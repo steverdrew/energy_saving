@@ -1,0 +1,49 @@
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.app-header__brand {
+  font-weight: 600;
+  font-size: 18px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.app-header__nav {
+  display: flex;
+  gap: 20px;
+}
+
+.app-header__nav a {
+  text-decoration: none;
+  color: inherit;
+  opacity: 0.75;
+}
+
+.app-header__nav a.active {
+  opacity: 1;
+  font-weight: 600;
+}
+
+.app-main {
+  flex: 1;
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 20px;
+  box-sizing: border-box;
+}
