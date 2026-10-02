@@ -8,7 +8,15 @@ import type { HeatMapDay, HeatMapSlot } from '../components/heatMapMath'
  * real Octopus tariff or customer.
  */
 
-const DEMO_DATE = '2026-06-15'
+// OA-85: "the graph should read as a multi-day time landscape, not a small
+// analytical matrix" -- four consecutive example days, the last of which
+// is the detail day the headline kWh/£ stat above the chart describes.
+// Deliberately identical shape every day (same illustrative household,
+// same illustrative tariff) rather than randomised: it's still example
+// data, not a real meter, so a repeating pattern is the honest way to
+// show "this happens every day" without implying real day-to-day variance
+// we have no data for.
+const DEMO_DAY_DATES = ['2026-06-12', '2026-06-13', '2026-06-14', '2026-06-15']
 
 // Illustrative half-hourly household demand (kWh), excluding the flexible
 // load below -- low overnight, a morning bump, quiet daytime, an evening
@@ -38,20 +46,24 @@ function withFlexibleLoad(slotIndices: number[]): number[] {
   return usage
 }
 
-function startsAtFor(slotIndex: number): string {
+function startsAtFor(date: string, slotIndex: number): string {
   const hours = Math.floor(slotIndex / 2)
   const minutes = (slotIndex % 2) * 30
-  return `${DEMO_DATE}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00Z`
+  return `${date}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00Z`
 }
 
-function buildDay(usageKwh: number[], ratePence: number[]): HeatMapDay {
+function buildDay(date: string, usageKwh: number[], ratePence: number[]): HeatMapDay {
   const slots: HeatMapSlot[] = usageKwh.map((kwh, i) => ({
-    startsAt: startsAtFor(i),
+    startsAt: startsAtFor(date, i),
     kwh,
     unitRateIncVatPence: ratePence[i],
     costPence: kwh * ratePence[i],
   }))
-  return { date: DEMO_DATE, slots }
+  return { date, slots }
+}
+
+function buildDays(usageKwh: number[], ratePence: number[]): HeatMapDay[] {
+  return DEMO_DAY_DATES.map((date) => buildDay(date, usageKwh, ratePence))
 }
 
 function sumKwh(usage: number[]): number {
@@ -66,7 +78,10 @@ export interface LandingDemoStep {
   tariffName: string
   totalKwh: number
   totalCostPence: number
+  /** The detail day the headline kWh/£ stat describes -- the last entry of `days`. */
   day: HeatMapDay
+  /** OA-85: the multi-day landscape shown in the heat map (see DEMO_DAY_DATES). */
+  days: HeatMapDay[]
 }
 
 export interface LandingDemoFixture {
@@ -83,23 +98,30 @@ export function buildLandingDemoFixture(): LandingDemoFixture {
   const baselineUsage = withFlexibleLoad(BASELINE_FLEXIBLE_SLOTS)
   const optimisedUsage = withFlexibleLoad(OPTIMISED_FLEXIBLE_SLOTS)
 
+  const baselineDays = buildDays(baselineUsage, STANDARD_VARIABLE_RATE_PENCE)
+  const compareDays = buildDays(baselineUsage, AGILE_LIKE_RATE_PENCE)
+  const optimiseDays = buildDays(optimisedUsage, AGILE_LIKE_RATE_PENCE)
+
   const baseline: LandingDemoStep = {
     tariffName: 'Standard Variable',
     totalKwh: sumKwh(baselineUsage),
     totalCostPence: sumCostPence(baselineUsage, STANDARD_VARIABLE_RATE_PENCE),
-    day: buildDay(baselineUsage, STANDARD_VARIABLE_RATE_PENCE),
+    day: baselineDays[baselineDays.length - 1],
+    days: baselineDays,
   }
   const compare: LandingDemoStep = {
     tariffName: 'Octopus Agile',
     totalKwh: sumKwh(baselineUsage),
     totalCostPence: sumCostPence(baselineUsage, AGILE_LIKE_RATE_PENCE),
-    day: buildDay(baselineUsage, AGILE_LIKE_RATE_PENCE),
+    day: compareDays[compareDays.length - 1],
+    days: compareDays,
   }
   const optimise: LandingDemoStep = {
     tariffName: 'Octopus Agile',
     totalKwh: sumKwh(optimisedUsage),
     totalCostPence: sumCostPence(optimisedUsage, AGILE_LIKE_RATE_PENCE),
-    day: buildDay(optimisedUsage, AGILE_LIKE_RATE_PENCE),
+    day: optimiseDays[optimiseDays.length - 1],
+    days: optimiseDays,
   }
 
   return {

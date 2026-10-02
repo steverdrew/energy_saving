@@ -202,8 +202,9 @@
    still show cheapest/most-expensive/highest-usage via the small ring
    marker -- see HeatMap.tsx's cell-flag) so the card doesn't run on
    past the grid with a block of extra copy competing with the left
-   panel's own caption. The "Show as table" toggle is left as-is: it's
-   an accessible alternate view, not decorative chrome. */
+   panel's own caption. (OA-85 demotes the "Show as table" toggle
+   further still, globally for the 'tariff' variant -- see HeatMap.css
+   -- since it read as diagnostic-widget chrome next to the story.) */
 .landing-demo__heatmap-card .heat-map__title {
   font-size: 13px;
   opacity: 0.85;
@@ -229,33 +230,25 @@
   display: none;
 }
 
-/* OA-83 (second pass): the shared HeatMap renders one flex row of 48
-   cells per day -- fine on a wide authenticated-page chart, but on the
-   landing page it stretched into a very wide, very short bar ("the
-   heat map is oversized... reduce the displayed sample length or
-   compress the visual treatment rather than simply scaling the grid
-   larger"). Overriding just the grid shape here (not HeatMap.tsx
-   itself) wraps the same 48 cells into a compact square block instead
-   -- each cell's aria-label still carries its exact time, so nothing
-   about the data or its accessibility changes, only the layout. Taller
-   cells also give the usage bar (--usage-ratio) more vertical room to
-   read clearly against the rate colour underneath it. */
+/* OA-85: now a genuine multi-day grid (DEMO_DAY_DATES, 4 rows x 48
+   cells) -- the "time landscape" the ticket asks for -- rather than
+   OA-83's single wide day wrapped into a square block, so the grid
+   shape is simply the shared component's own row-per-day layout, just
+   sized compactly for the card. Each cell's aria-label still carries
+   its exact time/usage/rate/cost, so nothing about accessibility
+   changes, only the layout and the tariff/opacity colour mechanism
+   (see HeatMap's 'tariff' variant). */
 .landing-demo__heatmap-card .heat-map__row-cells {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-auto-rows: 26px;
-  gap: 3px;
-  height: auto;
+  height: 14px;
+}
+
+.landing-demo__heatmap-card .heat-map__row-label {
+  flex: 0 0 52px;
+  font-size: 10px;
 }
 
 .landing-demo__heatmap-card .heat-map__cell {
-  border-radius: 3px;
-}
-
-/* A crisper top edge on the usage bar so its fill level reads at a
-   glance against the rate colour, rather than just fading into it. */
-.landing-demo__heatmap-card .heat-map__cell-bar {
-  box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.95);
+  border-radius: 2px;
 }
 
 .landing-demo__cta {

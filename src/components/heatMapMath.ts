@@ -56,6 +56,25 @@ export function rateColorStepIndex(rate: number | null, min: number, max: number
   return Math.max(0, Math.min(steps - 1, Math.round(t * (steps - 1))))
 }
 
+/**
+ * OA-85: the landing-page demo's "tariff" variant encodes price as one of
+ * three categorical bands (cheap/standard/peak) rather than the 9-step
+ * sequential ramp above -- same min/max normalisation approach, just
+ * fewer, named buckets so colour reads as "cheap vs. peak" at a glance
+ * instead of a continuous gradient. Returns null/1 for the same reasons
+ * as rateColorStepIndex.
+ */
+export const RATE_CATEGORY_LABELS = ['Cheap', 'Standard', 'Peak'] as const
+
+export function rateCategoryIndex(rate: number | null, min: number, max: number): number | null {
+  if (rate === null || !Number.isFinite(rate)) return null
+  if (max === min) return 1 // flat-rate: no implied ranking -- the "standard" middle band
+  const t = (rate - min) / (max - min)
+  if (t < 1 / 3) return 0
+  if (t < 2 / 3) return 1
+  return 2
+}
+
 export function rateRange(days: HeatMapDay[]): { min: number; max: number } {
   let min = Infinity
   let max = -Infinity

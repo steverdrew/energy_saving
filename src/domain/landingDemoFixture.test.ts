@@ -51,4 +51,16 @@ describe('buildLandingDemoFixture', () => {
     expect(fixture.tariffSwitchSavingPence).toBeCloseTo(fixture.baseline.totalCostPence - fixture.compare.totalCostPence, 6)
     expect(fixture.timingSavingPence).toBeCloseTo(fixture.compare.totalCostPence - fixture.optimise.totalCostPence, 6)
   })
+
+  it('builds a multi-day landscape (OA-85) ending on the same day as the headline `day`', () => {
+    const fixture = buildLandingDemoFixture()
+    for (const step of [fixture.baseline, fixture.compare, fixture.optimise]) {
+      expect(step.days).toHaveLength(4)
+      expect(step.days.every((d) => d.slots.length === 48)).toBe(true)
+      expect(step.days[step.days.length - 1]).toEqual(step.day)
+      // Dates are distinct and in order.
+      expect(step.days.map((d) => d.date)).toEqual([...step.days.map((d) => d.date)].sort())
+      expect(new Set(step.days.map((d) => d.date)).size).toBe(4)
+    }
+  })
 })

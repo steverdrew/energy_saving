@@ -48,6 +48,11 @@ function describeTimingPotential(pence: number): string {
  * numbers themselves carry the section rather than a labelled box.
  * Reuses the same fixture/copy as before, just reordered/restyled; no
  * new claims are made.
+ *
+ * OA-85: the heat map here uses HeatMap's 'tariff' variant (colour =
+ * cheap/standard/peak, opacity = usage) and a multi-day fixture, not the
+ * authenticated pages' sequential-ramp/bar-height chart -- see
+ * HeatMap.tsx's `variant` prop and landingDemoFixture's `days`.
  */
 function LandingDemo() {
   const [step, setStep] = useState<DemoStepId>('baseline')
@@ -169,7 +174,11 @@ function LandingDemo() {
         </div>
 
         <div className="landing-demo__heatmap-card">
-          <HeatMap days={[current.day]} title={`${STEP_TAB_LABELS[step]} — ${current.tariffName} (example data)`} />
+          <HeatMap
+            days={current.days}
+            variant="tariff"
+            title={`${STEP_TAB_LABELS[step]} — ${current.tariffName} (example data)`}
+          />
         </div>
       </div>
 

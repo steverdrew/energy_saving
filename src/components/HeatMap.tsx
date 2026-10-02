@@ -4,8 +4,10 @@ import {
   findAnnotations,
   formatSlotTime,
   maxUsage,
+  rateCategoryIndex,
   rateColorStepIndex,
   rateRange,
+  RATE_CATEGORY_LABELS,
   RATE_COLOR_STEPS_LIGHT,
   type HeatMapDay,
   type HeatMapSlot,
@@ -37,6 +39,15 @@ export interface HeatMapProps {
   days: HeatMapDay[]
   /** Accessible label for the chart as a whole, e.g. "Actual usage and cost". */
   title: string
+  /**
+   * OA-85: 'sequential' (default) is the authenticated-page chart --
+   * one-hue rate ramp, usage as bar height. 'tariff' is the landing-page
+   * demo's own mechanism -- rate as a 3-band cheap/standard/peak colour
+   * (green/purple/red), usage as cell opacity/intensity instead of a bar.
+   * Scoped to this prop (not a global style change) so Actual/Compare/
+   * Optimised keep their existing chart untouched.
+   */
+  variant?: 'sequential' | 'tariff'
 }
 
 /**
@@ -44,9 +55,10 @@ export interface HeatMapProps {
  * HeatMapDay[], never infers tariff family), reused by Actual, Like-for-like
  * and later Shifted. Background colour = rate (one sequential hue, per the
  * dataviz skill); foreground bar height = usage, so the two magnitudes never
- * share a channel.
+ * share a channel. The 'tariff' variant (OA-85) is the one exception to
+ * that convention, deliberately scoped to the landing-page demo only.
  */
-function HeatMap({ days, title }: HeatMapProps) {
+function HeatMap({ days, title, variant = 'sequential' }: HeatMapProps) {
   const [selected, setSelected] = useState<{ dayIndex: number; slotIndex: number } | null>(null)
   const [showTable, setShowTable] = useState(false)
   const panelId = useId()
@@ -91,8 +103,10 @@ function HeatMap({ days, title }: HeatMapProps) {
     selected !== null ? days[selected.dayIndex]?.slots[selected.slotIndex] ?? null : null
   const selectedDay = selected !== null ? days[selected.dayIndex] : null
 
+  const isTariff = variant === 'tariff'
+
   return (
-    <div className="heat-map">
+    <div className={isTariff ? 'heat-map heat-map--tariff' : 'heat-map'}>
       <div className="heat-map__header">
         <h2 className="heat-map__title">{title}</h2>
         <button type="button" className="heat-map__table-toggle" onClick={() => setShowTable((v) => !v)}>
@@ -109,14 +123,28 @@ function HeatMap({ days, title }: HeatMapProps) {
       {!showTable && (
         <>
           <div className="heat-map__legend">
-            <span className="heat-map__legend-label">Cheapest</span>
-            <span className="heat-map__legend-ramp" aria-hidden="true">
-              {RATE_COLOR_STEPS_LIGHT.map((_, i) => (
-                <span key={i} className="heat-map__legend-step" data-step={i} />
-              ))}
-            </span>
-            <span className="heat-map__legend-label">Most expensive</span>
-            <span className="heat-map__legend-note">Bar height = usage</span>
+            {isTariff ? (
+              <>
+                {RATE_CATEGORY_LABELS.map((label, i) => (
+                  <span className="heat-map__legend-item" key={label}>
+                    <span className="heat-map__legend-swatch" aria-hidden="true" data-category={i} />
+                    <span className="heat-map__legend-label">{label}</span>
+                  </span>
+                ))}
+                <span className="heat-map__legend-note">Shade shows usage</span>
+              </>
+            ) : (
+              <>
+                <span className="heat-map__legend-label">Cheapest</span>
+                <span className="heat-map__legend-ramp" aria-hidden="true">
+                  {RATE_COLOR_STEPS_LIGHT.map((_, i) => (
+                    <span key={i} className="heat-map__legend-step" data-step={i} />
+                  ))}
+                </span>
+                <span className="heat-map__legend-label">Most expensive</span>
+                <span className="heat-map__legend-note">Bar height = usage</span>
+              </>
+            )}
           </div>
 
           <div className="heat-map__grid" role="group" aria-label={title} aria-describedby={panelId}>
@@ -126,7 +154,9 @@ function HeatMap({ days, title }: HeatMapProps) {
                   <span className="heat-map__row-label">{formatDayLabel(day.date)}</span>
                   <div className="heat-map__row-cells">
                     {day.slots.map((slot, slotIndex) => {
-                      const stepIndex = rateColorStepIndex(slot.unitRateIncVatPence, min, max)
+                      const stepIndex = isTariff
+                        ? rateCategoryIndex(slot.unitRateIncVatPence, min, max)
+                        : rateColorStepIndex(slot.unitRateIncVatPence, min, max)
                       const usageRatio = slot.kwh !== null && peakUsage > 0 ? slot.kwh / peakUsage : 0
                       const annotation = annotationFor(dayIndex, slotIndex)
                       const isSelected = selected?.dayIndex === dayIndex && selected?.slotIndex === slotIndex
@@ -150,7 +180,7 @@ function HeatMap({ days, title }: HeatMapProps) {
                           onClick={() => setSelected({ dayIndex, slotIndex })}
                           onKeyDown={(e) => handleKeyDown(e, dayIndex, slotIndex)}
                         >
-                          <span className="heat-map__cell-bar" />
+                          {!isTariff && <span className="heat-map__cell-bar" />}
                           {annotation && <span className="heat-map__cell-flag" aria-hidden="true" />}
                         </button>
                       )
