@@ -2,19 +2,18 @@
 
 _Last updated: 2026-10-02 (core loop via PR #14; backlog audit +
 polish tier via PR #15; deeper feature tier via PR #16/#17; beta
-mop-up cluster OA-63/64/68/69/66/67 implemented this session, not yet
-pushed; OA-65 not started)_
+mop-up cluster OA-63/64/68/69/66/67 merged via PR #18, all Done in
+Jira; OA-65 not started)_
 
 ## Current task
 
 Steve identified a mop-up cluster of real beta bugs, separated from
 the next product surface, with an explicit build order: **OA-63 →
 OA-64 → OA-68 → OA-69 → OA-66 → OA-67, then OA-65**. All six mop-up
-tickets are implemented and tested this session (106 server tests, 12
-frontend) but **not yet pushed/merged** — see Next step. OA-65
-(Today/Tomorrow schedule + heat map) is a genuinely new, large product
-surface and hasn't been started; per Steve's own framing it should
-only follow a clean, trusted tariff/import foundation, which this
+tickets are merged (`main` @ `1aa273e`, PR #18) and Done in Jira.
+OA-65 (Today/Tomorrow schedule + heat map) is a genuinely new, large
+product surface and hasn't been started; per Steve's own framing it
+should only follow a clean, trusted tariff/import foundation, which this
 batch is building.
 
 ## State
@@ -450,13 +449,12 @@ batch is building.
 8. Update README.md's "Server deployment (Cloud Run)" checklist to match
    the real working IAM configuration (listed below) — currently stale,
    purely a documentation cleanup, no urgency.
-9. **Mop-up cluster (OA-63/64/68/69/66/67) is implemented and tested
-   but not yet pushed.** Push, open a PR (same pattern as #14–#17),
-   wait for CI, merge, then move all six to Done in Jira and verify
-   live on beta: connect an account on a non-Agile tariff if possible
-   (or at least re-check the existing Agile beta account), confirm
-   "You're on X" is correct, confirm Cheapest Times no longer defaults
-   to Agile for a non-Agile tariff, and check the import card's new
+9. **Mop-up cluster (OA-63/64/68/69/66/67) merged via PR #18
+   (`1aa273e`), all Done in Jira.** Still needs a live-beta check once
+   deployed: connect an account on a non-Agile tariff if possible (or
+   at least re-check the existing Agile beta account), confirm "You're
+   on X" is correct, confirm Cheapest Times no longer defaults to
+   Agile for a non-Agile tariff, and check the import card's new
    per-status copy against a real import.
 10. **OA-65 (Today/Tomorrow schedule + heat map) is a new, large
     product surface and hasn't been started.** Steve's framing: build
