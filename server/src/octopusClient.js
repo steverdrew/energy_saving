@@ -108,10 +108,14 @@ export async function fetchOctopusAccount(accountNumber, apiKey) {
  * explicitly rather than always taking index 0, which could silently
  * select an export-only meter point and tariff.
  */
-export function summarizeOctopusAccount(account) {
+function importMeterPoint(account) {
   const property = account?.properties?.[0]
   const meterPoints = property?.electricity_meter_points ?? []
-  const meterPoint = meterPoints.find((mp) => !mp.is_export) ?? meterPoints[0]
+  return meterPoints.find((mp) => !mp.is_export) ?? meterPoints[0]
+}
+
+export function summarizeOctopusAccount(account) {
+  const meterPoint = importMeterPoint(account)
   const agreements = meterPoint?.agreements ?? []
   const now = Date.now()
   const currentAgreement =
@@ -123,6 +127,24 @@ export function summarizeOctopusAccount(account) {
     tariffValidFrom: currentAgreement?.valid_from ?? null,
     serialNumber: meterPoint?.meters?.[0]?.serial_number ?? null,
   }
+}
+
+/**
+ * OA-71: the full agreement history for the import meter point, not just
+ * the current one -- needed to tell whether a tariff switch happened
+ * partway through a historical window, so that window's cost can be
+ * reconstructed honestly (one tariff's rates per sub-period it actually
+ * applied) rather than quietly priced as if today's tariff covered all of
+ * it.
+ */
+export function meterAgreementsFromAccount(account) {
+  const meterPoint = importMeterPoint(account)
+  const agreements = meterPoint?.agreements ?? []
+  return agreements.map((a) => ({
+    tariffCode: a.tariff_code ?? null,
+    validFrom: a.valid_from ?? null,
+    validTo: a.valid_to ?? null,
+  }))
 }
 
 /**

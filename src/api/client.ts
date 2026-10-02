@@ -251,6 +251,45 @@ export interface GuidanceFeedbackInput {
   comment?: string
 }
 
+// OA-71: one point of the "Actual" 30-day reconstruction -- null fields
+// mean genuinely unknown (no reading / no matching rate for that
+// half-hour), never a silently-assumed zero.
+export interface ActualPeriodPoint {
+  startsAt: string
+  kwh: number | null
+  unitRateIncVatPence: number | null
+  costPence: number | null
+  tariffCode: string | null
+}
+
+// OA-71: which tariff applied for which part of the period -- more than
+// one entry means the customer switched tariff mid-period, and each
+// entry's own displayName/validFrom/validTo should be shown rather than
+// presenting the whole period as a single tariff.
+export interface ActualPeriodTariffSegment {
+  tariffCode: string
+  displayName: string | null
+  validFrom: string
+  validTo: string
+}
+
+export type ActualPeriodImportStatus = OctopusImportResultStatus
+
+export interface ActualPeriodResult {
+  periodFrom?: string
+  periodTo?: string
+  importStatus: ActualPeriodImportStatus
+  unitRateOnly?: true
+  tariffSwitched?: boolean
+  tariffSegments?: ActualPeriodTariffSegment[]
+  totalKwh?: number
+  totalCostPence?: number
+  complete: boolean
+  matchedSlots?: number
+  expectedSlots?: number
+  points?: ActualPeriodPoint[]
+}
+
 export const api = {
   octopus: {
     connect: async (input: { apiKey: string; accountNumber: string }) =>
@@ -301,6 +340,8 @@ export const api = {
       }),
     savingsTotal: async () =>
       request<SavingsTotal>('/api/octopus/savings-total', { headers: await authHeaders() }),
+    actualPeriod: async () =>
+      request<ActualPeriodResult>('/api/octopus/actual-period', { headers: await authHeaders() }),
   },
   compatibility: {
     submitRequest: async (input: CompatibilityRequestInput) =>

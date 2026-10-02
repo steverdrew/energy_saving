@@ -5,6 +5,7 @@ import ProtectedRoute from './auth/ProtectedRoute'
 import { BrandMark } from './components/Logo'
 import { OctopusConnectionProvider } from './octopus/OctopusConnectionContext'
 import AccountPage from './pages/AccountPage'
+import ActualPage from './pages/ActualPage'
 import CheapestWindowPage from './pages/CheapestWindowPage'
 import CompatibilityFeedbackPage from './pages/CompatibilityFeedbackPage'
 import ConnectOctopusPage from './pages/ConnectOctopusPage'
@@ -41,6 +42,7 @@ function App() {
             </NavLink>
             {loading ? null : user ? (
               <>
+                <NavLink to="/actual">Actual</NavLink>
                 <NavLink to="/savings">My Savings</NavLink>
                 <NavLink to="/cheapest-window">Cheapest Times</NavLink>
                 <NavLink to="/account">Account</NavLink>
@@ -76,6 +78,14 @@ function App() {
             />
             <Route path="/how-smart-tariffs-work" element={<ExplainerPage />} />
             <Route path="/tell-us-what-you-have" element={<CompatibilityFeedbackPage />} />
+            <Route
+              path="/actual"
+              element={
+                <ProtectedRoute>
+                  <ActualPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/savings"
               element={

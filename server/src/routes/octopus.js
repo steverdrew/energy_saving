@@ -1,14 +1,16 @@
 import { Router } from 'express'
+import { buildActualPeriod, tariffSegmentsForPeriod } from '../actualPeriod.js'
 import { averageRate, findCheapestWindow } from '../cheapestWindow.js'
 import { decrypt, encrypt } from '../crypto.js'
 import {
   OctopusAuthError,
   OctopusRequestError,
+  meterAgreementsFromAccount,
   regionLetterFromTariffCode,
   summarizeOctopusAccount,
 } from '../octopusClient.js'
 import { compareCurrentTariffToAgile } from '../savingsComparison.js'
-import { TARIFF_FAMILY } from '../tariffClassification.js'
+import { classifyTariff, TARIFF_FAMILY } from '../tariffClassification.js'
 import { eligibilityForFamily } from '../tariffEligibility.js'
 import { determineTariffState } from '../tariffState.js'
 
@@ -233,6 +235,111 @@ export function createOctopusRouter({
       consumptionPoints,
       ratePoints,
       importedAt: record.importedAt,
+    })
+  })
+
+  // OA-71: "Actual" -- the customer's real tariff(s), real half-hourly
+  // usage and real cost for the already-imported window. No counterfactual
+  // modelling (that's OA-72); this just reconstructs what happened,
+  // including reconstructing cost correctly across a mid-period tariff
+  // switch rather than pretending one tariff covered the whole window.
+  router.get('/actual-period', requireFirebaseAuth, async (req, res) => {
+    const record = await importStore.get(req.firebaseUid)
+    if (!record) {
+      return res.status(400).json({ error: 'Import your usage history first.' })
+    }
+
+    const importStatus = importStatusFromCounts(record.consumption?.length ?? 0, record.rates?.length ?? 0)
+    if (importStatus === 'no_data') {
+      // Nothing to reconstruct -- an honest empty state rather than a
+      // precise-looking £0 total, and no point spending an extra Octopus
+      // round trip to check for a tariff switch within a period that has
+      // no usage data anyway.
+      return res.json({ periodFrom: undefined, periodTo: undefined, importStatus, complete: false })
+    }
+
+    const connection = await store.get(req.firebaseUid)
+    if (!connection) {
+      return res.status(400).json({ error: 'Connect your Octopus account first.' })
+    }
+
+    let account
+    try {
+      const accountNumber = decrypt(connection.encryptedAccountNumber)
+      const apiKey = decrypt(connection.encryptedApiKey)
+      account = await fetchOctopusAccount(accountNumber, apiKey)
+    } catch (err) {
+      if (err instanceof OctopusAuthError) {
+        return res.status(401).json({ error: err.message })
+      }
+      return res.status(502).json({ error: 'Could not reach Octopus right now. Please try again.' })
+    }
+
+    const agreements = meterAgreementsFromAccount(account)
+    const segments = tariffSegmentsForPeriod(agreements, {
+      periodFrom: record.periodFrom,
+      periodTo: record.periodTo,
+      fallbackTariffCode: record.tariffCode,
+    })
+    const distinctTariffCodes = [...new Set(segments.map((s) => s.tariffCode))]
+    const tariffSwitched = distinctTariffCodes.length > 1
+
+    let ratesBySegment
+    try {
+      if (!tariffSwitched && distinctTariffCodes[0] === record.tariffCode) {
+        // The common case: one tariff for the whole window, already
+        // fetched at import time -- reuse it rather than re-fetching
+        // public rate data we already have.
+        ratesBySegment = [{ tariffCode: record.tariffCode, rates: record.rates }]
+      } else {
+        ratesBySegment = await Promise.all(
+          segments.map(async (segment) => ({
+            tariffCode: segment.tariffCode,
+            rates: await fetchTariffUnitRates(segment.tariffCode, {
+              periodFrom: segment.validFrom,
+              periodTo: segment.validTo,
+            }),
+          })),
+        )
+      }
+    } catch {
+      return res.status(502).json({ error: 'Could not reach Octopus right now. Please try again.' })
+    }
+
+    const actual = buildActualPeriod({
+      consumption: record.consumption,
+      ratesBySegment,
+      periodFrom: record.periodFrom,
+      periodTo: record.periodTo,
+    })
+
+    const tariffSegments = await Promise.all(
+      segments.map(async (segment) => {
+        const classification = await classifyTariff(segment.tariffCode, { fetchProductDetails })
+        return {
+          tariffCode: segment.tariffCode,
+          displayName: classification.displayName,
+          validFrom: segment.validFrom,
+          validTo: segment.validTo,
+        }
+      }),
+    )
+
+    // OA-21-style flag: unit rates only, no standing charge -- stated
+    // explicitly rather than left for the UI to assume.
+    res.json({
+      periodFrom: record.periodFrom,
+      periodTo: record.periodTo,
+      importStatus,
+      unitRateOnly: true,
+      tariffSwitched,
+      tariffSegments,
+      totalKwh: actual.totalKwh,
+      totalCostPence: actual.totalCostPence,
+      complete: actual.complete,
+      matchedSlots: actual.matchedSlots,
+      expectedSlots: actual.expectedSlots,
+      points: actual.points,
     })
   })
 

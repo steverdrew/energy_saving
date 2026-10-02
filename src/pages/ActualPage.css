@@ -1,0 +1,55 @@
+.actual-page {
+  max-width: 640px;
+}
+
+.actual-page__intro {
+  margin-top: 8px;
+  opacity: 0.75;
+  font-size: 14px;
+}
+
+.actual-page__error {
+  color: #e05252;
+}
+
+.actual-page__result {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.actual-page__period {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.actual-page__tariffs {
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.actual-page__tariff-switch-note {
+  opacity: 0.85;
+}
+
+.actual-page__tariffs ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.actual-page__totals {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.actual-page__totals p:first-child {
+  font-size: 18px;
+}
+
+.actual-page__caveat {
+  margin-top: 8px;
+  font-size: 13px;
+  opacity: 0.75;
+}
