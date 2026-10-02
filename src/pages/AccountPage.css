@@ -1,0 +1,72 @@
+.account-page {
+  padding: 8px 0 32px;
+}
+
+.account-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.account-page__status {
+  margin-top: 4px;
+  opacity: 0.75;
+}
+
+.account-page__signout {
+  font: inherit;
+  color: inherit;
+  opacity: 0.75;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.account-page__signout:hover {
+  opacity: 1;
+}
+
+.account-page__cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  padding-top: 24px;
+}
+
+@media (max-width: 720px) {
+  .account-page__cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.account-page__card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.account-page__card h2 {
+  font-size: 18px;
+}
+
+.account-page__card p {
+  margin-top: 8px;
+  opacity: 0.75;
+}
+
+.account-page__cta {
+  display: inline-block;
+  margin-top: 16px;
+  padding: 10px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--bg);
+  background: var(--accent);
+  border-radius: 6px;
+}
