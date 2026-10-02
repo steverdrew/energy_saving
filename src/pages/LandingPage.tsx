@@ -23,11 +23,13 @@ const TRUST_POINTS = [
 ]
 
 // OA-55: only ever list something here once it's been tested end to end in
-// the beta -- today that's Octopus Energy (tariff import) and manual
-// appliance timers (the Cheapest Times guidance), presented as a real
-// supported mode, not a fallback. No device/smart-plug integration exists
-// yet (that's OA-12/OA-15, deliberately not started), so none is named.
-const WORKS_WITH = ['Octopus Energy', 'Manual appliance timers']
+// the beta -- today that's Octopus Energy (tariff import, actual usage and
+// cost, like-for-like tariff comparison). OA-74 retired the standalone
+// Cheapest Times page (manual appliance timer guidance) in favour of the
+// Actual/Compare journey, so it's no longer named here either. No
+// device/smart-plug integration exists yet (that's OA-12/OA-15,
+// deliberately not started), so none is named.
+const WORKS_WITH = ['Octopus Energy']
 const COMING_SOON = ['Smart plugs', 'More connected appliances']
 
 function LandingPage() {

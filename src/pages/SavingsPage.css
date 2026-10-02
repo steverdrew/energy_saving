@@ -1,21 +1,5 @@
 .savings-page {
-  max-width: 480px;
-}
-
-.savings-page__cta {
-  display: inline-block;
-  margin-top: 16px;
-  padding: 10px 20px;
-  font-size: 15px;
-  font-weight: 600;
-  text-decoration: none;
-  color: var(--bg);
-  background: var(--accent);
-  border-radius: 6px;
-}
-
-.savings-page__error {
-  color: #e05252;
+  max-width: 900px;
 }
 
 .savings-page__saved-so-far {
@@ -26,69 +10,4 @@
 .savings-page__equivalent {
   opacity: 0.7;
   font-size: 14px;
-}
-
-.savings-page__headline {
-  margin-top: 16px;
-  font-size: 18px;
-}
-
-.savings-page__caveat {
-  margin-top: 12px;
-  font-size: 14px;
-  opacity: 0.75;
-}
-
-.savings-page__annualized {
-  margin-top: 16px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 15px;
-}
-
-.savings-page__tariff-state {
-  margin-top: 4px;
-  font-size: 14px;
-  opacity: 0.85;
-}
-
-.savings-page__eligibility {
-  margin-top: 8px;
-  font-size: 13px;
-  opacity: 0.7;
-}
-
-.savings-page__shifting {
-  margin-top: 28px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border);
-}
-
-.savings-page__shifting h2 {
-  font-size: 16px;
-}
-
-.savings-page__shifting-intro {
-  margin-top: 6px;
-  font-size: 13px;
-  opacity: 0.75;
-}
-
-.savings-page__shifting-picker {
-  margin-top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 14px;
-  max-width: 240px;
-}
-
-.savings-page__shifting-picker select {
-  padding: 10px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  font-size: 16px;
-  background: var(--bg);
-  color: var(--text-h);
 }

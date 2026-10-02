@@ -6,7 +6,6 @@ import { BrandMark } from './components/Logo'
 import { OctopusConnectionProvider } from './octopus/OctopusConnectionContext'
 import AccountPage from './pages/AccountPage'
 import ActualPage from './pages/ActualPage'
-import CheapestWindowPage from './pages/CheapestWindowPage'
 import ComparePage from './pages/ComparePage'
 import CompatibilityFeedbackPage from './pages/CompatibilityFeedbackPage'
 import ConnectOctopusPage from './pages/ConnectOctopusPage'
@@ -46,7 +45,6 @@ function App() {
                 <NavLink to="/actual">Actual</NavLink>
                 <NavLink to="/compare">Compare</NavLink>
                 <NavLink to="/savings">My Savings</NavLink>
-                <NavLink to="/cheapest-window">Cheapest Times</NavLink>
                 <NavLink to="/account">Account</NavLink>
                 <button type="button" className="app-header__signout" onClick={() => logout()}>
                   Sign out
@@ -104,14 +102,10 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/cheapest-window"
-              element={
-                <ProtectedRoute>
-                  <CheapestWindowPage />
-                </ProtectedRoute>
-              }
-            />
+            {/* OA-74: Cheapest Times is retired in favour of My Savings'
+                Actual -> Like-for-like journey -- redirect rather than a
+                dead link for anyone with the old URL bookmarked. */}
+            <Route path="/cheapest-window" element={<Navigate to="/savings" replace />} />
             <Route path="/debug" element={<DebugPage />} />
           </Routes>
         </main>
