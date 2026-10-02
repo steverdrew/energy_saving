@@ -11,6 +11,7 @@ const request = (await import('supertest')).default
 const { createRequireFirebaseAuth } = await import('../src/firebaseAuth.js')
 const { OctopusAuthError, OctopusRequestError } = await import('../src/octopusClient.js')
 const { createOctopusRouter } = await import('../src/routes/octopus.js')
+const { createInMemoryOctopusStore } = await import('./helpers/fakeOctopusStore.js')
 
 // The fake verifier treats the bearer token itself as the uid, so tests can
 // address "different users" just by using different token strings -- no
@@ -45,7 +46,14 @@ function fakeFetchOctopusAccount(accountNumber, apiKey) {
 
 const app = express()
 app.use(express.json())
-app.use('/api/octopus', createOctopusRouter({ requireFirebaseAuth, fetchOctopusAccount: fakeFetchOctopusAccount }))
+app.use(
+  '/api/octopus',
+  createOctopusRouter({
+    requireFirebaseAuth,
+    fetchOctopusAccount: fakeFetchOctopusAccount,
+    store: createInMemoryOctopusStore(),
+  }),
+)
 
 test('POST /connect requires authentication', async () => {
   const res = await request(app)

@@ -1,0 +1,58 @@
+name: Deploy server
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - '.github/workflows/deploy-server.yml'
+
+jobs:
+  deploy:
+    name: Test and deploy server to Cloud Run (beta)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Test
+        working-directory: server
+        run: npm test
+        env:
+          ENCRYPTION_KEY: MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
+
+      # Everything above must pass before we touch Cloud Run: a failed
+      # test here stops the job and the last working server deploy stays
+      # live untouched.
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVER_DEPLOY_SA_KEY }}
+
+      - id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: energy-saving-server
+          region: europe-west2
+          source: server
+          env_vars: |
+            CLIENT_ORIGIN=https://shiftandsaveapp.web.app
+            DATABASE_PATH=data/app.db
+            NODE_ENV=production
+          secrets: |
+            ENCRYPTION_KEY=ENCRYPTION_KEY:latest
+          flags: --allow-unauthenticated
+
+      - name: Show deployed URL
+        run: echo "Deployed to ${{ steps.deploy.outputs.url }}"

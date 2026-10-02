@@ -1,5 +1,4 @@
 import { Router } from 'express'
-import { db } from '../db.js'
 import { encrypt } from '../crypto.js'
 import { OctopusAuthError, OctopusRequestError, summarizeOctopusAccount } from '../octopusClient.js'
 
@@ -10,11 +9,13 @@ export function redactAccountNumber(accountNumber) {
 }
 
 /**
- * Builds the Octopus router. requireFirebaseAuth and fetchOctopusAccount are
- * injected so tests can run without hitting Firebase's or Octopus's real
- * networks -- see server/src/index.js for the production wiring.
+ * Builds the Octopus router. requireFirebaseAuth, fetchOctopusAccount and
+ * store are all injected so tests can run without hitting Firebase's or
+ * Octopus's real networks, or a real Firestore -- see server/src/index.js
+ * for the production wiring (Firestore-backed store; Cloud Run has no
+ * persistent local disk for SQLite).
  */
-export function createOctopusRouter({ requireFirebaseAuth, fetchOctopusAccount }) {
+export function createOctopusRouter({ requireFirebaseAuth, fetchOctopusAccount, store }) {
   const router = Router()
 
   router.post('/connect', requireFirebaseAuth, async (req, res) => {
@@ -53,49 +54,35 @@ export function createOctopusRouter({ requireFirebaseAuth, fetchOctopusAccount }
     const now = new Date().toISOString()
     const redacted = redactAccountNumber(normalizedAccountNumber)
 
-    db.prepare(
-      `INSERT INTO octopus_connections
-         (firebase_uid, account_number_redacted, encrypted_account_number, encrypted_api_key, meter_context, connected_at, updated_at)
-       VALUES (@uid, @redacted, @encAccount, @encKey, @meterContext, @now, @now)
-       ON CONFLICT(firebase_uid) DO UPDATE SET
-         account_number_redacted = excluded.account_number_redacted,
-         encrypted_account_number = excluded.encrypted_account_number,
-         encrypted_api_key = excluded.encrypted_api_key,
-         meter_context = excluded.meter_context,
-         updated_at = excluded.updated_at`,
-    ).run({
-      uid: req.firebaseUid,
-      redacted,
-      encAccount: encrypt(normalizedAccountNumber),
-      encKey: encrypt(normalizedApiKey),
-      meterContext: JSON.stringify(meterContext),
-      now,
+    await store.upsert(req.firebaseUid, {
+      accountNumberRedacted: redacted,
+      encryptedAccountNumber: encrypt(normalizedAccountNumber),
+      encryptedApiKey: encrypt(normalizedApiKey),
+      meterContext,
+      connectedAt: now,
+      updatedAt: now,
     })
 
     res.json({ connected: true, accountNumberRedacted: redacted, meterContext, connectedAt: now })
   })
 
-  router.get('/connection', requireFirebaseAuth, (req, res) => {
-    const row = db
-      .prepare(
-        'SELECT account_number_redacted, meter_context, connected_at FROM octopus_connections WHERE firebase_uid = ?',
-      )
-      .get(req.firebaseUid)
+  router.get('/connection', requireFirebaseAuth, async (req, res) => {
+    const record = await store.get(req.firebaseUid)
 
-    if (!row) {
+    if (!record) {
       return res.json({ connected: false })
     }
 
     res.json({
       connected: true,
-      accountNumberRedacted: row.account_number_redacted,
-      meterContext: row.meter_context ? JSON.parse(row.meter_context) : null,
-      connectedAt: row.connected_at,
+      accountNumberRedacted: record.accountNumberRedacted,
+      meterContext: record.meterContext ?? null,
+      connectedAt: record.connectedAt,
     })
   })
 
-  router.delete('/connection', requireFirebaseAuth, (req, res) => {
-    db.prepare('DELETE FROM octopus_connections WHERE firebase_uid = ?').run(req.firebaseUid)
+  router.delete('/connection', requireFirebaseAuth, async (req, res) => {
+    await store.remove(req.firebaseUid)
     res.status(204).end()
   })
 
