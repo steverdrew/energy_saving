@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError, api, type SavingsResult, type TariffState } from '../api/client'
 import { DEFAULT_APPLIANCE_PROFILES, type ApplianceType } from '../domain/applianceProfile'
-import { formatGbp } from '../format'
+import { formatGbp, formatSavingsEquivalent } from '../format'
 import { useOctopusConnection } from '../octopus/OctopusConnectionContext'
 import './SavingsPage.css'
 
@@ -44,9 +44,12 @@ function SavedSoFar() {
 
   if (savedSoFarPence === null) return null
 
+  const equivalent = formatSavingsEquivalent(savedSoFarPence)
+
   return (
     <p className="savings-page__saved-so-far">
       Estimated saved so far: <strong>{formatGbp(savedSoFarPence)}</strong>
+      {equivalent && <span className="savings-page__equivalent"> — {equivalent}</span>}
     </p>
   )
 }

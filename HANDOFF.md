@@ -1,22 +1,23 @@
 # HANDOFF
 
-_Last updated: 2026-10-02 (core loop OA-59→OA-57 merged via PR #14;
-backlog audit + polish tier OA-60/61/62 merged via PR #15; deeper
-feature tier OA-45/OA-25/OA-24/OA-23/OA-7/OA-32 implemented this
-session, OA-44 deliberately untouched)_
+_Last updated: 2026-10-02 (core loop merged via PR #14; backlog audit
++ polish tier merged via PR #15; deeper feature tier OA-45/25/24/23/
+7/32 merged via PR #16; OA-46 implemented this session, not yet
+pushed; OA-44 deliberately untouched)_
 
 ## Current task
 
 None in progress. Order worked this session, per Steve: (1) core loop
 — merged (`main` @ `995bdea`, PR #14). (2) Backlog audit — done. (3)
 Polish tier (OA-60/61/62) — merged (`main` @ `1b0bb2b`, PR #15). (4)
-Deeper feature tier: **OA-45, OA-25, OA-24, OA-23, OA-7, OA-32** all
-implemented, tested, merged (`main` @ `6f45343`, PR #16), moved to
-Done in Jira. **OA-44 deliberately not started** — its own ticket
-says "Not part of the focused MVP... build only after the MVP proves
-customers act on savings guidance." **OA-46** (real-world savings
-equivalents) is the one deeper-feature ticket still open — small,
-independent of the rest.
+Deeper feature tier: **OA-45, OA-25, OA-24, OA-23, OA-7, OA-32**
+merged (`main` @ `6f45343`, PR #16), all moved to Done in Jira.
+**OA-46** (real-world savings equivalents) is now also implemented
+and tested — see State below — but not yet pushed/merged. **OA-44
+deliberately not started** — its own ticket says "Not part of the
+focused MVP... build only after the MVP proves customers act on
+savings guidance." With OA-46 done, the entire deeper-feature tier
+Steve named is complete except OA-44 (by design).
 
 ## State
 
@@ -273,6 +274,14 @@ independent of the rest.
   capturable for Gate 5 metrics, not a UI), and the running total's
   copy is already dense; a judgment call to leave out until there's a
   concrete reason to show it.
+- **OA-46**: `src/format.ts`'s new `formatSavingsEquivalent(pence)` —
+  a single, clearly-labelled illustrative unit (a £3.50 "coffee"),
+  deterministic, returning `null` (not "about 0 coffees") for zero or
+  anything under one unit. `SavedSoFar` on `SavingsPage` renders it as
+  a visually secondary suffix next to the £ figure — "Estimated saved
+  so far: £63.40 — about 18 coffees" — never replacing or outweighing
+  the £ amount. 6 new frontend unit tests
+  (`src/format.test.ts`).
 
 ## Next step
 
@@ -325,14 +334,12 @@ independent of the rest.
      next" — only spot-checked tickets that looked plausibly stale.
      A fuller audit is possible if useful later.
 5. Polish tier (OA-60/61/62) merged via PR #15 (`1b0bb2b`).
-6. **Deeper feature tier — mostly done this session** (not yet
-   pushed): OA-45, OA-25, OA-24, OA-23 (+ OA-7), OA-32 all
-   implemented, tested (91 server tests), build/lint/bundle-check
-   clean. **OA-46** (real-world savings equivalents, e.g. "about 18
-   coffees") is the one deeper-feature ticket **not yet built** this
-   pass — small and independent of the others, good next pick.
-   **OA-44 deliberately skipped** — its own ticket marks it post-MVP.
-   Open a PR for this batch once pushed, same pattern as PR #14/#15.
+6. Deeper feature tier OA-45/25/24/23/7/32 merged via PR #16
+   (`6f45343`), all Done in Jira. OA-46 built on top (coffee
+   equivalent on My Savings) but **not yet pushed** — push, open a PR
+   (same pattern as #14/#15/#16), merge, then mark OA-46 Done.
+   **OA-44 deliberately skipped** — its own ticket marks it post-MVP;
+   do not start it without Steve's go-ahead.
 7. Before relying on OA-45's Go/Intelligent Go detection in anger:
    `classifyTariffKind` (`server/src/tariffState.js`)'s `'GO-'` and
    `'INTELLI'` prefix matches are a best-effort guess at Octopus's
