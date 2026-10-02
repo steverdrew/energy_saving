@@ -1,20 +1,6 @@
 import { Link } from 'react-router-dom'
+import LandingDemo from '../components/LandingDemo'
 import './LandingPage.css'
-
-const HOW_IT_WORKS = [
-  {
-    title: 'Connect',
-    body: 'Link your Octopus Energy account in a couple of minutes.',
-  },
-  {
-    title: 'See your saving',
-    body: 'We look at your actual usage to show what a dynamic tariff would have cost you.',
-  },
-  {
-    title: 'Make it easy',
-    body: "We'll lay out the single highest-impact change to make first, in plain English — the move is always yours to make.",
-  },
-]
 
 const TRUST_POINTS = [
   'Your usage stays private. We never sell your data.',
@@ -29,7 +15,7 @@ const TRUST_POINTS = [
 // Actual/Compare journey, so it's no longer named here either. No
 // device/smart-plug integration exists yet (that's OA-12/OA-15,
 // deliberately not started), so none is named.
-const WORKS_WITH = ['Octopus Energy']
+const WORKS_WITH = ['Octopus Energy accounts']
 const COMING_SOON = ['Smart plugs', 'More connected appliances']
 
 function LandingPage() {
@@ -38,43 +24,33 @@ function LandingPage() {
       <section className="landing-hero">
         <h1>Take control of when you use energy — and what it costs you.</h1>
         <p className="landing-hero__sub">
-          Dynamic tariffs like Octopus Agile can cut your bills, but tracking
-          half-hourly prices yourself is a hassle. Shift &amp; Save looks at
-          your actual usage and makes a dynamic tariff easy to understand and
-          act on.
+          Different tariffs suit different patterns of energy use. Shift
+          &amp; Save shows what your actual usage would have cost on another
+          tariff — and what better timing could change.
         </p>
         <Link to="/login" className="landing-hero__cta">
-          See what I could save
+          See my last 30 days
         </Link>
       </section>
 
-      <section className="landing-how" aria-label="How it works">
-        {HOW_IT_WORKS.map((step, index) => (
-          <div className="landing-how__step" key={step.title}>
-            <h2>
-              {index + 1}. {step.title}
-            </h2>
-            <p>{step.body}</p>
-          </div>
-        ))}
-      </section>
+      <LandingDemo />
 
-      <section className="landing-about" aria-label="What is Shift & Save?">
+      <section className="landing-card landing-about" aria-label="What is Shift & Save?">
         <h2>What is Shift &amp; Save?</h2>
         <p>
           Shift &amp; Save helps you get more from dynamic energy tariffs without having to watch
           electricity prices all day.
         </p>
         <p>
-          We look at your real energy use, show whether a tariff like Octopus Agile could save you
-          money, and tell you the best practical times to run things around the home.
+          We look at your real energy use, compare it against a different tariff — same usage,
+          same times — and show what better timing could change too.
         </p>
         <p>You stay in control. We make the complicated bit simple.</p>
       </section>
 
-      <section className="landing-compat" aria-label="Compatibility">
+      <section className="landing-card landing-compat" aria-label="Compatibility">
         <div className="landing-compat__group">
-          <h2>Works with</h2>
+          <h2>Currently supports</h2>
           <p>{WORKS_WITH.join(' · ')}</p>
         </div>
         <div className="landing-compat__group">
@@ -87,7 +63,7 @@ function LandingPage() {
         </p>
       </section>
 
-      <section className="landing-about" aria-label="Who we are">
+      <section className="landing-card landing-about" aria-label="Who we are">
         <h2>Who we are</h2>
         <p>
           Shift &amp; Save is an independent UK product built to make smart energy tariffs easier to
@@ -106,17 +82,19 @@ function LandingPage() {
         </p>
       </section>
 
-      <section className="landing-trust" aria-label="Why trust us">
-        {TRUST_POINTS.map((point) => (
-          <p className="landing-trust__item" key={point}>
-            {point}
-          </p>
-        ))}
-      </section>
+      <footer className="landing-footer">
+        <div className="landing-trust" aria-label="Why trust us">
+          {TRUST_POINTS.map((point) => (
+            <p className="landing-trust__item" key={point}>
+              {point}
+            </p>
+          ))}
+        </div>
 
-      <p className="landing-explainer-link">
-        <Link to="/how-smart-tariffs-work">How dynamic tariffs work</Link>
-      </p>
+        <p className="landing-explainer-link">
+          <Link to="/how-smart-tariffs-work">How dynamic tariffs work</Link>
+        </p>
+      </footer>
     </>
   )
 }
