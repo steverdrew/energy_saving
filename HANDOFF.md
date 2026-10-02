@@ -1,23 +1,22 @@
 # HANDOFF
 
-_Last updated: 2026-10-02 (core loop merged via PR #14; backlog audit
-+ polish tier merged via PR #15; deeper feature tier OA-45/25/24/23/
-7/32 merged via PR #16; OA-46 implemented this session, not yet
-pushed; OA-44 deliberately untouched)_
+_Last updated: 2026-10-02 (core loop via PR #14; backlog audit +
+polish tier via PR #15; deeper feature tier OA-45/25/24/23/7/32 via
+PR #16; OA-46 via PR #17 — all merged to `main`, all Done in Jira;
+OA-44 deliberately untouched)_
 
 ## Current task
 
-None in progress. Order worked this session, per Steve: (1) core loop
-— merged (`main` @ `995bdea`, PR #14). (2) Backlog audit — done. (3)
-Polish tier (OA-60/61/62) — merged (`main` @ `1b0bb2b`, PR #15). (4)
-Deeper feature tier: **OA-45, OA-25, OA-24, OA-23, OA-7, OA-32**
-merged (`main` @ `6f45343`, PR #16), all moved to Done in Jira.
-**OA-46** (real-world savings equivalents) is now also implemented
-and tested — see State below — but not yet pushed/merged. **OA-44
+None in progress. Everything Steve asked for this session, in the
+order given, is merged to `main` and Done in Jira: (1) core loop
+(`995bdea`, PR #14), (2) backlog audit, (3) polish tier OA-60/61/62
+(`1b0bb2b`, PR #15), (4) deeper feature tier OA-45/25/24/23/7/32
+(`6f45343`, PR #16) and OA-46 (`23d40b0`, PR #17). **OA-44
 deliberately not started** — its own ticket says "Not part of the
 focused MVP... build only after the MVP proves customers act on
-savings guidance." With OA-46 done, the entire deeper-feature tier
-Steve named is complete except OA-44 (by design).
+savings guidance." Nothing is currently in progress; see Next step
+for what's genuinely left in the backlog vs. what needs Steve's
+input before picking up.
 
 ## State
 
@@ -335,11 +334,27 @@ Steve named is complete except OA-44 (by design).
      A fuller audit is possible if useful later.
 5. Polish tier (OA-60/61/62) merged via PR #15 (`1b0bb2b`).
 6. Deeper feature tier OA-45/25/24/23/7/32 merged via PR #16
-   (`6f45343`), all Done in Jira. OA-46 built on top (coffee
-   equivalent on My Savings) but **not yet pushed** — push, open a PR
-   (same pattern as #14/#15/#16), merge, then mark OA-46 Done.
-   **OA-44 deliberately skipped** — its own ticket marks it post-MVP;
-   do not start it without Steve's go-ahead.
+   (`6f45343`); OA-46 merged via PR #17 (`23d40b0`). All Done in
+   Jira. **OA-44 deliberately skipped** — its own ticket marks it
+   post-MVP; do not start it without Steve's go-ahead.
+6a. **What's genuinely left in the backlog** (from the audit, not
+   yet built — see Decisions): OA-10 (My Savings needs appliance-
+   level breakdown across *all* appliances at once, plus explicit
+   "still best, no action needed" framing), OA-18 (provider-neutral
+   auth abstraction), OA-20 (account-deletion flow, consent
+   recording, documented retention rules), OA-39 (insufficient-data
+   onboarding state, time-to-first-saving instrumentation). None of
+   these were explicitly requested this session — worth raising with
+   Steve before picking one, since they're backlog finds, not part of
+   the roadmap he actually gave.
+6b. Epics OA-1, OA-2, OA-3, OA-33, OA-34, OA-35 were deliberately left
+   untouched during the audit (see Decisions) — still worth a nudge to
+   Steve that they exist and may be ready to close given how much of
+   the MVP roadmap is now done.
+6c. The rest of the Jira backlog beyond what's been touched this
+   session (most of OA-11 through OA-32, and anything past OA-62)
+   has **not** been audited — only tickets that looked plausibly
+   stale or were explicitly named were checked.
 7. Before relying on OA-45's Go/Intelligent Go detection in anger:
    `classifyTariffKind` (`server/src/tariffState.js`)'s `'GO-'` and
    `'INTELLI'` prefix matches are a best-effort guess at Octopus's
