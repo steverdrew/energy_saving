@@ -8,10 +8,87 @@ OA-75 and OA-76 built, gap-closed against their actual Jira acceptance
 criteria, and transitioned to Done; OA-81 (household appliance setup)
 created by Steve directly in Jira and built this session; all three
 merged to `main` via PR #26 and deployed to prod (Deploy server +
-Deploy beta both green); OA-82 (public landing page prerendering)
-built this session and merged/deployed to prod; OA-65 not started)_
+Deploy beta both green); OA-82 (public landing page prerendering) and
+OA-83 (recomposed landing-page comparison) both built this session and
+merged/deployed to prod; OA-65 not started)_
 
 ## Current task (latest)
+
+**OA-83** ("Recompose landing-page interactive comparison to match the
+design mockup") — composition/spacing/hierarchy rework of
+`LandingDemo` (the Baseline/Compare/Optimise tabbed comparison on the
+logged-out landing page), scoped strictly to the ticket's written
+requirements plus a design-mockup video Steve shared mid-session
+(`src/entry-server.tsx`/screenshots aside, no file from it is in the
+repo — it was reviewed via extracted frames and a verbal description,
+not committed):
+
+- `src/components/LandingDemo.tsx`: added a visible section heading
+  ("Interactive tariff comparison" — previously only an aria-label, no
+  visible title); restructured each step's story panel from a
+  headline-led paragraph to a stat-first hierarchy -- a small context
+  pill (tariff name), a short label, the dominant kWh/£ figure, then a
+  brief caption -- per the ticket's "kWh and cost should be the
+  dominant figures; explanatory copy should support rather than
+  compete with them". Added `describeTimingPotential` for the
+  Optimise step's "+ £X.XX potential" framing (distinct from
+  `describeDifference`'s "more/less" wording used for the tariff-choice
+  step). No copy claims changed, no fixture/data changes -- same
+  `buildLandingDemoFixture` figures, just reordered/restyled.
+- `src/components/LandingDemo.css`: tightened the gap between the
+  segmented control and the content; capped `.landing-demo__grid` and
+  `.landing-demo__heatmap-card` width so the pair reads as one
+  contained object instead of the heat map's 48-cell row stretching
+  into a short, very wide bar on large screens; de-emphasised the
+  heat map's legend/title text size and hid its text annotations list
+  within the landing-demo scope only (the flagged-cell ring markers on
+  the grid itself still show cheapest/most-expensive/highest-usage, so
+  no information is lost, just not duplicated as a text block); new
+  `__pill`/`__label`/`__stat`/`__stat-value`/`__stat-diff`/`__question`/
+  `__callout`/`__caption` classes for the restructured story panel.
+  Mobile already stacked narrative-before-heat-map (pre-existing DOM
+  order), so no reordering was needed there.
+- **Decisions** (ticket scope wasn't fully covered by the written spec
+  alone, filled in per CLAUDE.md's "pick the simplest option, record
+  it" convention):
+  - Did **not** change the heat map's colour system to the mockup's
+    categorical green/purple/red (cheap/standard/peak) scheme. The
+    shared `HeatMap` component (also used by Actual/Compare/Optimised)
+    deliberately uses a single-hue sequential ramp per the dataviz
+    skill, with usage encoded separately via bar height rather than a
+    second hue -- recolouring it is a cross-page design-system change
+    the ticket's own acceptance criteria don't ask for. Flagged to
+    Steve as a possible separate ticket if wanted.
+  - Did not literally replicate the mockup's dense "14-day sample"
+    grid shape -- our fixture is one illustrative day (48 half-hour
+    slots), and the real `HeatMap` component's per-day-row,
+    annotated, table-togglable rendering (used identically on
+    authenticated pages) was kept as-is; only its landing-page-scoped
+    sizing/legend weight changed, per "reduce the displayed sample
+    length or compress the visual treatment rather than simply scaling
+    the grid larger" and "implementation remains consistent with
+    OA-77/78/79/80".
+  - Picked `#4ade80` (a green not previously used anywhere else in the
+    app) for the Compare/Optimise savings-difference figure -- no
+    existing "savings green" token existed to reuse.
+- Verified: `npm run build`/`lint`/`test`/`check-bundle` all pass.
+  Visually verified via `vite preview` + a locally-available headless
+  Chromium binary (`/opt/pw-browsers`, no `playwright` npm package in
+  this repo) at desktop (1280px) and mobile (390px) widths, with the
+  page's CSS fade-in animations temporarily neutralised for the
+  screenshot only (a static single-frame capture otherwise catches the
+  animation's `opacity:0` starting keyframe, which looks like missing
+  content but isn't -- confirmed by comparing against the real build
+  with animations intact; this is a headless-screenshot artifact, not
+  a shipped bug, and pre-dates this session) and reverted immediately
+  after. Did not verify interactively clicking through the three tabs
+  in a real browser this session -- Firebase's `onAuthStateChanged`
+  never resolves in this sandbox (blocked egress), so the client app
+  never leaves `loading`; static/no-JS rendering of the (default)
+  Baseline step was verified instead, and the Compare/Optimise JSX
+  branches were reviewed by reading rather than screenshotted.
+
+## Previous task
 
 **OA-82** ("Make public landing page externally readable without app
 execution") — build-time prerendering of the root URL so external

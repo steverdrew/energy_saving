@@ -21,8 +21,14 @@ function describeDifference(pence: number, moreLabel: string, lessLabel: string)
   return 'no difference'
 }
 
+function describeTimingPotential(pence: number): string {
+  if (pence > 0) return `+ ${formatGbp(pence)} potential`
+  if (pence < 0) return `${formatGbp(-pence)} more`
+  return 'no further difference'
+}
+
 /**
- * OA-77/OA-80: logged-out, interactive Baseline -> Compare tariff ->
+ * OA-77/OA-80/OA-83: logged-out, interactive Baseline -> Compare tariff ->
  * Optimise timing walkthrough. All figures come from
  * `buildLandingDemoFixture` -- fixture data only, never a real
  * household's usage, so every panel says so explicitly rather than
@@ -31,6 +37,11 @@ function describeDifference(pence: number, moreLabel: string, lessLabel: string)
  * keyboard as well as click/tap, and each step change remounts its
  * content (via `key`) to replay a restrained fade/slide transition --
  * skipped entirely under prefers-reduced-motion (see LandingDemo.css).
+ *
+ * OA-83: the story panel leads with the number (kWh/£), not a sentence --
+ * a small context pill above it and a short supporting line below, per
+ * the ticket's "dominant figure" hierarchy. Reuses the same fixture/copy
+ * as before, just reordered/restyled; no new claims are made.
  */
 function LandingDemo() {
   const [step, setStep] = useState<DemoStepId>('baseline')
@@ -56,6 +67,7 @@ function LandingDemo() {
 
   return (
     <section className="landing-demo" aria-label="Interactive example: how Shift & Save works">
+      <h2 className="landing-demo__heading">Interactive tariff comparison</h2>
       <p className="landing-demo__eyebrow">Example household — illustrative data, not your own</p>
 
       <div className="landing-demo__tabs" role="tablist" aria-label="Demo steps">
@@ -91,26 +103,33 @@ function LandingDemo() {
         <div className="landing-demo__story">
           {step === 'baseline' && (
             <>
-              <h3>This is what happened</h3>
-              <p className="landing-demo__summary">
-                On a <strong>{fixture.baseline.tariffName}</strong> tariff, this example household used{' '}
-                <strong>{fixture.baseline.totalKwh.toFixed(1)} kWh</strong> over the day, at a cost of{' '}
-                <strong>{formatGbp(fixture.baseline.totalCostPence)}</strong>.
+              <p className="landing-demo__pill">Example tariff: {fixture.baseline.tariffName}</p>
+              <p className="landing-demo__label">This example day:</p>
+              <p className="landing-demo__stat">
+                <span className="landing-demo__stat-value">{fixture.baseline.totalKwh.toFixed(1)} kWh</span>
+                <span className="landing-demo__stat-sep" aria-hidden="true">
+                  ·
+                </span>
+                <span className="landing-demo__stat-value">{formatGbp(fixture.baseline.totalCostPence)}</span>
+              </p>
+              <p className="landing-demo__caption">
+                This is the baseline. We map exactly when energy gets used, half hour by half hour.
               </p>
             </>
           )}
 
           {step === 'compare' && (
             <>
-              <h3>
-                I&apos;m on {fixture.baseline.tariffName} — what if I&apos;d been on {fixture.compare.tariffName}?
-              </h3>
-              <p className="landing-demo__summary">
-                Same usage. Same times. Only the tariff changes:{' '}
-                <strong>{formatGbp(fixture.compare.totalCostPence)}</strong> instead of{' '}
-                <strong>{formatGbp(fixture.baseline.totalCostPence)}</strong> — a difference of{' '}
-                <strong>{describeDifference(fixture.tariffSwitchSavingPence, 'more', 'less')}</strong> in this
-                example.
+              <p className="landing-demo__pill">Compare with: {fixture.compare.tariffName}</p>
+              <p className="landing-demo__label landing-demo__label--accent">Same usage. Same times.</p>
+              <p className="landing-demo__stat">
+                <span className="landing-demo__stat-value">{formatGbp(fixture.compare.totalCostPence)}</span>
+                <span className="landing-demo__stat-diff">
+                  {describeDifference(fixture.tariffSwitchSavingPence, 'more', 'less')}
+                </span>
+              </p>
+              <p className="landing-demo__caption">
+                Only the tariff changes — same example household, same half-hourly usage.
               </p>
               <p className="landing-demo__caveat">
                 This is one example comparison, not a guarantee — which tariff costs less depends on your own usage
@@ -121,16 +140,18 @@ function LandingDemo() {
 
           {step === 'optimise' && (
             <>
-              <h3>What could better timing change?</h3>
-              <p className="landing-demo__summary">
-                Here&apos;s an example of moving flexible use — like a dishwasher — into cheaper periods, while
-                keeping the same {fixture.compare.tariffName} tariff and the same total energy use.
+              <p className="landing-demo__question">
+                What if flexible use — like a dishwasher — moved out of the expensive window?
               </p>
-              <p className="landing-demo__summary">
-                That alone is a further{' '}
-                <strong>{describeDifference(fixture.timingSavingPence, 'more', 'less')}</strong> in this illustrative
-                example — separate from the tariff-choice difference above.
-              </p>
+              <div className="landing-demo__callout">
+                <p className="landing-demo__label">{fixture.compare.tariffName} + smarter timing</p>
+                <p className="landing-demo__stat">
+                  <span className="landing-demo__stat-value">{formatGbp(fixture.optimise.totalCostPence)}</span>
+                  <span className="landing-demo__stat-diff landing-demo__stat-diff--positive">
+                    {describeTimingPotential(fixture.timingSavingPence)}
+                  </span>
+                </p>
+              </div>
               <p className="landing-demo__caveat">
                 Illustrative example only. We&apos;re not saying your home has this appliance, or that you could
                 achieve this saving.
