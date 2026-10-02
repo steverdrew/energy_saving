@@ -1,6 +1,12 @@
 import { Router } from 'express'
 import { decrypt, encrypt } from '../crypto.js'
-import { OctopusAuthError, OctopusRequestError, summarizeOctopusAccount } from '../octopusClient.js'
+import {
+  OctopusAuthError,
+  OctopusRequestError,
+  regionLetterFromTariffCode,
+  summarizeOctopusAccount,
+} from '../octopusClient.js'
+import { compareCurrentTariffToAgile } from '../savingsComparison.js'
 
 const ACCOUNT_NUMBER_RE = /^A-[A-Za-z0-9]{8}$/
 
@@ -26,6 +32,7 @@ export function createOctopusRouter({
   fetchOctopusAccount,
   fetchElectricityConsumption,
   fetchTariffUnitRates,
+  fetchActiveAgileTariffCode,
   store,
   importStore,
 }) {
@@ -168,8 +175,52 @@ export function createOctopusRouter({
     })
   })
 
-  router.get('/savings-result', requireFirebaseAuth, (_req, res) => {
-    res.status(501).json({ error: 'Not implemented' })
+  router.get('/savings-result', requireFirebaseAuth, async (req, res) => {
+    const record = await importStore.get(req.firebaseUid)
+    if (!record) {
+      return res.status(400).json({ error: 'Import your usage history first.' })
+    }
+
+    const regionLetter = regionLetterFromTariffCode(record.tariffCode)
+
+    let agileTariffCode
+    let agileRates
+    try {
+      agileTariffCode = await fetchActiveAgileTariffCode(regionLetter)
+      agileRates = await fetchTariffUnitRates(agileTariffCode, {
+        periodFrom: record.periodFrom,
+        periodTo: record.periodTo,
+      })
+    } catch {
+      return res.status(502).json({ error: 'Could not reach Octopus right now. Please try again.' })
+    }
+
+    const comparison = compareCurrentTariffToAgile({
+      consumption: record.consumption,
+      currentTariffRates: record.rates,
+      agileRates,
+    })
+
+    const windowDays = Math.max(
+      1,
+      Math.round((new Date(record.periodTo).getTime() - new Date(record.periodFrom).getTime()) / 86400000),
+    )
+    const annualizedSavingPence = Math.round(comparison.estimatedSavingPence * (365 / windowDays) * 100) / 100
+
+    // OA-21: unit rates only, no standing charge -- flagged explicitly so a
+    // future standing-charge addition is an upgrade to this same result
+    // shape, not a silent change of what the number means.
+    res.json({
+      periodFrom: record.periodFrom,
+      periodTo: record.periodTo,
+      windowDays,
+      currentTariffCostPence: comparison.currentTariffCostPence,
+      agileCostPence: comparison.agileCostPence,
+      estimatedSavingPence: comparison.estimatedSavingPence,
+      annualizedSavingPence,
+      unitRateOnly: true,
+      agileTariffCode,
+    })
   })
 
   return router

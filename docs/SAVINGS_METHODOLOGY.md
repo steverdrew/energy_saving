@@ -1,9 +1,8 @@
 # Savings methodology (OA-21)
 
-Draft for Steve's sign-off. Nothing in this document is live in the
-product yet — no £ savings claim is shown to a user until this is
-agreed and OA-22/OA-8 are built against it. See `HANDOFF.md` for the
-engineering status this gates.
+**Signed off by Steve 2026-10-02.** OA-8 is built against this —
+see `HANDOFF.md` for current status. Decisions below are recorded as
+agreed, not draft.
 
 ## What we calculate
 
@@ -53,34 +52,51 @@ prediction of future behaviour.
   charges, and any account-level discounts aren't included.
 - Not financial advice.
 
-## Trust copy (draft, for wherever a result is shown)
+## Decisions (Steve, 2026-10-02)
 
-Short form, for use near any £ figure:
+1. **Unit-rate-only is fine to ship**, as long as the caveat is
+   impossible to miss *in the result copy itself*, not left implicit
+   or buried in a docs page. Never phrase it as "you would save £X on
+   your bill" — that overclaims a full-bill comparison we're not
+   making. Internally, treat this as a distinct, labelled
+   `unitRateOnly: true` result shape, so that adding standing charges
+   later is an upgrade to the same result type, not a meaning change
+   underneath an unchanged label.
+2. **30 days is enough to ship the first result.** State the window
+   explicitly in the copy ("last 30 days"). If the result is
+   annualised, label it clearly as a projection from that window, not
+   as if it were already a seasonally-representative year. Widening
+   the import window later (90 days, a year) is a quality
+   improvement, not a blocker.
+3. **The result copy carries its own caveats** — a user looking only
+   at the £ figure and the line directly under it should already have
+   the full picture, without needing to find this document.
 
-> Based on your own actual usage over the last 30 days, compared
-> against real Octopus Agile prices for the same period. Unit rates
-> only — doesn't include the standing charge. Past usage, not a
-> promise about the future.
+## Trust copy (final, wired into OA-8)
 
-Longer form, for an explainer/FAQ-style page:
+Primary result line (current tariff cheaper — the honest "stay put"
+outcome):
 
-> We take your real half-hourly usage from your connected account and
-> ask what it would have cost on Octopus Agile instead of your current
-> tariff, using Agile's actual published prices for the same days. We
-> only compare unit rates, not the standing charge, and we only look
-> at the period we've imported so far — so this is a look back at what
-> already happened, not a forecast. If your current tariff would have
-> been cheaper, we'll say so.
+> Based on your actual electricity use over the last {N} days, your
+> current tariff was already cheaper than Agile by **£X** at the unit
+> rates available during that period.
+
+Primary result line (Agile would have been cheaper):
+
+> Based on your actual electricity use over the last {N} days, you
+> would have spent **£X** less on Agile at the unit rates available
+> during that period.
+
+Caveat line, always shown directly under the headline, same weight:
+
+> This is an estimate based on unit rates only. Standing charges
+> aren't included yet.
+
+Annualised projection, shown only alongside the above, never alone:
+
+> At the same usage pattern, that's roughly **£Y** a year. Your
+> actual annual saving will vary with your usage and electricity
+> prices.
 
 This keeps the tone already set on the Landing and Explainer pages
 ("we won't tell you to switch if switching wouldn't actually help").
-
-## Open questions for Steve
-
-1. Is unit-rate-only (no standing charge) acceptable for the first
-   result screen, with the caveat shown, or does OA-8 need standing
-   charges included before anyone sees a number?
-2. Is a 30-day window enough to show a first result, or should OA-8
-   wait until a longer import window is implemented?
-3. Any wording changes to the trust copy above before it's wired into
-   the UI?

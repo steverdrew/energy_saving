@@ -1,15 +1,17 @@
 # HANDOFF
 
-_Last updated: 2026-10-02 (OA-59, OA-58, OA-6 implemented this session)_
+_Last updated: 2026-10-02 (OA-59, OA-58, OA-6, OA-21, OA-22, OA-8 implemented this session)_
 
 ## Current task
 
-None in progress. OA-59, OA-58, OA-6, and the codeable part of OA-22
-(current-tariff-vs-Agile comparison maths) are implemented, tested,
-and pushed to `claude/dazzling-ritchie-nofudq`. OA-21 has a drafted
-methodology/trust copy (`docs/SAVINGS_METHODOLOGY.md`) awaiting Steve's
-sign-off — it's a sign-off gate, not something I can mark done myself.
-Nothing is deployed/verified live on beta yet.
+None in progress. OA-21's methodology was reviewed and **signed off by
+Steve** (2026-10-02, see `docs/SAVINGS_METHODOLOGY.md` Decisions). With
+that gate cleared, OA-22's comparison maths is now wired into a real
+`GET /api/octopus/savings-result` endpoint, and OA-8's result screen
+(`src/pages/SavingsPage.tsx`) is built and shows a real £ estimate.
+OA-59, OA-58, OA-6, OA-21, OA-22, OA-8 are all implemented, tested, and
+pushed to `claude/dazzling-ritchie-nofudq`. Nothing is
+deployed/verified live on beta yet.
 
 ## State
 
@@ -36,9 +38,20 @@ Nothing is deployed/verified live on beta yet.
   - [x] Flow visible and testable on the stable beta URL
   - [ ] Not yet manually exercised (but covered by passing server tests):
     invalid-credentials error path, disconnect, cross-user isolation
-- "See my savings" link intentionally hits a `501` stub
-  (`savings-result` endpoint) — by design, gated behind OA-21 sign-off.
-  Not a bug if Steve or anyone clicks it.
+- **OA-21/OA-22/OA-8**: "See my savings" now returns a real result
+  instead of the old `501` stub. `GET /api/octopus/savings-result`
+  reads the imported consumption + current-tariff rates
+  (`octopusImports`), looks up the currently-on-sale Agile product for
+  the user's region (`fetchActiveAgileTariffCode`), fetches Agile's
+  rates for the same period, and runs
+  `compareCurrentTariffToAgile` (`server/src/savingsComparison.js`).
+  Response is explicitly flagged `unitRateOnly: true`. `SavingsPage`
+  shows the headline (Agile cheaper / current tariff cheaper / about
+  the same), the mandatory "unit rates only, no standing charge"
+  caveat at equal visual weight, and an annualised projection only
+  when there's an actual saving to project — wording follows
+  `docs/SAVINGS_METHODOLOGY.md`'s final trust copy exactly, per
+  Steve's sign-off.
 - **OA-59**: Account, Connect Octopus and future authenticated pages now
   share one `OctopusConnectionProvider`
   (`src/octopus/OctopusConnectionContext.tsx`) instead of each fetching
@@ -68,28 +81,26 @@ Nothing is deployed/verified live on beta yet.
 
 ## Next step
 
-1. **Steve: read and respond to `docs/SAVINGS_METHODOLOGY.md`** —
-   three open questions at the bottom (standing charge exclusion,
-   30-day window, trust copy wording). Nothing £-facing ships until
-   this is agreed; see "No £ savings claims until OA-21 passes" below.
-2. Once OA-21 is agreed, wire `server/src/savingsComparison.js` +
-   `fetchActiveAgileTariffCode` into an actual endpoint (reading from
-   the `octopusImports` Firestore doc OA-6 writes) and build OA-8's
-   result screen against it. Both pieces exist and are tested, just
-   not connected to any route yet — intentionally, per the gate above.
-3. **fetchActiveAgileTariffCode (`server/src/octopusClient.js`) has
+1. **fetchActiveAgileTariffCode (`server/src/octopusClient.js`) has
    never been run against the real Octopus API** — this sandbox has no
    network access to `api.octopus.energy` (outbound is proxied and
    that host isn't allow-listed). It's built from the documented
    `/v1/products/` shape and unit-tested with a mocked `fetch`, but
    Steve should sanity-check it against a real response (e.g. hit
    `https://api.octopus.energy/v1/products/?page_size=100` directly)
-   before relying on it.
-4. Manually spot-check OA-59/OA-58/OA-6 live on beta once deployed:
-   Account page reflects real connection state after a refresh; `/`
-   redirects when signed in; Import button works with a real account
-   and real Octopus history comes back sane.
-5. Update README.md's "Server deployment (Cloud Run)" checklist to match
+   before relying on it. This is the single highest-risk unverified
+   assumption in OA-8's result — if the real product list shape
+   differs, `/savings-result` will 502 rather than show a wrong number
+   (fails closed), but worth confirming before wider beta use.
+2. Manually spot-check the full chain live on beta once deployed:
+   connect → import → "See my savings" shows a real, sane £ figure
+   with the caveat visible; Account page reflects real connection
+   state after a refresh; `/` redirects when signed in.
+3. Pick up the next roadmap items: OA-9/OA-30/OA-31 (cheapest windows,
+   appliance profiles, manual guidance), OA-40/OA-43 (recommend an
+   action with £ value), OA-41 (running saved-so-far total) — all
+   build on OA-8 now existing.
+4. Update README.md's "Server deployment (Cloud Run)" checklist to match
    the real working IAM configuration (listed below) — currently stale,
    purely a documentation cleanup, no urgency.
 
@@ -136,8 +147,17 @@ Nothing is deployed/verified live on beta yet.
   charge, over whatever window OA-6 imported — see
   `docs/SAVINGS_METHODOLOGY.md` for the full scope statement and why.
 - OA-21: drafted the methodology/trust copy myself rather than waiting,
-  since it's cheap to draft and expensive to block on — but did not
-  mark it agreed/passed. That call is Steve's, not mine.
+  since it's cheap to draft and expensive to block on. Steve then
+  answered all three open questions (unit-rate-only OK, 30 days OK,
+  trust copy needed more explicit in-line caveats) — recorded as
+  Decisions in `docs/SAVINGS_METHODOLOGY.md`, which now carries his
+  sign-off date. The result shape is deliberately labelled
+  `unitRateOnly: true` so adding standing charges later is an upgrade
+  to this same shape, not a silent meaning change (Steve's instruction).
+- OA-8: annualised saving is only shown when Agile would have been
+  cheaper (`estimatedSavingPence > 0`) — projecting an annualised
+  *negative* saving read oddly, so when the current tariff is already
+  cheaper, the headline alone carries the message, no annualised line.
 
 ## Constraints and preferences
 
@@ -147,7 +167,9 @@ Nothing is deployed/verified live on beta yet.
   Secret Manager, never shared in chat.
 - Octopus API key: encrypted at rest, never logged, never returned to
   the browser after submission.
-- No £ savings claims until OA-21 passes.
+- No £ savings claims until OA-21 passes — **cleared 2026-10-02**; any
+  £ figure shown must still carry the unit-rate-only caveat at equal
+  visual weight (Steve's explicit instruction, not just a docs note).
 - GCP console/CLI changes always need Steve — this session has no GCP
   credentials.
 

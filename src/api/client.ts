@@ -65,6 +65,22 @@ export interface OctopusImportStatus {
   importedAt?: string
 }
 
+// OA-22/OA-21: unit rates only, no standing charge -- see
+// docs/SAVINGS_METHODOLOGY.md. `unitRateOnly` is always true today but is
+// sent explicitly so a future standing-charge addition is a new, distinct
+// shape rather than a silent change of what this result means.
+export interface SavingsResult {
+  periodFrom: string
+  periodTo: string
+  windowDays: number
+  currentTariffCostPence: number
+  agileCostPence: number
+  estimatedSavingPence: number
+  annualizedSavingPence: number
+  unitRateOnly: true
+  agileTariffCode: string
+}
+
 export const api = {
   octopus: {
     connect: async (input: { apiKey: string; accountNumber: string }) =>
@@ -90,6 +106,6 @@ export const api = {
     importStatus: async () =>
       request<OctopusImportStatus>('/api/octopus/import-status', { headers: await authHeaders() }),
     savingsResult: async () =>
-      request<never>('/api/octopus/savings-result', { headers: await authHeaders() }),
+      request<SavingsResult>('/api/octopus/savings-result', { headers: await authHeaders() }),
   },
 }

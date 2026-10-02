@@ -37,7 +37,7 @@ function fakeFetchOctopusAccount(accountNumber, apiKey) {
             mpan: '1200000345678',
             meters: [{ serial_number: '21E1234567' }],
             agreements: [
-              { tariff_code: 'E-1R-AGILE-24-04-03-A', valid_from: '2024-01-01', valid_to: null },
+              { tariff_code: 'E-1R-VAR-22-11-01-A', valid_from: '2024-01-01', valid_to: null },
             ],
           },
         ],
@@ -56,11 +56,24 @@ function fakeFetchElectricityConsumption(mpan, serialNumber, apiKey) {
   ])
 }
 
-function fakeFetchTariffUnitRates(_tariffCode) {
+function fakeFetchTariffUnitRates(tariffCode) {
+  if (tariffCode.startsWith('E-1R-AGILE-FAIL')) {
+    throw new OctopusRequestError('Could not reach Octopus.')
+  }
+  if (tariffCode.includes('AGILE')) {
+    return Promise.resolve([
+      { validFrom: '2026-09-01T00:00:00Z', validTo: '2026-09-01T00:30:00Z', unitRateIncVatPence: 10 },
+      { validFrom: '2026-09-01T00:30:00Z', validTo: '2026-09-01T01:00:00Z', unitRateIncVatPence: 40 },
+    ])
+  }
   return Promise.resolve([
     { validFrom: '2026-09-01T00:00:00Z', validTo: '2026-09-01T00:30:00Z', unitRateIncVatPence: 24.1 },
     { validFrom: '2026-09-01T00:30:00Z', validTo: '2026-09-01T01:00:00Z', unitRateIncVatPence: 19.8 },
   ])
+}
+
+function fakeFetchActiveAgileTariffCode(regionLetter) {
+  return Promise.resolve(`E-1R-AGILE-24-10-01-${regionLetter}`)
 }
 
 const app = express()
@@ -72,6 +85,7 @@ app.use(
     fetchOctopusAccount: fakeFetchOctopusAccount,
     fetchElectricityConsumption: fakeFetchElectricityConsumption,
     fetchTariffUnitRates: fakeFetchTariffUnitRates,
+    fetchActiveAgileTariffCode: fakeFetchActiveAgileTariffCode,
     store: createInMemoryOctopusStore(),
     importStore: createInMemoryOctopusImportStore(),
   }),
@@ -127,7 +141,7 @@ test('POST /connect succeeds, redacts the account number, and never returns the 
   assert.equal(res.body.connected, true)
   assert.equal(res.body.accountNumberRedacted, 'A-****5678')
   assert.equal(res.body.meterContext.mpan, '1200000345678')
-  assert.equal(res.body.meterContext.tariffCode, 'E-1R-AGILE-24-04-03-A')
+  assert.equal(res.body.meterContext.tariffCode, 'E-1R-VAR-22-11-01-A')
   assert.equal(JSON.stringify(res.body).includes('good-key'), false)
   assert.equal(JSON.stringify(res.body).includes('A-12345678'), false)
 })
@@ -170,14 +184,6 @@ test('DELETE /connection removes only the requesting user\'s connection', async 
   assert.equal(afterF.body.connected, true)
 })
 
-for (const [method, path] of [['get', '/api/octopus/savings-result']]) {
-  test(`${method.toUpperCase()} ${path} returns 501 with a JSON error when authenticated`, async () => {
-    const res = await request(app)[method](path).set('Authorization', 'Bearer user-a')
-    assert.equal(res.status, 501)
-    assert.equal(typeof res.body.error, 'string')
-  })
-}
-
 test('GET /import-status reports not imported before any import has run', async () => {
   const res = await request(app).get('/api/octopus/import-status').set('Authorization', 'Bearer user-g')
   assert.equal(res.status, 200)
@@ -217,4 +223,60 @@ test('POST /import never leaks the decrypted API key back to the client', async 
 
   const res = await request(app).post('/api/octopus/import').set('Authorization', 'Bearer user-j')
   assert.equal(JSON.stringify(res.body).includes('good-key'), false)
+})
+
+test('GET /savings-result requires an import first', async () => {
+  const res = await request(app).get('/api/octopus/savings-result').set('Authorization', 'Bearer user-k')
+  assert.equal(res.status, 400)
+})
+
+test('GET /savings-result compares the current tariff against Agile and flags unit-rate-only', async () => {
+  await request(app)
+    .post('/api/octopus/connect')
+    .set('Authorization', 'Bearer user-l')
+    .send({ accountNumber: 'A-12345678', apiKey: 'good-key' })
+  await request(app).post('/api/octopus/import').set('Authorization', 'Bearer user-l')
+
+  const res = await request(app).get('/api/octopus/savings-result').set('Authorization', 'Bearer user-l')
+  assert.equal(res.status, 200)
+  assert.equal(res.body.unitRateOnly, true)
+  assert.equal(res.body.agileTariffCode, 'E-1R-AGILE-24-10-01-A')
+  // current: 0.21*24.1 + 0.18*19.8 = 8.625p. agile: 0.21*10 + 0.18*40 = 9.3p.
+  assert.equal(res.body.currentTariffCostPence, 8.63)
+  assert.equal(res.body.agileCostPence, 9.3)
+  assert.equal(res.body.estimatedSavingPence, -0.67)
+  assert.equal(typeof res.body.annualizedSavingPence, 'number')
+})
+
+test('GET /savings-result surfaces an Octopus failure fetching Agile rates as 502', async () => {
+  await request(app)
+    .post('/api/octopus/connect')
+    .set('Authorization', 'Bearer user-m')
+    .send({ accountNumber: 'A-12345678', apiKey: 'good-key' })
+  await request(app).post('/api/octopus/import').set('Authorization', 'Bearer user-m')
+
+  // Force the Agile tariff lookup to resolve to one fakeFetchTariffUnitRates
+  // treats as unreachable, without needing a separate router instance.
+  const failingApp = express()
+  failingApp.use(express.json())
+  failingApp.use(
+    '/api/octopus',
+    createOctopusRouter({
+      requireFirebaseAuth,
+      fetchOctopusAccount: fakeFetchOctopusAccount,
+      fetchElectricityConsumption: fakeFetchElectricityConsumption,
+      fetchTariffUnitRates: fakeFetchTariffUnitRates,
+      fetchActiveAgileTariffCode: () => Promise.resolve('E-1R-AGILE-FAIL-A'),
+      store: createInMemoryOctopusStore(),
+      importStore: createInMemoryOctopusImportStore(),
+    }),
+  )
+  await request(failingApp)
+    .post('/api/octopus/connect')
+    .set('Authorization', 'Bearer user-n')
+    .send({ accountNumber: 'A-12345678', apiKey: 'good-key' })
+  await request(failingApp).post('/api/octopus/import').set('Authorization', 'Bearer user-n')
+
+  const res = await request(failingApp).get('/api/octopus/savings-result').set('Authorization', 'Bearer user-n')
+  assert.equal(res.status, 502)
 })
