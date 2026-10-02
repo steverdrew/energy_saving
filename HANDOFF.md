@@ -8,12 +8,66 @@ OA-75 and OA-76 built, gap-closed against their actual Jira acceptance
 criteria, and transitioned to Done; OA-81 (household appliance setup)
 created by Steve directly in Jira and built this session; all three
 merged to `main` via PR #26 and deployed to prod (Deploy server +
-Deploy beta both green); OA-82 (public landing page prerendering) and
+Deploy beta both green); OA-82 (public landing page prerendering, also
+expanded mid-session into automation-friendliness -- see below) and
 OA-83 (recomposed landing-page comparison, in two passes -- see below)
 both built this session and merged/deployed to prod; OA-65 not
 started)_
 
 ## Current task (latest)
+
+**OA-82, update** ("Make public landing page externally readable and
+automation-friendly") -- Steve expanded this ticket after the first
+pass merged: title/description rewritten to add automation-friendly
+interaction, stable identifiers/state, and heat-map inspectability
+requirements, on top of the original prerendering work.
+
+Audited the existing implementation against every new acceptance
+bullet first, since most were already satisfied by prior work (the
+tablist/button semantics from OA-80, the deterministic
+`buildLandingDemoFixture`, OA-82's own prerendered no-JS HTML) rather
+than needing new code:
+- Already true, no change needed: real `<button role="tab">` controls
+  with `aria-selected`/`aria-controls`/roving `tabIndex`, keyboard
+  arrow-key navigation, a real `<a>`/`Link` CTA, heat-map cells as
+  real `<button>`s with descriptive `aria-label`s, an accessible-table
+  fallback view, deterministic (no `Math.random`) fixture data, a
+  synchronous (not effect-driven) initial Baseline state.
+- Added (genuinely missing against "give major landing sections
+  stable IDs" / "expose the currently selected comparison state
+  deterministically"): `id`s on `LandingPage`'s sections (`hero`,
+  `comparison-demo`, `about`, `compatibility`, `who-we-are`, `footer`)
+  and a `data-active-step={step}` attribute on `LandingDemo`'s
+  `<section>`, readable by automation/QA tooling without parsing ARIA.
+- Added **component-level interaction tests**
+  (`src/components/LandingDemo.test.tsx`, new devDependencies
+  `@testing-library/react`/`@testing-library/jest-dom`/
+  `@testing-library/user-event`/`jsdom`, scoped to that one file via
+  the `// @vitest-environment jsdom` pragma rather than changing the
+  project's default `node` test environment) to satisfy "an automated
+  browser can select all three comparison states... assertion that
+  state and figures update correctly... keyboard-only operation...
+  DOM/text equivalents for the heat map" durably in CI, rather than as
+  a one-off manual check. This was a deliberate substitution: **a real
+  browser automation run against the live app was attempted and ruled
+  out as infeasible from this sandbox**, not skipped by choice --
+  `onAuthStateChanged` in `AuthContext` never resolves in this
+  container even though Firebase's own endpoints
+  (`identitytoolkit.googleapis.com`, `securetoken.googleapis.com`) are
+  reachable through the sandbox's egress proxy (confirmed via `curl`);
+  headless Chromium doesn't pick up the proxy from environment
+  variables the way `curl`/Node do, and passing `--proxy-server`
+  explicitly, `--ignore-certificate-errors`, and a generous
+  `--virtual-time-budget` still left the client app stuck in `loading`
+  indefinitely. Since `LandingDemo` itself has no Firebase dependency,
+  testing it directly in jsdom sidesteps that blocker entirely and is
+  arguably the more durable fix anyway (a permanent CI regression
+  check beats a one-time manual click-through).
+- Verified: `npm run build`/`lint`/`test` (41 tests, up from 35) /
+  `check-bundle` all pass; confirmed the new `id`/`data-active-step`
+  attributes appear in the prerendered no-JS `dist/index.html` too.
+
+## Previous task
 
 **OA-83, second pass** ("Evolve landing-page interactive comparison
 beyond the initial mockup") -- Steve rewrote the ticket after the

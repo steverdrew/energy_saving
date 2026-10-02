@@ -72,7 +72,12 @@ function LandingDemo() {
   }
 
   return (
-    <section className="landing-demo" aria-label="Interactive example: how Shift & Save works">
+    <section
+      className="landing-demo"
+      id="comparison-demo"
+      aria-label="Interactive example: how Shift & Save works"
+      data-active-step={step}
+    >
       <p className="landing-demo__eyebrow">Example household — illustrative data, not your own</p>
 
       <div className="landing-demo__tabs" role="tablist" aria-label="Demo steps">

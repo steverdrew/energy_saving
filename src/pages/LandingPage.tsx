@@ -21,7 +21,7 @@ const COMING_SOON = ['Smart plugs', 'More connected appliances']
 function LandingPage() {
   return (
     <>
-      <section className="landing-hero">
+      <section className="landing-hero" id="hero">
         <h1>Take control of when you use energy — and what it costs you.</h1>
         <p className="landing-hero__sub">
           Different tariffs suit different patterns of energy use. Shift
@@ -35,7 +35,7 @@ function LandingPage() {
 
       <LandingDemo />
 
-      <section className="landing-card landing-about" aria-label="What is Shift & Save?">
+      <section className="landing-card landing-about" id="about" aria-label="What is Shift & Save?">
         <h2>What is Shift &amp; Save?</h2>
         <p>
           Shift &amp; Save helps you get more from dynamic energy tariffs without having to watch
@@ -48,7 +48,7 @@ function LandingPage() {
         <p>You stay in control. We make the complicated bit simple.</p>
       </section>
 
-      <section className="landing-card landing-compat" aria-label="Compatibility">
+      <section className="landing-card landing-compat" id="compatibility" aria-label="Compatibility">
         <div className="landing-compat__group">
           <h2>Currently supports</h2>
           <p>{WORKS_WITH.join(' · ')}</p>
@@ -63,7 +63,7 @@ function LandingPage() {
         </p>
       </section>
 
-      <section className="landing-card landing-about" aria-label="Who we are">
+      <section className="landing-card landing-about" id="who-we-are" aria-label="Who we are">
         <h2>Who we are</h2>
         <p>
           Shift &amp; Save is an independent UK product built to make smart energy tariffs easier to
@@ -82,7 +82,7 @@ function LandingPage() {
         </p>
       </section>
 
-      <footer className="landing-footer">
+      <footer className="landing-footer" id="footer">
         <div className="landing-trust" aria-label="Why trust us">
           {TRUST_POINTS.map((point) => (
             <p className="landing-trust__item" key={point}>
