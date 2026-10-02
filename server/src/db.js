@@ -43,4 +43,19 @@ db.exec(`
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     expires_at TEXT NOT NULL
   );
+
+  -- One Octopus connection per Firebase user (OA-5/OA-20). The account
+  -- number and API key are both encrypted at rest (see src/crypto.js) and
+  -- never returned to the browser; account_number_redacted is the only
+  -- display-safe form. firebase_uid is the sole ownership boundary -- no
+  -- row is ever readable across users.
+  CREATE TABLE IF NOT EXISTS octopus_connections (
+    firebase_uid TEXT PRIMARY KEY,
+    account_number_redacted TEXT NOT NULL,
+    encrypted_account_number TEXT NOT NULL,
+    encrypted_api_key TEXT NOT NULL,
+    meter_context TEXT,
+    connected_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
 `)

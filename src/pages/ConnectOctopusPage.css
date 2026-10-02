@@ -1,0 +1,91 @@
+.connect-octopus-page {
+  max-width: 480px;
+}
+
+.connect-octopus-page__intro {
+  margin-top: 12px;
+  opacity: 0.85;
+}
+
+.connect-octopus-page__help {
+  margin-top: 16px;
+  padding-left: 20px;
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.connect-octopus-page__help li + li {
+  margin-top: 6px;
+}
+
+.connect-octopus-page__form {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.connect-octopus-page__form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.connect-octopus-page__form input {
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 16px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.connect-octopus-page__submit {
+  padding: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  color: var(--bg);
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.connect-octopus-page__submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.connect-octopus-page__error {
+  color: #e05252;
+  font-size: 14px;
+  margin: 0;
+}
+
+.connect-octopus-page__status {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.connect-octopus-page__meta {
+  margin-top: 4px;
+  opacity: 0.75;
+  font-size: 14px;
+}
+
+.connect-octopus-page__status button {
+  margin-top: 16px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.connect-octopus-page__next {
+  margin-top: 16px;
+}

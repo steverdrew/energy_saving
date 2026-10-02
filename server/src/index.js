@@ -2,8 +2,10 @@ import cookieParser from 'cookie-parser'
 import cors from 'cors'
 import express from 'express'
 import { loadConfig } from './config.js'
+import { requireFirebaseAuth } from './firebaseAuth.js'
+import { fetchOctopusAccount } from './octopusClient.js'
 import { authRouter } from './routes/auth.js'
-import { octopusRouter } from './routes/octopus.js'
+import { createOctopusRouter } from './routes/octopus.js'
 
 const config = loadConfig()
 
@@ -15,7 +17,7 @@ export function createApp() {
   app.use(cookieParser())
 
   app.use('/api/auth', authRouter)
-  app.use('/api/octopus', octopusRouter)
+  app.use('/api/octopus', createOctopusRouter({ requireFirebaseAuth, fetchOctopusAccount }))
 
   app.get('/api/health', (_req, res) => res.json({ ok: true }))
 
