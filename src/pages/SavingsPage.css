@@ -1,0 +1,43 @@
+.savings-page {
+  max-width: 480px;
+}
+
+.savings-page__cta {
+  display: inline-block;
+  margin-top: 16px;
+  padding: 10px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--bg);
+  background: var(--accent);
+  border-radius: 6px;
+}
+
+.savings-page__error {
+  color: #e05252;
+}
+
+.savings-page__saved-so-far {
+  margin-top: 8px;
+  font-size: 15px;
+}
+
+.savings-page__headline {
+  margin-top: 16px;
+  font-size: 18px;
+}
+
+.savings-page__caveat {
+  margin-top: 12px;
+  font-size: 14px;
+  opacity: 0.75;
+}
+
+.savings-page__annualized {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 15px;
+}

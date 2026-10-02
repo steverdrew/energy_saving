@@ -86,6 +86,38 @@
   cursor: pointer;
 }
 
+.connect-octopus-page__import {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.connect-octopus-page__import h2 {
+  font-size: 16px;
+}
+
+.connect-octopus-page__import p {
+  margin-top: 8px;
+  opacity: 0.85;
+  font-size: 14px;
+}
+
+.connect-octopus-page__import button {
+  margin-top: 12px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.connect-octopus-page__import button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .connect-octopus-page__next {
   margin-top: 16px;
 }

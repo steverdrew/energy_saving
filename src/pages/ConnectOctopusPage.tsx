@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { ApiError, api, type OctopusConnection } from '../api/client'
+import { ApiError, api, type OctopusImportStatus } from '../api/client'
+import { useOctopusConnection } from '../octopus/OctopusConnectionContext'
 import './ConnectOctopusPage.css'
 
 const ACCOUNT_NUMBER_RE = /^A-[A-Za-z0-9]{8}$/
@@ -20,9 +21,15 @@ function describeConnectError(err: unknown): string {
   return 'Something went wrong connecting your account. Please try again.'
 }
 
+function describeImportError(err: unknown): string {
+  if (err instanceof ApiError && (err.status === 400 || err.status === 401)) {
+    return err.message
+  }
+  return "We couldn't import your usage history right now. Please try again."
+}
+
 function ConnectOctopusPage() {
-  const [loadingStatus, setLoadingStatus] = useState(true)
-  const [connection, setConnection] = useState<OctopusConnection | null>(null)
+  const { connection, loading: loadingStatus, setConnection } = useOctopusConnection()
 
   const [accountNumber, setAccountNumber] = useState('')
   const [apiKey, setApiKey] = useState('')
@@ -31,23 +38,36 @@ function ConnectOctopusPage() {
   const [submitting, setSubmitting] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
 
+  const [importStatus, setImportStatus] = useState<OctopusImportStatus | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+
   useEffect(() => {
+    if (!connection?.connected) return
     let cancelled = false
     api.octopus
-      .connection()
+      .importStatus()
       .then((result) => {
-        if (!cancelled) setConnection(result)
+        if (!cancelled) setImportStatus(result)
       })
-      .catch(() => {
-        if (!cancelled) setConnection({ connected: false })
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingStatus(false)
-      })
+      .catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [connection?.connected])
+
+  async function handleImport() {
+    setImporting(true)
+    setImportError(null)
+    try {
+      const result = await api.octopus.import()
+      if (result) setImportStatus(result)
+    } catch (err) {
+      setImportError(describeImportError(err))
+    } finally {
+      setImporting(false)
+    }
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -67,7 +87,7 @@ function ConnectOctopusPage() {
     setSubmitting(true)
     try {
       const result = await api.octopus.connect({ accountNumber: normalized, apiKey: apiKey.trim() })
-      setConnection(result)
+      if (result) setConnection(result)
       setAccountNumber('')
       setApiKey('')
     } catch (err) {
@@ -104,6 +124,23 @@ function ConnectOctopusPage() {
             {disconnecting ? 'Disconnecting…' : 'Disconnect'}
           </button>
         </div>
+
+        <div className="connect-octopus-page__import">
+          <h2>Usage history</h2>
+          {importStatus?.imported ? (
+            <p>
+              Imported {importStatus.consumptionPoints} usage readings and {importStatus.ratePoints} tariff
+              rates, covering {importStatus.periodFrom?.slice(0, 10)} to {importStatus.periodTo?.slice(0, 10)}.
+            </p>
+          ) : (
+            <p>Import your recent half-hourly usage and tariff rate history to see your savings.</p>
+          )}
+          {importError && <p className="connect-octopus-page__error">{importError}</p>}
+          <button type="button" onClick={handleImport} disabled={importing}>
+            {importing ? 'Importing…' : importStatus?.imported ? 'Re-import' : 'Import my usage history'}
+          </button>
+        </div>
+
         <p className="connect-octopus-page__next">
           <Link to="/savings">See my savings</Link>
         </p>

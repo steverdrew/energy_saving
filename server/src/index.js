@@ -1,12 +1,23 @@
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
 import express from 'express'
+import { createFirestoreCompatibilityRequestStore } from './compatibilityRequestStore.js'
 import { loadConfig } from './config.js'
-import { requireFirebaseAuth } from './firebaseAuth.js'
-import { fetchOctopusAccount } from './octopusClient.js'
+import { optionalFirebaseAuth, requireFirebaseAuth } from './firebaseAuth.js'
+import { createFirestoreGuidanceFeedbackStore } from './guidanceFeedbackStore.js'
+import {
+  fetchActiveAgileTariffCode,
+  fetchElectricityConsumption,
+  fetchOctopusAccount,
+  fetchTariffUnitRates,
+} from './octopusClient.js'
+import { createFirestoreOctopusImportStore } from './octopusImportStore.js'
 import { createFirestoreOctopusStore } from './octopusStore.js'
 import { authRouter } from './routes/auth.js'
+import { createCompatibilityRequestRouter } from './routes/compatibility.js'
+import { createGuidanceFeedbackRouter } from './routes/guidanceFeedback.js'
 import { createOctopusRouter } from './routes/octopus.js'
+import { createFirestoreSavingsLedgerStore } from './savingsLedgerStore.js'
 
 const config = loadConfig()
 
@@ -23,7 +34,26 @@ export function createApp() {
     createOctopusRouter({
       requireFirebaseAuth,
       fetchOctopusAccount,
+      fetchElectricityConsumption,
+      fetchTariffUnitRates,
+      fetchActiveAgileTariffCode,
       store: createFirestoreOctopusStore(),
+      importStore: createFirestoreOctopusImportStore(),
+      ledgerStore: createFirestoreSavingsLedgerStore(),
+    }),
+  )
+  app.use(
+    '/api/compatibility-requests',
+    createCompatibilityRequestRouter({
+      optionalFirebaseAuth,
+      store: createFirestoreCompatibilityRequestStore(),
+    }),
+  )
+  app.use(
+    '/api/feedback',
+    createGuidanceFeedbackRouter({
+      requireFirebaseAuth,
+      store: createFirestoreGuidanceFeedbackStore(),
     }),
   )
 

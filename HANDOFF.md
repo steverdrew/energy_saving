@@ -1,12 +1,16 @@
 # HANDOFF
 
-_Last updated: 2026-10-02 (OA-5/OA-20: live and verified on beta — ready for Steve's sign-off)_
+_Last updated: 2026-10-02 (OA-59, OA-58, OA-6, OA-21, OA-22, OA-8, OA-9/OA-30/OA-31, OA-40/OA-43, OA-41, OA-55/OA-56/OA-57 implemented this session)_
 
 ## Current task
 
-None in progress. OA-5/OA-20 is functionally complete and verified live
-on beta by Steve. Next work is whatever Steve picks next (OA-6 roadmap
-item mentioned earlier, or OA-21/OA-26 sign-off follow-through).
+None in progress. All core-loop tickets (OA-59 through OA-41) and the
+beta-feedback/compatibility tickets (OA-55, OA-56, OA-57) are
+implemented, tested, pushed to `claude/dazzling-ritchie-nofudq`, and
+moved to **Done in Jira** (standing rule — see Constraints). Nothing is
+deployed/verified live on beta yet. Remaining roadmap: none —
+everything through OA-57 is done. Next would be device-control
+(OA-12/OA-15), which Steve explicitly said not to start yet.
 
 ## State
 
@@ -33,21 +37,160 @@ item mentioned earlier, or OA-21/OA-26 sign-off follow-through).
   - [x] Flow visible and testable on the stable beta URL
   - [ ] Not yet manually exercised (but covered by passing server tests):
     invalid-credentials error path, disconnect, cross-user isolation
-- "See my savings" link intentionally hits a `501` stub
-  (`savings-result` endpoint) — by design, gated behind OA-21 sign-off.
-  Not a bug if Steve or anyone clicks it.
+- **OA-9/OA-30/OA-31**: forward-looking cheapest-window guidance is
+  live, distinct from OA-22's backward-looking comparison.
+  `GET /api/octopus/cheapest-window?durationMinutes=N` looks up the
+  live Agile tariff for the user's region, fetches its published rates
+  for the next 48h (today, plus tomorrow once Octopus publishes it
+  around 4pm UK time), and runs `findCheapestWindow`
+  (`server/src/cheapestWindow.js`) to find the cheapest contiguous
+  run of half-hour slots — returns `{found: false}` if no window long
+  enough exists yet (e.g. tomorrow's prices not published). OA-30's
+  appliance profile model already existed as pure domain data
+  (`src/domain/applianceProfile.ts`, from a prior session) but wasn't
+  used anywhere; `CheapestWindowPage` (OA-31) is its first consumer —
+  an appliance picker that calls the endpoint with that appliance's
+  typical cycle duration and shows "run your X between A and B",
+  flagging estimated durations and any safety note (e.g. "don't leave
+  a tumble dryer unattended") from the profile.
+- **OA-40/OA-43**: the same `/cheapest-window` endpoint takes an
+  optional `energyKwh` param (the frontend's own appliance catalog
+  value, same pattern as `durationMinutes` -- server stays generic).
+  When given, and the account has imported usage history, the
+  response's `recommendation` quantifies one cycle's £ cost at the
+  cheapest window vs. the current tariff's average rate
+  (`averageRate` in `server/src/cheapestWindow.js`), flagged
+  `unitRateOnly: true` like `SavingsResult`. No import yet, or
+  `energyKwh` omitted → `recommendation: null`, and the page falls
+  back to just the window (no £ claim). `CheapestWindowPage` renders
+  the OA-43 copy ("running then instead of now would cost about £C
+  instead of £F — a saving of about £S this cycle") only when there's
+  an actual saving, and an honest "wouldn't cost less" line when there
+  isn't — never silence either way. Deliberately per-cycle, not
+  annualised: this is a single-action recommendation, and there's no
+  real basis yet for how often a given cycle actually runs.
+- **OA-21/OA-22/OA-8**: "See my savings" now returns a real result
+  instead of the old `501` stub. `GET /api/octopus/savings-result`
+  reads the imported consumption + current-tariff rates
+  (`octopusImports`), looks up the currently-on-sale Agile product for
+  the user's region (`fetchActiveAgileTariffCode`), fetches Agile's
+  rates for the same period, and runs
+  `compareCurrentTariffToAgile` (`server/src/savingsComparison.js`).
+  Response is explicitly flagged `unitRateOnly: true`. `SavingsPage`
+  shows the headline (Agile cheaper / current tariff cheaper / about
+  the same), the mandatory "unit rates only, no standing charge"
+  caveat at equal visual weight, and an annualised projection only
+  when there's an actual saving to project — wording follows
+  `docs/SAVINGS_METHODOLOGY.md`'s final trust copy exactly, per
+  Steve's sign-off.
+- **OA-59**: Account, Connect Octopus and future authenticated pages now
+  share one `OctopusConnectionProvider`
+  (`src/octopus/OctopusConnectionContext.tsx`) instead of each fetching
+  `/api/octopus/connection` independently — fixes Account always
+  showing "connect your account" even when already connected. Also
+  removed the duplicate Sign out button on the Account page (header nav
+  already has one).
+- **OA-58**: `/` now redirects a signed-in visitor to `/account`
+  (`HomeRoute` in `src/App.tsx`) instead of always showing the
+  signed-out marketing landing page with a "sign in" CTA.
+- **OA-6**: real tariff + half-hourly consumption import is live.
+  - `POST /api/octopus/import` fetches the last 30 days of half-hourly
+    consumption (`fetchElectricityConsumption`, requires the user's own
+    API key) and standard unit rates (`fetchTariffUnitRates`, public
+    product data) for the connected meter/tariff, and stores both in a
+    new Firestore collection `octopusImports`
+    (`server/src/octopusImportStore.js`), keyed by Firebase UID.
+  - `GET /api/octopus/import-status` returns a summary (point counts,
+    period, `importedAt`) instead of the old `501` stub.
+  - Connect Octopus page has an "Import my usage history" button once
+    connected, showing the point counts/date range back.
+  - 30-day window is deliberately small for this MVP — see Decisions.
+  - `summarizeOctopusAccount` now also captures the meter
+    `serialNumber` (needed for the consumption endpoint), stored
+    alongside the existing `mpan`/`tariffCode` in each connection's
+    `meterContext`.
+
+- **OA-41**: running "saved so far" total, built to Steve's explicit
+  model (showing a recommendation ≠ saving money):
+  - `CheapestWindowPage` now asks "Did you run it at the recommended
+    time? Yes / No" under any quantified recommendation
+    (`result.recommendation.savingPence > 0`).
+  - `POST /api/octopus/recommendation-confirm` records the event either
+    way (`confirmed: true/false`) in a new Firestore-backed ledger
+    (`server/src/savingsLedgerStore.js`, collection
+    `savingsLedgerEvents/{uid}/events`), but only credits the saving
+    (`creditedPence`) when `confirmed: true` — No or no answer credits
+    £0, and is still recorded for a possible future
+    projected-vs-actual view.
+  - `GET /api/octopus/savings-total` sums `creditedPence` across all
+    events → `{ savedSoFarPence, eventCount }`.
+  - `SavingsPage` shows "Estimated saved so far: £X" independently of
+    its own connect/import phase (a `SavedSoFar` component with its own
+    fetch) — it reflects the ledger, not whether Octopus is currently
+    connected.
+  - Ledger events carry `source: 'manual'` today; the shape has room
+    for a future `'automated'` source once device control (OA-12/15)
+    can observe an actual run, without changing this endpoint's shape.
+- **OA-55**: landing page (`src/pages/LandingPage.tsx`) now has a
+  "Works with / Coming soon" section. **Works with** lists only what's
+  actually been tested end-to-end in the beta today: Octopus Energy
+  and manual appliance timers (presented as a real supported mode, not
+  a fallback) — no smart plug or LG ThinQ listed, since no device
+  integration exists yet (OA-12/15 deliberately not started). **Coming
+  soon** names categories only ("Smart plugs", "More connected
+  appliances"), no brand logos. A "Tell us what you have" link goes to
+  OA-56's form.
+- **OA-56**: new compatibility-request flow, two entry points —
+  `LandingPage`'s "Tell us what you have" (signed-out) and
+  `CheapestWindowPage`'s "Can't connect your appliance or device? Tell
+  us the brand/model" (signed-in). Both open
+  `CompatibilityFeedbackPage` (`/tell-us-what-you-have`, unprotected
+  route since a signed-out visitor must reach it). `POST
+  /api/compatibility-requests` is public (`optionalFirebaseAuth` —
+  new middleware in `server/src/firebaseAuth.js` that attaches a uid
+  if a valid token is present but never rejects an anonymous request),
+  stores device type + optional brand/model/smart-plug/platform/note
+  in a new Firestore collection `compatibilityRequests`
+  (`server/src/compatibilityRequestStore.js`), one doc per submission.
+  No admin UI for Steve to review submissions — see Decisions.
+- **OA-57**: contextual "Was this recommendation useful? Yes / Not
+  really / I couldn't do it" on `CheapestWindowPage`, shown under every
+  cheapest-window result (not gated behind a £ recommendation, unlike
+  OA-41's confirm block — this asks about the guidance itself). "Yes"
+  submits immediately (one tap); a negative answer offers an optional
+  short reason before sending. `POST /api/feedback` (always
+  authenticated) stores events in a new Firestore collection
+  `guidanceFeedback` (`server/src/guidanceFeedbackStore.js`),
+  deliberately separate from OA-56's `compatibilityRequests` so
+  guidance-quality feedback and compatibility/integration feedback are
+  never mixed.
 
 ## Next step
 
-Nothing blocking. Options for Steve to pick from:
-1. Manually spot-check the remaining DoD items (wrong API key → clear
-   error; disconnect button; a second test account can't see the first
-   user's connection) if extra confidence is wanted before calling OA-5
-   fully signed off.
-2. Move to OA-21 (savings methodology sign-off) or OA-26 — both are
-   sign-off gates, not coding tickets; I can read them and report
-   blockers/prerequisites but can't declare them passed.
-3. Pick up OA-6 or another roadmap ticket.
+1. **fetchActiveAgileTariffCode (`server/src/octopusClient.js`) has
+   never been run against the real Octopus API** — this sandbox has no
+   network access to `api.octopus.energy` (outbound is proxied and
+   that host isn't allow-listed). It's built from the documented
+   `/v1/products/` shape and unit-tested with a mocked `fetch`, but
+   Steve should sanity-check it against a real response (e.g. hit
+   `https://api.octopus.energy/v1/products/?page_size=100` directly)
+   before relying on it. This is the single highest-risk unverified
+   assumption in OA-8's result — if the real product list shape
+   differs, `/savings-result` will 502 rather than show a wrong number
+   (fails closed), but worth confirming before wider beta use.
+2. Manually spot-check the full chain live on beta once deployed:
+   connect → import → "See my savings" shows a real, sane £ figure
+   with the caveat visible; Cheapest Times shows a real upcoming
+   window *and* a real per-cycle £ saving for at least one appliance
+   once usage is imported; confirming "Yes" on it updates the saved-
+   so-far total on My Savings; the "Was this useful?" and "Tell us
+   what you have" flows submit successfully; Account page reflects
+   real connection state after a refresh; `/` redirects when signed
+   in.
+3. Everything on the original roadmap through OA-57 is now built.
+   Remaining tickets (OA-12/OA-15, device control) are explicitly
+   **not** to be started without Steve's go-ahead — raise with him
+   before picking anything further.
 4. Update README.md's "Server deployment (Cloud Run)" checklist to match
    the real working IAM configuration (listed below) — currently stale,
    purely a documentation cleanup, no urgency.
@@ -81,16 +224,110 @@ Nothing blocking. Options for Steve to pick from:
 - Old SQLite `users`/`sessions`/`consents` tables and `server/src/db.js`
   itself left in place untouched — dead code since OA-50, unrelated
   cleanup not in scope here.
+- OA-6: import window fixed at 30 days (`IMPORT_WINDOW_DAYS` in
+  `server/src/routes/octopus.js`), not full history. Keeps each import
+  request fast and each `octopusImports` Firestore doc well under the
+  1MiB document limit (30 days half-hourly ≈ 1,440 points per series).
+  Revisit once Steve has reviewed real imported data — a longer window
+  may need chunked/paginated storage rather than one doc per user.
+- OA-6: the Cloud Run runtime service account already has "Cloud
+  Datastore User", which covers the new `octopusImports` collection too
+  — no IAM change needed for this feature.
+- OA-22: scoped to current-tariff-vs-Agile only (Steve's explicit
+  instruction — not every Octopus tariff). Unit rates only, no standing
+  charge, over whatever window OA-6 imported — see
+  `docs/SAVINGS_METHODOLOGY.md` for the full scope statement and why.
+- OA-21: drafted the methodology/trust copy myself rather than waiting,
+  since it's cheap to draft and expensive to block on. Steve then
+  answered all three open questions (unit-rate-only OK, 30 days OK,
+  trust copy needed more explicit in-line caveats) — recorded as
+  Decisions in `docs/SAVINGS_METHODOLOGY.md`, which now carries his
+  sign-off date. The result shape is deliberately labelled
+  `unitRateOnly: true` so adding standing charges later is an upgrade
+  to this same shape, not a silent meaning change (Steve's instruction).
+- OA-8: annualised saving is only shown when Agile would have been
+  cheaper (`estimatedSavingPence > 0`) — projecting an annualised
+  *negative* saving read oddly, so when the current tariff is already
+  cheaper, the headline alone carries the message, no annualised line.
+- OA-9/OA-31: cheapest-window search takes `durationMinutes` as a
+  request param from the frontend (which owns the appliance catalog)
+  rather than duplicating appliance durations server-side — the server
+  stays generic to "any duration", not appliance-aware. Lookahead
+  fixed at 48h, matching Agile's today+tomorrow publication pattern.
+  `{found: false}` (not an error) when no long-enough contiguous
+  window exists yet, e.g. before tomorrow's prices are out.
+- OA-30: the appliance profile domain model
+  (`src/domain/applianceProfile.ts`) already existed from an earlier
+  session, fully tested, but had no consumer anywhere in the app until
+  `CheapestWindowPage` (OA-31) this session. Left its generic-default
+  values as-is — not real research, just reasonable UK household
+  averages, and the model already flags them as estimates via
+  `isEstimate`/`DataSource`.
+- OA-40: deliberately per-cycle, not annualised like OA-8's result —
+  there's no real basis for how often a user actually runs a given
+  appliance, so annualising it would be inventing a frequency
+  assumption rather than reading one from data. If OA-41 or a later
+  ticket wants an annual figure here, that needs its own explicit
+  frequency input (e.g. "how many times a week"), not a guess.
+- OA-55: deliberately listed only Octopus Energy and manual appliance
+  timers under "Works with" — the ticket's own example text names a
+  smart plug and LG ThinQ, but those are illustrative, not a
+  requirement, and the explicit rule ("only list a brand/product after
+  it's been tested end to end in the beta") rules them out since no
+  device integration exists yet. "Coming soon" names categories only,
+  per the ticket's own "no specific brand logos unless genuinely
+  underway" rule.
+- OA-56: no admin UI was built for Steve to review compatibility
+  requests — there's no admin-auth concept anywhere in this app yet,
+  and building one just to list form submissions would be a bigger
+  change than the ticket's own scope. Steve inspects/exports via the
+  Firestore console (`compatibilityRequests` collection) directly,
+  same pattern as other operational tasks in this project. Revisit
+  only if that becomes impractical at real beta volume.
+- OA-56: added `optionalFirebaseAuth` (`server/src/firebaseAuth.js`)
+  rather than reusing `requireFirebaseAuth`, since this is the first
+  endpoint a signed-out visitor must be able to call — an invalid or
+  expired token is treated as anonymous, not rejected, since the
+  alternative (reject the whole submission over a stale token) is
+  worse than just not attributing it to a user.
+- OA-57: kept guidance feedback (`guidanceFeedback`) and compatibility
+  requests (`compatibilityRequests`) as separate Firestore collections
+  and separate endpoints, rather than one generic "feedback" shape —
+  directly satisfies the ticket's own acceptance criterion that
+  guidance-quality feedback must be distinguishable from
+  compatibility/integration feedback, and the two have genuinely
+  different fields (brand/model vs. response/comment).
+- Extracted `src/format.ts` (`formatGbp`) once the exact same pence→£
+  formatter appeared in both `SavingsPage` and `CheapestWindowPage` —
+  real duplication, not speculative, so worth the shared module.
+- OA-41: used Steve's exact model (his words, 2026-10-02): "Did you run
+  it at the recommended time? Yes/No. Yes credits the per-cycle saving
+  to Estimated saved so far; No or no answer credits £0. Showing
+  someone an opportunity is not the same as saving them money." Ledger
+  stored as a Firestore subcollection per user (`savingsLedgerEvents/
+  {uid}/events`), not a single growing doc like `octopusImports` —
+  events accumulate indefinitely over a user's lifetime, unlike a
+  30-day import window, so a single-doc model would eventually hit
+  Firestore's 1MiB document limit. `source: 'manual'` on every event
+  today, specifically so OA-12/15's later device control can write
+  `'automated'` events through the same ledger/endpoint shape.
 
 ## Constraints and preferences
 
+- **Standing rule (2026-10-02): when a ticket is implemented, tested,
+  and pushed, transition it to Done in Jira immediately** — don't wait
+  to be asked. Caught up the backlog this session: OA-59, OA-58, OA-6,
+  OA-21, OA-22, OA-8, OA-9, OA-30, OA-31 all moved To Do/In Progress →
+  Done (OA-40/OA-43 were already Done, moved by Steve directly).
 - No secrets/credentials in browser code, bundle, or repo.
 - `ENCRYPTION_KEY` lives in Secret Manager only, mounted at deploy time
   via `--set-secrets` — generated and entered by Steve directly into
   Secret Manager, never shared in chat.
 - Octopus API key: encrypted at rest, never logged, never returned to
   the browser after submission.
-- No £ savings claims until OA-21 passes.
+- No £ savings claims until OA-21 passes — **cleared 2026-10-02**; any
+  £ figure shown must still carry the unit-rate-only caveat at equal
+  visual weight (Steve's explicit instruction, not just a docs note).
 - GCP console/CLI changes always need Steve — this session has no GCP
   credentials.
 

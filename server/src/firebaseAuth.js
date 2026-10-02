@@ -33,3 +33,28 @@ export function createRequireFirebaseAuth(verifyIdToken) {
 }
 
 export const requireFirebaseAuth = createRequireFirebaseAuth(verifyFirebaseIdToken)
+
+/**
+ * Like createRequireFirebaseAuth, but for endpoints a signed-out visitor
+ * must also be able to use (e.g. OA-56's public landing-page compatibility
+ * form). Attaches req.firebaseUid when a valid bearer token is present;
+ * otherwise just continues with no uid, rather than rejecting the request.
+ */
+export function createOptionalFirebaseAuth(verifyIdToken) {
+  return async function optionalFirebaseAuth(req, _res, next) {
+    const header = req.headers.authorization ?? ''
+    const match = /^Bearer (.+)$/.exec(header)
+    if (!match) return next()
+    try {
+      const decoded = await verifyIdToken(match[1])
+      req.firebaseUid = decoded.uid
+      req.firebaseEmail = decoded.email ?? null
+    } catch {
+      // An invalid/expired token on this endpoint just means "treat as
+      // anonymous" -- it's not a reason to block the submission.
+    }
+    next()
+  }
+}
+
+export const optionalFirebaseAuth = createOptionalFirebaseAuth(verifyFirebaseIdToken)

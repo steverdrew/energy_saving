@@ -24,6 +24,16 @@ async function authHeaders(): Promise<Record<string, string>> {
   return { Authorization: `Bearer ${token}` }
 }
 
+// OA-56: the compatibility-request form is usable by a signed-out landing
+// page visitor as well as a signed-in app user -- unlike authHeaders(),
+// this never throws; it just omits the header when nobody is signed in.
+async function optionalAuthHeaders(): Promise<Record<string, string>> {
+  const user = auth.currentUser
+  if (!user) return {}
+  const token = await user.getIdToken()
+  return { Authorization: `Bearer ${token}` }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
   const headers = {
     ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
@@ -56,6 +66,113 @@ export interface OctopusConnection {
   connectedAt?: string
 }
 
+export interface OctopusImportStatus {
+  imported: boolean
+  periodFrom?: string
+  periodTo?: string
+  consumptionPoints?: number
+  ratePoints?: number
+  importedAt?: string
+}
+
+// OA-22/OA-21: unit rates only, no standing charge -- see
+// docs/SAVINGS_METHODOLOGY.md. `unitRateOnly` is always true today but is
+// sent explicitly so a future standing-charge addition is a new, distinct
+// shape rather than a silent change of what this result means.
+export interface SavingsResult {
+  periodFrom: string
+  periodTo: string
+  windowDays: number
+  currentTariffCostPence: number
+  agileCostPence: number
+  estimatedSavingPence: number
+  annualizedSavingPence: number
+  unitRateOnly: true
+  agileTariffCode: string
+}
+
+// OA-40: only present when energyKwh was passed to cheapestWindow() and
+// the account has imported usage history -- quantifies the £ saving of
+// running the appliance in the cheapest window vs. the current tariff's
+// average rate, for one cycle. unitRateOnly mirrors SavingsResult's flag.
+export interface CheapestWindowRecommendation {
+  energyKwh: number
+  averageCurrentTariffRateIncVatPence: number
+  costAtCheapestPence: number
+  costAtCurrentTariffPence: number
+  savingPence: number
+  unitRateOnly: true
+}
+
+// OA-9: a forward-looking cheapest contiguous Agile window for a given
+// appliance cycle duration -- distinct from SavingsResult, which looks
+// backward at already-imported history.
+export type CheapestWindowResult =
+  | { found: false }
+  | {
+      found: true
+      agileTariffCode: string
+      startsAt: string
+      endsAt: string
+      averageUnitRateIncVatPence: number
+      slotsUsed: number
+      recommendation: CheapestWindowRecommendation | null
+    }
+
+// OA-41: showing a recommendation isn't the same as saving money, so the
+// running total only credits a recommendation the user explicitly confirmed
+// they acted on. Declining or not answering still records the event (£0
+// credited) rather than being silently dropped.
+export interface RecommendationConfirmationInput {
+  windowStartsAt: string
+  windowEndsAt: string
+  applianceType: string
+  savingPence: number
+  confirmed: boolean
+}
+
+export interface RecommendationConfirmationResult {
+  confirmed: boolean
+  creditedPence: number
+}
+
+export interface SavingsTotal {
+  savedSoFarPence: number
+  eventCount: number
+}
+
+// OA-56: suggested categories from the ticket -- the UI shows these plus
+// 'other', brand/model/platform fields left optional throughout.
+export type CompatibilityDeviceType =
+  | 'washing_machine'
+  | 'dishwasher'
+  | 'tumble_dryer'
+  | 'dehumidifier'
+  | 'smart_plug'
+  | 'ev_charger'
+  | 'battery'
+  | 'heating_heat_pump'
+  | 'other'
+
+export interface CompatibilityRequestInput {
+  deviceType: CompatibilityDeviceType
+  brand?: string
+  model?: string
+  smartPlugBrandModel?: string
+  connectedPlatform?: string
+  note?: string
+}
+
+// OA-57: one tap for the common case ("yes"), an optional short reason only
+// offered when the answer is negative.
+export type GuidanceFeedbackResponse = 'yes' | 'not_really' | 'could_not'
+
+export interface GuidanceFeedbackInput {
+  relatedId: string
+  response: GuidanceFeedbackResponse
+  comment?: string
+}
+
 export const api = {
   octopus: {
     connect: async (input: { apiKey: string; accountNumber: string }) =>
@@ -73,9 +190,45 @@ export const api = {
         method: 'DELETE',
         headers: await authHeaders(),
       }),
+    import: async () =>
+      request<OctopusImportStatus>('/api/octopus/import', {
+        method: 'POST',
+        headers: await authHeaders(),
+      }),
     importStatus: async () =>
-      request<never>('/api/octopus/import-status', { headers: await authHeaders() }),
+      request<OctopusImportStatus>('/api/octopus/import-status', { headers: await authHeaders() }),
     savingsResult: async () =>
-      request<never>('/api/octopus/savings-result', { headers: await authHeaders() }),
+      request<SavingsResult>('/api/octopus/savings-result', { headers: await authHeaders() }),
+    cheapestWindow: async (durationMinutes: number, energyKwh?: number) => {
+      const params = new URLSearchParams({ durationMinutes: String(durationMinutes) })
+      if (energyKwh != null) params.set('energyKwh', String(energyKwh))
+      return request<CheapestWindowResult>(`/api/octopus/cheapest-window?${params}`, {
+        headers: await authHeaders(),
+      })
+    },
+    confirmRecommendation: async (input: RecommendationConfirmationInput) =>
+      request<RecommendationConfirmationResult>('/api/octopus/recommendation-confirm', {
+        method: 'POST',
+        body: JSON.stringify(input),
+        headers: await authHeaders(),
+      }),
+    savingsTotal: async () =>
+      request<SavingsTotal>('/api/octopus/savings-total', { headers: await authHeaders() }),
+  },
+  compatibility: {
+    submitRequest: async (input: CompatibilityRequestInput) =>
+      request<{ ok: true }>('/api/compatibility-requests', {
+        method: 'POST',
+        body: JSON.stringify(input),
+        headers: await optionalAuthHeaders(),
+      }),
+  },
+  feedback: {
+    submitGuidanceFeedback: async (input: GuidanceFeedbackInput) =>
+      request<{ ok: true }>('/api/feedback', {
+        method: 'POST',
+        body: JSON.stringify(input),
+        headers: await authHeaders(),
+      }),
   },
 }
