@@ -1,49 +1,62 @@
 # HANDOFF
 
-_Last updated: 2026-10-02 (OA-5/OA-20: Cloud Run + Firestore wiring)_
+_Last updated: 2026-10-02 (OA-5/OA-20: Cloud Run deploy blocked on Cloud Build logging IAM)_
 
 ## Current task
 
-Following Steve's confirmed decision (Cloud Run for the server, Firestore
-for `octopus_connections`), wire up the actual deployment: migrate the
-Octopus connection store off SQLite onto Firestore, and scaffold a Cloud
-Run deploy workflow + Firebase Hosting rewrite so `/api/**` reaches it.
-Code complete and tested locally; branched cleanly on top of OA-54
-(Shift & Save landing rebrand, merged separately in parallel — unrelated
-to this work).
+Get the `energy-saving-server` Cloud Run deploy to actually succeed, so
+the already-merged OA-5/OA-20 Connect Octopus flow becomes reachable on
+beta. All application code is done and tested; this is now purely a GCP
+IAM blocker.
 
 ## State
 
-- OA-47 through OA-54 (plus hotfixes) and the OA-5/OA-20 engineering
-  slice (PR #9) are merged to `main`. The Connect Octopus UI is live on
-  beta, but submitting the form does nothing useful yet — no backend is
-  reachable until this deploy wiring lands **and** the GCP setup below
-  is done.
-- OA-54 rebranded the app from "Octopus Agent" to "Shift & Save"
-  (header, landing copy) — unrelated to this slice, already merged.
-- This change: Firestore-backed `octopus_connections` store
-  (`server/src/octopusStore.js`), SQLite table removed, router takes an
-  injected `store` (tests use an in-memory fake — 21 server tests pass).
-  `deploy-server.yml` (Cloud Run, test-gated, triggers on `server/**`
-  changes) and a Firebase Hosting rewrite (`/api/**` → the Cloud Run
-  service) are scaffolded but **unverified** — no GCP credentials exist
-  in this environment to test an actual deploy.
-- Web app unchanged by this slice — `api/client.ts`'s relative
-  `/api/...` calls work either way, by design (same-origin via the
-  Hosting rewrite once deployed).
+- OA-5/OA-20 application code (Firestore store, encrypted credentials,
+  Connect Octopus UI, server routes) is merged and tested — 21 server
+  tests pass. Not yet reachable on beta: the backend has never
+  successfully deployed.
+- `deploy-server.yml` has failed 6 times in a row (run 36983420655
+  attempts 1-5, then run 36991131641 after the Dockerfile switch), each
+  time with `ERROR: (gcloud.run.deploy) Build failed; check build logs
+  for details` and no further detail.
+- Attempts 1-5 fixed real, visible IAM gaps one at a time (Artifact
+  Registry, Storage bucket, Storage object, missing logging role on the
+  **default Compute Engine service account**) — all fixed, but the
+  generic "Build failed" error persisted.
+- Switched the deploy from Buildpacks to an explicit `server/Dockerfile`
+  (PR #13, merged), on the hypothesis that `better-sqlite3` (native
+  module) was failing to compile under Buildpacks. **This hypothesis is
+  now ruled out**: the Dockerfile deploy failed identically (confirmed
+  via job logs: `Building using Dockerfile and deploying container...`
+  then the same opaque failure, zero build output — just progress dots).
+- **New diagnosis**: the complete absence of any build log output (not
+  even Docker layer lines) means Cloud Build's own logs aren't being
+  written/surfaced at all — a logging-permission problem, not a build
+  problem. `gcloud run deploy --source` builds via Cloud Build, which
+  runs as its own dedicated service account,
+  `761386319734@cloudbuild.gserviceaccount.com` (the **Cloud Build**
+  default SA) — a different identity from the default **Compute
+  Engine** SA that was granted Logs Writer in an earlier attempt. That
+  grant likely went to the wrong identity.
 
 ## Next step
 
-1. Commit this on a new branch off `main` (e.g.
-   `oa-5-cloud-run-firestore`, already checked out), push, open a PR,
-   get it through CI (lint/build/test only — nothing here can be
-   deploy-verified by CI), merge.
-2. Steve does the one-time GCP setup in README.md's "Server deployment
-   (Cloud Run)" section — none of it is something this session can do
-   (no GCP console/CLI access, no credentials). That section has the
-   full checklist.
-3. After that setup, the next push to `main` touching `server/**`
-   actually deploys. Confirm via the OA-5 beta verification steps.
+Steve: in GCP Console → IAM (tick "Include Google-provided role grants"
+if `761386319734@cloudbuild.gserviceaccount.com` isn't listed), grant
+that service account:
+- **Logs Writer** (`roles/logging.logWriter`)
+- **Cloud Build Service Account** (`roles/cloudbuild.builds.builder`) if
+  not already present
+
+Then re-run `deploy-server.yml` (Actions tab → "Deploy server" → Re-run
+failed jobs) or push any change to `server/**`. If it still fails, the
+Dockerfile-based build should now (with working Cloud Build logs) finally
+surface the real error — fetch it with `mcp__github__get_job_logs` on the
+new run.
+
+Once the server deploy succeeds: re-run/trigger `deploy-beta.yml` so
+Firebase Hosting's `/api/**` rewrite can resolve the now-existing Cloud
+Run service (see Gotchas — bootstrapping order).
 
 ## Key references
 
@@ -51,67 +64,77 @@ to this work).
   `{ upsert, get, remove }` keyed by Firebase UID.
 - `server/test/helpers/fakeOctopusStore.js` — in-memory equivalent used
   by `server/test/octopus.test.js`.
-- `server/src/firebaseApp.js` — shared Firebase Admin app singleton,
-  pulled out of `firebaseAuth.js` so `octopusStore.js` can reuse it
-  without a circular import.
+- `server/Dockerfile` / `server/.dockerignore` — explicit Docker build
+  (PR #13), installs python3/make/g++ for `npm ci` then purges them.
+  Confirmed picked up correctly by `gcloud run deploy --source`
+  ("Building using Dockerfile..." in the job log) — did not fix the
+  deploy; see diagnosis above.
 - `.github/workflows/deploy-server.yml` — Cloud Run deploy, gated on
   `npm test` in `server/`, triggered on `server/**` changes to `main`.
 - `firebase.json` — `/api/**` rewrite to the `energy-saving-server`
   Cloud Run service (`europe-west2`), ahead of the catch-all SPA
   rewrite (order matters — first match wins).
-- README.md "Server deployment (Cloud Run)" — the full one-time GCP
-  setup checklist.
+- README.md "Server deployment (Cloud Run)" — the one-time GCP setup
+  checklist; **stale** re: IAM roles (several were added reactively
+  this session and aren't reflected back into it yet — see Gotchas).
+- Failed run IDs for reference: 36983420655 (Buildpacks, 5 attempts),
+  36991131641 (Dockerfile, same opaque failure).
 
 ## Decisions
 
 - Firestore chosen (over e.g. Cloud SQL) because it's already inside
-  the `shiftandsaveapp` Firebase project — no new vendor, no new
-  connection-string secret, and `firebase-admin` is already a server
-  dependency (added for ID token verification in OA-5).
-- The web app needs **no changes** for this: `api/client.ts` already
-  calls relative `/api/...` paths, and Firebase Hosting's `run` rewrite
-  makes Cloud Run appear same-origin to the browser — no CORS dance,
-  no new base-URL config to thread through the build.
-- `europe-west2` (London) chosen as the Cloud Run region, matching the
-  product's UK audience — easy to change in both
-  `deploy-server.yml` and `firebase.json` together if Steve prefers
-  otherwise.
+  the `shiftandsaveapp` Firebase project.
+- `europe-west2` (London) chosen as the Cloud Run region.
+- Switched Buildpacks → explicit Dockerfile to rule out a native-module
+  compile failure as the cause of the opaque build error. Confirmed this
+  was not the cause; kept the Dockerfile anyway since it's a strict
+  improvement (explicit, inspectable build) regardless of the real fix.
 - Old SQLite `users`/`sessions`/`consents` tables and `server/src/db.js`
-  itself are left in place untouched — they're already dead code since
-  OA-50 (Firebase Auth replaced them), removing them is a separate,
-  unrelated cleanup not in scope here.
-- Deploy auth uses a GCP service account JSON key as a GitHub secret
-  (`GCP_SERVER_DEPLOY_SA_KEY`), matching the existing
-  `FIREBASE_SERVICE_ACCOUNT_BETA` pattern from OA-49, rather than
-  introducing Workload Identity Federation — more setup steps for a
-  security benefit not obviously needed yet at this project's size.
+  itself are left in place untouched — dead code since OA-50, unrelated
+  cleanup not in scope here.
 
 ## Constraints and preferences
 
 - No secrets/credentials in browser code, bundle, or repo.
-- `ENCRYPTION_KEY` for production lives in Secret Manager, not a GitHub
-  Actions secret or plain Cloud Run env var — it's mounted at deploy
-  time via `--set-secrets`.
+- `ENCRYPTION_KEY` for production lives in Secret Manager, mounted at
+  deploy time via `--set-secrets` — never a plain env var or GitHub
+  Actions secret in transit.
 - Octopus API key: encrypted at rest, never logged, never returned to
   the browser after submission.
 - No £ savings claims until OA-21 passes.
-- Keep sessions short; if context grows large, update this file and
-  continue in a fresh session.
+- This session has no GCP console or CLI credentials (`gcloud auth
+  list` → no credentialed accounts) — every IAM grant needs Steve.
 
 ## Gotchas
 
 - **Bootstrapping order**: the Cloud Run service must exist before
-  Firebase Hosting's rewrite can reference it by name. First deploy:
-  let `deploy-server.yml` run once, then re-run (or let the next push
-  trigger) `deploy-beta.yml` so Hosting picks up the rewrite.
+  Firebase Hosting's rewrite can reference it by name. First successful
+  deploy: let `deploy-server.yml` run once, then re-run (or let the next
+  push trigger) `deploy-beta.yml` so Hosting picks up the rewrite.
+- **IAM roles granted reactively this session** (not yet reflected in
+  README.md's checklist):
+  - `github-deploy@shiftandsaveapp.iam.gserviceaccount.com`: Artifact
+    Registry Administrator, Cloud Build Editor, Cloud Run Admin,
+    Service Account User, Storage Admin.
+  - `firebase-adminsdk-fbsvc@shiftandsaveapp.iam.gserviceaccount.com`:
+    Cloud Run Viewer (added because Hosting deploys fail otherwise once
+    `firebase.json` references a Cloud Run service by name).
+  - `energy-saving-server-runtime@shiftandsaveapp.iam.gserviceaccount.com`
+    (dedicated runtime SA, not the default compute SA): Cloud Datastore
+    User, Secret Manager Secret Accessor.
+  - Default Compute Engine SA (`761386319734-compute@developer.gserviceaccount.com`):
+    Storage Object Viewer, Logs Writer, Secret Manager Secret Accessor,
+    Cloud Datastore User — **this turned out to be the wrong identity
+    for the "Build failed" symptom**; see Next step.
+  - **Still needed**: Logs Writer (+ possibly Cloud Build Service
+    Account role) on `761386319734@cloudbuild.gserviceaccount.com`, the
+    Cloud Build default SA — not yet granted.
 - `server/src/firebaseAuth.js`'s no-service-account token verification
-  is still unverified against real traffic (noted in the prior OA-5
-  HANDOFF entry) — once Cloud Run is live this becomes testable.
-- Nothing about the Cloud Run deploy itself (service creation, IAM,
-  Secret Manager) has been run or verified — this environment has no
-  GCP credentials. Treat `deploy-server.yml` as scaffolded-but-unproven
-  until Steve's GCP setup is done and a real deploy succeeds.
+  is still unverified against real traffic — only testable once Cloud
+  Run is actually live.
 - The Firebase project **ID** (`shiftandsaveapp`) vs. **number**
-  (`761386319734`) distinction from OA-49 still applies.
+  (`761386319734`) distinction still applies — don't confuse the two
+  service-account-style identities that both use the project number
+  (compute default SA vs. Cloud Build default SA).
 - Don't commit the beta test account's password, any Octopus API key,
   or the production `ENCRYPTION_KEY` anywhere in this repo.
