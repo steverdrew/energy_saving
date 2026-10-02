@@ -1,23 +1,23 @@
 # HANDOFF
 
 _Last updated: 2026-10-02 (core loop OA-59→OA-57 shipped and merged to
-`main` via PR #14; backlog audit; polish tickets OA-61/OA-62 done,
-OA-60 partially done, implemented this session)_
+`main` via PR #14; backlog audit; polish tier OA-60/OA-61/OA-62 all
+done, implemented this session)_
 
 ## Current task
 
 None in progress. Order worked this session, per Steve: (1) core loop
 (OA-59 through OA-57) — shipped, merged to `main`. (2) Backlog audit —
-done, see Decisions/Next step. (3) Polish tier: OA-61 (landing page
-"What is Shift & Save?"/"Who we are") and OA-62 (SVG logo + BETA
-badge) are complete; **OA-60 (Connect Octopus form help) is only
-partially done** — all the text/link guidance is built, but the
-ticket's screenshot requirement is genuinely blocked (see Next step).
-Not yet started: the "deeper feature" tier (OA-23/24/25/32/44/45/46)
-and device control (OA-11–17, on hold per Steve). Nothing in this
-batch is pushed/merged yet — still on
-`claude/dazzling-ritchie-nofudq`, build/lint/bundle-check/tests all
-pass locally.
+done, see Decisions/Next step. (3) Polish tier — all three done:
+OA-61 (landing page "What is Shift & Save?"/"Who we are"), OA-62 (SVG
+logo + BETA badge), and OA-60 (Connect Octopus form help) — its
+screenshot requirement was dropped by Steve ("don't worry about
+screenshots for now, we can live without them"), so the text/link
+guidance alone closes it out. Not yet started: the "deeper feature"
+tier (OA-23/24/25/32/44/45/46) and device control (OA-11–17, on hold
+per Steve). This batch is pushed to `claude/dazzling-ritchie-nofudq`
+(not yet merged to `main`) — build/lint/bundle-check/tests all pass
+locally.
 
 ## State
 
@@ -200,16 +200,13 @@ pass locally.
   `.../api-access/` for the API key), opening in a new tab so typed
   form state isn't lost. Helper copy under each field also matches the
   ticket's required wording ("Your account number starts with A-",
-  etc). **What's genuinely missing**: the screenshot/annotated-crop
-  requirement. Producing one honestly needs a real, authenticated
-  Octopus dashboard/API-access page to photograph (both pages require
-  login) — I have no Octopus account and no way to capture that
-  legitimately in this sandbox, and fabricating a mockup of someone
-  else's UI would risk showing something inaccurate. This needs Steve:
-  take a screenshot of his own dashboard (account number masked, e.g.
-  `A-••••••3E1B`) and of the API-access page (never a usable live
-  key), then either hand them to me to drop into the panel or add them
-  directly. Left OA-60 **not** moved to Done — see Next step.
+  etc). The ticket's screenshot/annotated-crop requirement was raised
+  as a genuine gap (needs a real, logged-in Octopus dashboard to
+  photograph, which only Steve has) — **Steve decided to drop it**
+  ("don't worry about screenshots for now, we can live without
+  them"), so OA-60 is Done on text/link guidance alone. If this comes
+  up again later, the gap and what's needed are recorded in Jira
+  comments on OA-60.
 
 ## Next step
 
@@ -259,16 +256,13 @@ pass locally.
      OA-32 and beyond) beyond the handful needed to answer "what's
      next" — only spot-checked tickets that looked plausibly stale.
      A fuller audit is possible if useful later.
-5. **OA-60 needs Steve**: the screenshot/annotated-crop requirement
-   for the Connect Octopus field help can't be done honestly without
-   his real, logged-in Octopus dashboard — see State above for exactly
-   what's needed (masked account number, no live API key). Once
-   provided, drop them into `ConnectOctopusPage.tsx`'s
-   `CredentialHelp` panels and mark OA-60 Done.
-6. Polish tier not yet started: none left — OA-60/61/62 are the full
-   set from that tier. Next up per the agreed order: the "deeper
-   feature" tickets (OA-23, OA-24, OA-25, OA-32, OA-44, OA-45, OA-46).
-7. Device control (OA-12/OA-15) remains explicitly **not** to be
+5. Polish tier complete — OA-60, OA-61, OA-62 all Done. This batch
+   (commit `7b92bf0` plus this HANDOFF update) is pushed to
+   `claude/dazzling-ritchie-nofudq` but not yet merged to `main` —
+   open a PR for it, or fold it into the next PR. Next up per the
+   agreed order: the "deeper feature" tickets (OA-23, OA-24, OA-25,
+   OA-32, OA-44, OA-45, OA-46).
+6. Device control (OA-12/OA-15) remains explicitly **not** to be
    started without Steve's go-ahead.
 8. Update README.md's "Server deployment (Cloud Run)" checklist to match
    the real working IAM configuration (listed below) — currently stale,
