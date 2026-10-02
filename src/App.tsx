@@ -17,7 +17,7 @@ function App() {
     <div className="app-shell">
       <header className="app-header">
         <NavLink to="/" className="app-header__brand">
-          Octopus Agent
+          Shift &amp; Save
         </NavLink>
         <nav className="app-header__nav">
           <NavLink to="/" end>

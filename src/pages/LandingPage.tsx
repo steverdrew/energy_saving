@@ -8,17 +8,17 @@ const HOW_IT_WORKS = [
   },
   {
     title: 'See your saving',
-    body: 'We look at your actual usage and tariff to find real opportunities.',
+    body: 'We look at your actual usage to show what a dynamic tariff would have cost you.',
   },
   {
-    title: 'Do one thing',
-    body: "We'll tell you the single highest-impact change to make first.",
+    title: 'Make it easy',
+    body: "We'll lay out the single highest-impact change to make first, in plain English — the move is always yours to make.",
   },
 ]
 
 const TRUST_POINTS = [
+  'Your usage stays private. We never sell your data.',
   'We never move your money or switch anything without your say.',
-  'Your account details are encrypted and never shared.',
   'Built independently of Octopus Energy.',
 ]
 
@@ -26,12 +26,15 @@ function LandingPage() {
   return (
     <>
       <section className="landing-hero">
-        <h1>Take your energy bills into your own hands.</h1>
+        <h1>Take control of when you use energy — and what it costs you.</h1>
         <p className="landing-hero__sub">
-          Find out how much you could save on Octopus, and how to do it.
+          Dynamic tariffs like Octopus Agile can cut your bills, but tracking
+          half-hourly prices yourself is a hassle. Shift &amp; Save looks at
+          your actual usage and makes a dynamic tariff easy to understand and
+          act on.
         </p>
         <Link to="/login" className="landing-hero__cta">
-          Find my saving
+          See what I could save
         </Link>
       </section>
 
@@ -55,8 +58,7 @@ function LandingPage() {
       </section>
 
       <p className="landing-explainer-link">
-        New to Agile, Go or Intelligent Go?{' '}
-        <Link to="/how-smart-tariffs-work">See how smart tariffs work</Link>.
+        <Link to="/how-smart-tariffs-work">What is Octopus Agile?</Link>
       </p>
     </>
   )
