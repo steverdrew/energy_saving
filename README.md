@@ -235,20 +235,59 @@ will be replaced by OAuth later).
 - **Disconnect** (`DELETE /api/octopus/connection`) removes the stored
   row entirely — no manual database step needed.
 
-### Not yet live on beta
+## Server deployment (Cloud Run)
 
-`server/` has no deployment target — OA-49 deploys **Hosting only** (the
-static web build). This feature's server-side code exists, is fully
-tested, and is ready to deploy, but there is currently nowhere for the
-beta web app to send these requests. Getting this onto
-`shiftandsaveapp.web.app` for real needs a decision on where the
-Express server runs (e.g. Cloud Run/Cloud Functions alongside the
-Firebase project) and what persists `octopus_connections` once it's not
-running on a single machine's disk (SQLite's file doesn't survive a
-typical serverless container restart) — see `HANDOFF.md` for the open
-questions.
+`server/` deploys to **Cloud Run** on every push to `main` that touches
+`server/**`, via `.github/workflows/deploy-server.yml` — same
+test-before-deploy gate as `deploy-beta.yml`. Firebase Hosting proxies
+`/api/**` to it (see `firebase.json`'s `run` rewrite), so the web app's
+existing relative `fetch('/api/...')` calls keep working unchanged, same
+origin, no CORS needed in practice.
 
-### Testing locally (until a backend is deployed)
+Octopus connections (OA-5/OA-20) are stored in **Firestore**
+(`server/src/octopusStore.js`), not SQLite — Cloud Run's filesystem
+doesn't persist across container restarts or scale-to-zero, so SQLite's
+file can't be the durable store for anything that needs to survive a
+redeploy. The old `users`/`sessions`/`consents` SQLite tables are
+unused dead code (Firebase Auth replaced them in OA-50) and are left
+alone.
+
+### One-time GCP setup (Steve — none of this can be done from this repo)
+
+1. **Enable billing and APIs** on the `shiftandsaveapp` GCP project:
+   Cloud Run, Cloud Build, Artifact Registry, Firestore.
+2. **Create a Firestore database** (Firebase Console → Build →
+   Firestore Database → Create, Native mode) if one doesn't exist yet —
+   pick a region (e.g. `europe-west2`, matching the Cloud Run region
+   below).
+3. **Create a deploy service account** (e.g.
+   `github-deploy@shiftandsaveapp.iam.gserviceaccount.com`) with roles:
+   Cloud Run Admin, Cloud Build Editor, Artifact Registry Writer,
+   Service Account User, Secret Manager Secret Accessor. Download its
+   JSON key and add it as the GitHub Actions repo secret
+   `GCP_SERVER_DEPLOY_SA_KEY` (Settings → Secrets and variables →
+   Actions) — never paste the key itself anywhere else.
+4. **Create a Secret Manager secret** named `ENCRYPTION_KEY` with a real
+   generated value (`openssl rand -base64 32` — a *different* value from
+   any used for local dev or CI). The deploy workflow mounts it into
+   Cloud Run as an env var via `--set-secrets`; it's never stored in
+   GitHub Actions itself.
+5. **Grant the Cloud Run service's runtime service account** (the
+   default compute service account, unless you configure a dedicated
+   one) the `Cloud Datastore User` role, so it can read/write Firestore,
+   and `Secret Manager Secret Accessor` on the `ENCRYPTION_KEY` secret.
+6. **First deploy only**: the Cloud Run service must exist before
+   Firebase Hosting's rewrite can reference it. Push to `main` once to
+   let `deploy-server.yml` create the `energy-saving-server` Cloud Run
+   service, *then* let `deploy-beta.yml`'s next run (or a manual
+   `firebase deploy --only hosting`) pick up the rewrite.
+
+None of this is verified end-to-end yet — there's no GCP access from
+this environment to test an actual deploy. Once set up, the beta
+verification steps above (OA-5's Connect Octopus flow) become testable
+for real.
+
+### Testing locally (either before, or regardless of, a live deploy)
 
 ```bash
 cd server && npm install && cp .env.example .env   # fill in CLIENT_ORIGIN, DATABASE_PATH, ENCRYPTION_KEY

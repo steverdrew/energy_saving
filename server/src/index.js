@@ -4,6 +4,7 @@ import express from 'express'
 import { loadConfig } from './config.js'
 import { requireFirebaseAuth } from './firebaseAuth.js'
 import { fetchOctopusAccount } from './octopusClient.js'
+import { createFirestoreOctopusStore } from './octopusStore.js'
 import { authRouter } from './routes/auth.js'
 import { createOctopusRouter } from './routes/octopus.js'
 
@@ -17,7 +18,14 @@ export function createApp() {
   app.use(cookieParser())
 
   app.use('/api/auth', authRouter)
-  app.use('/api/octopus', createOctopusRouter({ requireFirebaseAuth, fetchOctopusAccount }))
+  app.use(
+    '/api/octopus',
+    createOctopusRouter({
+      requireFirebaseAuth,
+      fetchOctopusAccount,
+      store: createFirestoreOctopusStore(),
+    }),
+  )
 
   app.get('/api/health', (_req, res) => res.json({ ok: true }))
 

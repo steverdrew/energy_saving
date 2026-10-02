@@ -1,154 +1,117 @@
 # HANDOFF
 
-_Last updated: 2026-10-02 (OA-54: Shift & Save landing page, merged with OA-5/OA-20)_
+_Last updated: 2026-10-02 (OA-5/OA-20: Cloud Run + Firestore wiring)_
 
 ## Current task
 
-OA-54: update the public landing page to the Shift & Save
-dynamic-tariff proposition (new hero, CTA, 3-step flow, stronger
-privacy copy, link to the Agile explainer) and rebrand the app from
-"Octopus Agent" to "Shift & Save" everywhere a user sees it.
-
-This branch was rebased on top of `main` after OA-5/OA-20 (secure
-Octopus account connection) merged ahead of it — see that section
-below for the state of that slice, which is unrelated to OA-54 but
-landed on `main` in between.
+Following Steve's confirmed decision (Cloud Run for the server, Firestore
+for `octopus_connections`), wire up the actual deployment: migrate the
+Octopus connection store off SQLite onto Firestore, and scaffold a Cloud
+Run deploy workflow + Firebase Hosting rewrite so `/api/**` reaches it.
+Code complete and tested locally; branched cleanly on top of OA-54
+(Shift & Save landing rebrand, merged separately in parallel — unrelated
+to this work).
 
 ## State
 
-- OA-47 through OA-53 (plus hotfixes) and OA-5/OA-20 are merged to
-  `main` and live on beta (OA-5/OA-20's server-side piece is not
-  reachable from beta yet — see "Connect Octopus" below).
-- **OA-54** (this change): code complete and validated locally (lint,
-  build, check-bundle, web tests all pass; manually screenshotted the
-  rendered landing page at http://localhost:5173/). Merged with
-  `main` locally to pick up OA-5/OA-20; only `HANDOFF.md` and
-  `README.md` conflicted (both had independent new sections) and have
-  been resolved keeping both. Pushed to `claude/busy-gates-4i4s7h`,
-  PR #10 open against `main`.
-- Deployment to beta happens automatically on merge to `main` via
-  `.github/workflows/deploy-beta.yml`; it has not run for OA-54 yet,
-  since PR #10 isn't merged. The ticket's "deploy to beta before
-  completion" criterion will be satisfied once this PR is merged and
-  the workflow runs (watch it with the beta-verification checklist
-  below).
+- OA-47 through OA-54 (plus hotfixes) and the OA-5/OA-20 engineering
+  slice (PR #9) are merged to `main`. The Connect Octopus UI is live on
+  beta, but submitting the form does nothing useful yet — no backend is
+  reachable until this deploy wiring lands **and** the GCP setup below
+  is done.
+- OA-54 rebranded the app from "Octopus Agent" to "Shift & Save"
+  (header, landing copy) — unrelated to this slice, already merged.
+- This change: Firestore-backed `octopus_connections` store
+  (`server/src/octopusStore.js`), SQLite table removed, router takes an
+  injected `store` (tests use an in-memory fake — 21 server tests pass).
+  `deploy-server.yml` (Cloud Run, test-gated, triggers on `server/**`
+  changes) and a Firebase Hosting rewrite (`/api/**` → the Cloud Run
+  service) are scaffolded but **unverified** — no GCP credentials exist
+  in this environment to test an actual deploy.
+- Web app unchanged by this slice — `api/client.ts`'s relative
+  `/api/...` calls work either way, by design (same-origin via the
+  Hosting rewrite once deployed).
 
 ## Next step
 
-Watch CI on PR #10, merge once green, then run "Beta verification
-(OA-54)" in `README.md` against `https://shiftandsaveapp.web.app`.
+1. Commit this on a new branch off `main` (e.g.
+   `oa-5-cloud-run-firestore`, already checked out), push, open a PR,
+   get it through CI (lint/build/test only — nothing here can be
+   deploy-verified by CI), merge.
+2. Steve does the one-time GCP setup in README.md's "Server deployment
+   (Cloud Run)" section — none of it is something this session can do
+   (no GCP console/CLI access, no credentials). That section has the
+   full checklist.
+3. After that setup, the next push to `main` touching `server/**`
+   actually deploys. Confirm via the OA-5 beta verification steps.
 
 ## Key references
 
-- Ticket: OA-54, Jira Octopus Agile project.
-- `src/pages/LandingPage.tsx` / `.css` — new hero copy and CTA, revised
-  3-step flow (Connect / See your saving / Make it easy), stronger
-  privacy trust point, "What is Octopus Agile?" link to the existing
-  `/how-smart-tariffs-work` explainer (OA-42).
-- `src/App.tsx`, `index.html`, `vite.config.ts` (PWA manifest),
-  `README.md` — rebranded "Octopus Agent" → "Shift & Save" in every
-  user-visible spot (header, tab title, meta description, installed
-  PWA name).
-- README.md "Beta verification (OA-54)" section.
+- `server/src/octopusStore.js` — `createFirestoreOctopusStore()`,
+  `{ upsert, get, remove }` keyed by Firebase UID.
+- `server/test/helpers/fakeOctopusStore.js` — in-memory equivalent used
+  by `server/test/octopus.test.js`.
+- `server/src/firebaseApp.js` — shared Firebase Admin app singleton,
+  pulled out of `firebaseAuth.js` so `octopusStore.js` can reuse it
+  without a circular import.
+- `.github/workflows/deploy-server.yml` — Cloud Run deploy, gated on
+  `npm test` in `server/`, triggered on `server/**` changes to `main`.
+- `firebase.json` — `/api/**` rewrite to the `energy-saving-server`
+  Cloud Run service (`europe-west2`), ahead of the catch-all SPA
+  rewrite (order matters — first match wins).
+- README.md "Server deployment (Cloud Run)" — the full one-time GCP
+  setup checklist.
 
 ## Decisions
 
-- Rebranded the PWA manifest name/short_name/description and the
-  `<title>`/meta description in `index.html`, plus the README title —
-  not explicitly called out in the ticket, but the ticket is about the
-  Shift & Save proposition and HANDOFF already flagged the stale
-  "Octopus Agent" branding as debt; fixing it here is the simplest
-  option and avoids an inconsistent brand across tab title / installed
-  app name / landing page in the same release.
-  `ExplainerPage.tsx`'s own "Find my saving" CTA was left as-is — out of
-  this ticket's scope (landing page only); worth a follow-up ticket if
-  the mismatch with the new "See what I could save" CTA matters.
-- Kept the link to the explainer page pointing at the existing
-  `/how-smart-tariffs-work` route (built under OA-42) rather than
-  renaming the route, since the ticket only asks for new link text
-  ("What is Octopus Agile?"), not a URL change.
-- "Make it easy" step copy explicitly says "the move is always yours to
-  make" to satisfy the ticket's guard against implying automatic
-  switching or device control in the MVP.
-- Merge conflicts in `HANDOFF.md`/`README.md` against OA-5/OA-20 were
-  resolved by keeping both sections (they document unrelated slices of
-  work) rather than picking one side.
-
-## Connect Octopus (OA-5 / OA-20) — merged ahead of this branch, not this ticket's work
-
-OA-5 + OA-20 as one slice: let an authenticated beta user connect their
-Octopus Energy account (account number + API key), validated and stored
-server-side, encrypted at rest, never exposed back to the browser.
-**Not complete** — engineering is done, tested, and merged to `main`;
-the live/beta part of the Definition of Done is blocked on a hosting
-decision only Steve can make.
-
-- **Nothing in this slice is deployed or reachable from
-  `shiftandsaveapp.web.app`.** OA-49 deploys Hosting only; the Express
-  server has never had a deployment target.
-
-### Blocked — needs Steve
-
-OA-5's Definition of Done requires the flow to be "visible and testable
-on the stable beta URL." That needs:
-
-1. **Where the Express server runs.** No target exists yet (Cloud Run
-   or Cloud Functions is the likely candidate — same GCP project as
-   Firebase — but this is a real infrastructure/billing choice).
-2. **What persists `octopus_connections` once off a single disk.**
-   `better-sqlite3`'s file won't survive a serverless container
-   restarting. Either host somewhere with a persistent disk, or move
-   this store to Firestore.
-3. Once (1) is decided, confirm whether the chosen host's identity can
-   verify Firebase ID tokens via `initializeApp({ projectId })` alone
-   (no service account) — `server/src/firebaseAuth.js` assumes this
-   works for signature-only verification (no revocation check),
-   unverified against a real deployment so far.
-
-OA-26 (commercial/API/legal viability gate) is still open and was not
-treated as passed for this slice.
-
-### Key references
-
-- `server/src/octopusClient.js` — real Octopus API call + account
-  summarization (MPAN, tariff code only — no consumption data, that's
-  OA-6).
-- `server/src/crypto.js` — AES-256-GCM encrypt/decrypt, `ENCRYPTION_KEY`
-  required (added to `server/src/config.js`'s fail-fast list).
-- `server/src/firebaseAuth.js` — verifies a Firebase ID token
-  (`Authorization: Bearer <token>`) server-side; `createRequireFirebaseAuth`
-  takes the verify function as a parameter so tests inject a fake one
-  instead of hitting Google's network.
-- `server/src/routes/octopus.js` — `createOctopusRouter({
-  requireFirebaseAuth, fetchOctopusAccount })`, same DI pattern, for the
-  same testability reason.
-- `src/pages/ConnectOctopusPage.tsx` — the `/connect-octopus` protected
-  route (connect form / connected state / disconnect).
-- `src/api/client.ts` — `api.octopus.*` now attaches the current
-  Firebase user's ID token as a bearer token to every call.
-- README.md "Connect Octopus (OA-5 / OA-20)" section.
+- Firestore chosen (over e.g. Cloud SQL) because it's already inside
+  the `shiftandsaveapp` Firebase project — no new vendor, no new
+  connection-string secret, and `firebase-admin` is already a server
+  dependency (added for ID token verification in OA-5).
+- The web app needs **no changes** for this: `api/client.ts` already
+  calls relative `/api/...` paths, and Firebase Hosting's `run` rewrite
+  makes Cloud Run appear same-origin to the browser — no CORS dance,
+  no new base-URL config to thread through the build.
+- `europe-west2` (London) chosen as the Cloud Run region, matching the
+  product's UK audience — easy to change in both
+  `deploy-server.yml` and `firebase.json` together if Steve prefers
+  otherwise.
+- Old SQLite `users`/`sessions`/`consents` tables and `server/src/db.js`
+  itself are left in place untouched — they're already dead code since
+  OA-50 (Firebase Auth replaced them), removing them is a separate,
+  unrelated cleanup not in scope here.
+- Deploy auth uses a GCP service account JSON key as a GitHub secret
+  (`GCP_SERVER_DEPLOY_SA_KEY`), matching the existing
+  `FIREBASE_SERVICE_ACCOUNT_BETA` pattern from OA-49, rather than
+  introducing Workload Identity Federation — more setup steps for a
+  security benefit not obviously needed yet at this project's size.
 
 ## Constraints and preferences
 
-- No secrets/credentials in browser code, bundle, or repo (Firebase web
-  config is the documented exception).
-- Never log credentials or full account numbers.
-- Currency GBP; times stored/handled UTC, displayed Europe/London.
-- Keep production deployment and production auth separate, manual, and
-  gated — this is beta only.
+- No secrets/credentials in browser code, bundle, or repo.
+- `ENCRYPTION_KEY` for production lives in Secret Manager, not a GitHub
+  Actions secret or plain Cloud Run env var — it's mounted at deploy
+  time via `--set-secrets`.
+- Octopus API key: encrypted at rest, never logged, never returned to
+  the browser after submission.
 - No £ savings claims until OA-21 passes.
 - Keep sessions short; if context grows large, update this file and
   continue in a fresh session.
 
 ## Gotchas
 
-- Don't commit the beta test account's password, or any Octopus API
-  key, anywhere — Octopus credentials are meant to be entered directly
-  into the deployed (or local) app by Steve, never pasted into chat,
-  Jira, source, config, logs, or fixtures.
+- **Bootstrapping order**: the Cloud Run service must exist before
+  Firebase Hosting's rewrite can reference it by name. First deploy:
+  let `deploy-server.yml` run once, then re-run (or let the next push
+  trigger) `deploy-beta.yml` so Hosting picks up the rewrite.
 - `server/src/firebaseAuth.js`'s no-service-account token verification
-  is unverified against a real deployment — works in theory per
-  Firebase's docs, untested here since there's no live Firebase traffic
-  to this server at all yet.
+  is still unverified against real traffic (noted in the prior OA-5
+  HANDOFF entry) — once Cloud Run is live this becomes testable.
+- Nothing about the Cloud Run deploy itself (service creation, IAM,
+  Secret Manager) has been run or verified — this environment has no
+  GCP credentials. Treat `deploy-server.yml` as scaffolded-but-unproven
+  until Steve's GCP setup is done and a real deploy succeeds.
 - The Firebase project **ID** (`shiftandsaveapp`) vs. **number**
-  (`761386319734`) distinction from OA-49 applies here too.
+  (`761386319734`) distinction from OA-49 still applies.
+- Don't commit the beta test account's password, any Octopus API key,
+  or the production `ENCRYPTION_KEY` anywhere in this repo.
