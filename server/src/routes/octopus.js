@@ -52,6 +52,7 @@ export function createOctopusRouter({
   fetchActiveAgileTariffCode,
   store,
   importStore,
+  ledgerStore,
 }) {
   const router = Router()
 
@@ -309,6 +310,49 @@ export function createOctopusRouter({
     }
 
     res.json({ found: true, agileTariffCode, ...window, recommendation })
+  })
+
+  // OA-41: "did you run it at the recommended time?" -- showing a
+  // recommendation is not the same as saving money, so the running total
+  // (`GET /savings-total`) only credits an event the user explicitly
+  // confirmed. A declined or unanswered recommendation is still recorded
+  // (for a later projected-vs-actual comparison) but credits £0.
+  router.post('/recommendation-confirm', requireFirebaseAuth, async (req, res) => {
+    const { windowStartsAt, windowEndsAt, applianceType, savingPence, confirmed } = req.body ?? {}
+
+    if (typeof windowStartsAt !== 'string' || typeof windowEndsAt !== 'string' || !windowStartsAt || !windowEndsAt) {
+      return res.status(400).json({ error: 'windowStartsAt and windowEndsAt are both required.' })
+    }
+    if (typeof applianceType !== 'string' || !applianceType) {
+      return res.status(400).json({ error: 'applianceType is required.' })
+    }
+    if (typeof savingPence !== 'number' || !Number.isFinite(savingPence) || savingPence < 0) {
+      return res.status(400).json({ error: 'savingPence must be a non-negative number.' })
+    }
+    if (typeof confirmed !== 'boolean') {
+      return res.status(400).json({ error: 'confirmed must be true or false.' })
+    }
+
+    const creditedPence = confirmed ? savingPence : 0
+
+    await ledgerStore.addEvent(req.firebaseUid, {
+      source: 'manual',
+      windowStartsAt,
+      windowEndsAt,
+      applianceType,
+      savingPence,
+      confirmed,
+      creditedPence,
+      confirmedAt: new Date().toISOString(),
+    })
+
+    res.json({ confirmed, creditedPence })
+  })
+
+  router.get('/savings-total', requireFirebaseAuth, async (req, res) => {
+    const events = await ledgerStore.listEvents(req.firebaseUid)
+    const savedSoFarPence = round2(events.reduce((sum, event) => sum + (event.creditedPence ?? 0), 0))
+    res.json({ savedSoFarPence, eventCount: events.length })
   })
 
   return router

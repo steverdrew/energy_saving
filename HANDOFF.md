@@ -1,6 +1,6 @@
 # HANDOFF
 
-_Last updated: 2026-10-02 (OA-59, OA-58, OA-6, OA-21, OA-22, OA-8, OA-9/OA-30/OA-31, OA-40/OA-43 implemented this session)_
+_Last updated: 2026-10-02 (OA-59, OA-58, OA-6, OA-21, OA-22, OA-8, OA-9/OA-30/OA-31, OA-40/OA-43, OA-41 implemented this session)_
 
 ## Current task
 
@@ -10,13 +10,16 @@ that gate cleared: OA-22's comparison maths is wired into a real
 `GET /api/octopus/savings-result` endpoint, OA-8's result screen
 (`src/pages/SavingsPage.tsx`) shows a real £ estimate, OA-9/OA-30/OA-31
 (cheapest Agile window + appliance profiles + manual guidance) is built
-(`GET /api/octopus/cheapest-window` + `CheapestWindowPage.tsx`), and
+(`GET /api/octopus/cheapest-window` + `CheapestWindowPage.tsx`),
 OA-40/OA-43 (recommend an action with its £ value, "run X at Y save
 £Z" copy) extends that same endpoint and page with a per-cycle £
-comparison against the current tariff. OA-59, OA-58, OA-6, OA-21,
-OA-22, OA-8, OA-9, OA-30, OA-31, OA-40, OA-43 are all implemented,
-tested, and pushed to `claude/dazzling-ritchie-nofudq`. Nothing is
-deployed/verified live on beta yet.
+comparison against the current tariff, and OA-41 (running saved-so-far
+total) adds explicit "did you run it?" confirmation plus a savings
+ledger, per Steve's exact model (see State below). OA-59, OA-58, OA-6,
+OA-21, OA-22, OA-8, OA-9, OA-30, OA-31, OA-40, OA-43, OA-41 are all
+implemented, tested, and pushed to `claude/dazzling-ritchie-nofudq`.
+All of them are also moved to **Done in Jira** (standing rule — see
+Constraints). Nothing is deployed/verified live on beta yet.
 
 ## State
 
@@ -116,6 +119,28 @@ deployed/verified live on beta yet.
     alongside the existing `mpan`/`tariffCode` in each connection's
     `meterContext`.
 
+- **OA-41**: running "saved so far" total, built to Steve's explicit
+  model (showing a recommendation ≠ saving money):
+  - `CheapestWindowPage` now asks "Did you run it at the recommended
+    time? Yes / No" under any quantified recommendation
+    (`result.recommendation.savingPence > 0`).
+  - `POST /api/octopus/recommendation-confirm` records the event either
+    way (`confirmed: true/false`) in a new Firestore-backed ledger
+    (`server/src/savingsLedgerStore.js`, collection
+    `savingsLedgerEvents/{uid}/events`), but only credits the saving
+    (`creditedPence`) when `confirmed: true` — No or no answer credits
+    £0, and is still recorded for a possible future
+    projected-vs-actual view.
+  - `GET /api/octopus/savings-total` sums `creditedPence` across all
+    events → `{ savedSoFarPence, eventCount }`.
+  - `SavingsPage` shows "Estimated saved so far: £X" independently of
+    its own connect/import phase (a `SavedSoFar` component with its own
+    fetch) — it reflects the ledger, not whether Octopus is currently
+    connected.
+  - Ledger events carry `source: 'manual'` today; the shape has room
+    for a future `'automated'` source once device control (OA-12/15)
+    can observe an actual run, without changing this endpoint's shape.
+
 ## Next step
 
 1. **fetchActiveAgileTariffCode (`server/src/octopusClient.js`) has
@@ -135,12 +160,8 @@ deployed/verified live on beta yet.
    window *and* a real per-cycle £ saving for at least one appliance
    once usage is imported; Account page reflects real connection state
    after a refresh; `/` redirects when signed in.
-3. Pick up the next roadmap item: OA-41 (running saved-so-far total) —
-   needs a decision on what "saved so far" even means given nothing
-   tracks whether a user actually acted on a recommendation yet; worth
-   raising with Steve before building rather than guessing. Then OA-55
-   (Works with / Coming soon) and OA-56/OA-57 (compatibility, real
-   beta feedback).
+3. Pick up the next roadmap item: OA-55 (Works with / Coming soon),
+   then OA-56/OA-57 (compatibility, real beta feedback).
 4. Update README.md's "Server deployment (Cloud Run)" checklist to match
    the real working IAM configuration (listed below) — currently stale,
    purely a documentation cleanup, no urgency.
@@ -222,9 +243,25 @@ deployed/verified live on beta yet.
 - Extracted `src/format.ts` (`formatGbp`) once the exact same pence→£
   formatter appeared in both `SavingsPage` and `CheapestWindowPage` —
   real duplication, not speculative, so worth the shared module.
+- OA-41: used Steve's exact model (his words, 2026-10-02): "Did you run
+  it at the recommended time? Yes/No. Yes credits the per-cycle saving
+  to Estimated saved so far; No or no answer credits £0. Showing
+  someone an opportunity is not the same as saving them money." Ledger
+  stored as a Firestore subcollection per user (`savingsLedgerEvents/
+  {uid}/events`), not a single growing doc like `octopusImports` —
+  events accumulate indefinitely over a user's lifetime, unlike a
+  30-day import window, so a single-doc model would eventually hit
+  Firestore's 1MiB document limit. `source: 'manual'` on every event
+  today, specifically so OA-12/15's later device control can write
+  `'automated'` events through the same ledger/endpoint shape.
 
 ## Constraints and preferences
 
+- **Standing rule (2026-10-02): when a ticket is implemented, tested,
+  and pushed, transition it to Done in Jira immediately** — don't wait
+  to be asked. Caught up the backlog this session: OA-59, OA-58, OA-6,
+  OA-21, OA-22, OA-8, OA-9, OA-30, OA-31 all moved To Do/In Progress →
+  Done (OA-40/OA-43 were already Done, moved by Steve directly).
 - No secrets/credentials in browser code, bundle, or repo.
 - `ENCRYPTION_KEY` lives in Secret Manager only, mounted at deploy time
   via `--set-secrets` — generated and entered by Steve directly into

@@ -7,6 +7,37 @@ import './SavingsPage.css'
 
 type Phase = 'loading' | 'not-connected' | 'not-imported' | 'result' | 'error'
 
+// OA-41: the running total is its own, independent state -- it reflects
+// confirmed actions from Cheapest Times, not whether an Octopus account is
+// currently connected or imported, so it's fetched and shown regardless of
+// `phase` below.
+function SavedSoFar() {
+  const [savedSoFarPence, setSavedSoFarPence] = useState<number | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    api.octopus
+      .savingsTotal()
+      .then((res) => {
+        if (!cancelled && res) setSavedSoFarPence(res.savedSoFarPence)
+      })
+      .catch(() => {
+        /* Non-essential — the rest of the page still works without it. */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (savedSoFarPence === null) return null
+
+  return (
+    <p className="savings-page__saved-so-far">
+      Estimated saved so far: <strong>{formatGbp(savedSoFarPence)}</strong>
+    </p>
+  )
+}
+
 function describeResultError(err: unknown): string {
   if (err instanceof ApiError && err.status === 502) {
     return "We couldn't reach Octopus right now. Please try again in a moment."
@@ -61,6 +92,7 @@ function SavingsPage() {
     return (
       <section className="savings-page">
         <h1>My Savings</h1>
+        <SavedSoFar />
         <p>Connect your Octopus Energy account to see what you could save.</p>
         <Link to="/connect-octopus" className="savings-page__cta">
           Connect Octopus
@@ -73,6 +105,7 @@ function SavingsPage() {
     return (
       <section className="savings-page">
         <h1>My Savings</h1>
+        <SavedSoFar />
         <p>Import your usage history to see what you could save.</p>
         <Link to="/connect-octopus" className="savings-page__cta">
           Import my usage history
@@ -85,6 +118,7 @@ function SavingsPage() {
     return (
       <section className="savings-page">
         <h1>My Savings</h1>
+        <SavedSoFar />
         <p className="savings-page__error">{error}</p>
       </section>
     )
@@ -98,6 +132,7 @@ function SavingsPage() {
   return (
     <section className="savings-page">
       <h1>My Savings</h1>
+      <SavedSoFar />
 
       {cheaperTariff === 'agile' && (
         <p className="savings-page__headline">

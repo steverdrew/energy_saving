@@ -18,6 +18,11 @@
   color: #e05252;
 }
 
+.savings-page__saved-so-far {
+  margin-top: 8px;
+  font-size: 15px;
+}
+
 .savings-page__headline {
   margin-top: 16px;
   font-size: 18px;

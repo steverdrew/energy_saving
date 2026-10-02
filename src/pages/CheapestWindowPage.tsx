@@ -34,17 +34,22 @@ function describeWindowError(err: unknown): string {
   return 'Something went wrong finding a cheap time slot. Please try again.'
 }
 
+type ConfirmState = 'unanswered' | 'submitting' | 'answered' | 'error'
+
 function CheapestWindowPage() {
   const [applianceType, setApplianceType] = useState<ApplianceType>(APPLIANCE_TYPES[0])
   const [phase, setPhase] = useState<Phase>('loading')
   const [result, setResult] = useState<CheapestWindowResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [confirmState, setConfirmState] = useState<ConfirmState>('unanswered')
+  const [confirmedYes, setConfirmedYes] = useState(false)
 
   const profile = DEFAULT_APPLIANCE_PROFILES[applianceType]
 
   useEffect(() => {
     let cancelled = false
     setPhase('loading')
+    setConfirmState('unanswered')
 
     api.octopus
       .cheapestWindow(profile.typicalProgrammeDurationMinutes.value, profile.typicalEnergyPerCycleKwh.value)
@@ -63,6 +68,24 @@ function CheapestWindowPage() {
       cancelled = true
     }
   }, [profile])
+
+  function confirmRan(confirmed: boolean) {
+    if (!result?.found || !result.recommendation) return
+    setConfirmState('submitting')
+    api.octopus
+      .confirmRecommendation({
+        windowStartsAt: result.startsAt,
+        windowEndsAt: result.endsAt,
+        applianceType,
+        savingPence: result.recommendation.savingPence,
+        confirmed,
+      })
+      .then(() => {
+        setConfirmedYes(confirmed)
+        setConfirmState('answered')
+      })
+      .catch(() => setConfirmState('error'))
+  }
 
   return (
     <section className="cheapest-window-page">
@@ -123,6 +146,34 @@ function CheapestWindowPage() {
                 Estimate based on unit rates only, for one cycle — not a per-year figure, and doesn't
                 include the standing charge.
               </p>
+
+              {confirmState === 'unanswered' && (
+                <div className="cheapest-window-page__confirm">
+                  <p>Did you run it at the recommended time?</p>
+                  <div className="cheapest-window-page__confirm-buttons">
+                    <button type="button" onClick={() => confirmRan(true)}>
+                      Yes
+                    </button>
+                    <button type="button" onClick={() => confirmRan(false)}>
+                      No
+                    </button>
+                  </div>
+                </div>
+              )}
+              {confirmState === 'submitting' && <p className="cheapest-window-page__caveat">Saving…</p>}
+              {confirmState === 'answered' && confirmedYes && (
+                <p className="cheapest-window-page__confirm-feedback">
+                  Nice — added to your saved-so-far total.
+                </p>
+              )}
+              {confirmState === 'answered' && !confirmedYes && (
+                <p className="cheapest-window-page__caveat">No worries — we'll suggest this again next time.</p>
+              )}
+              {confirmState === 'error' && (
+                <p className="cheapest-window-page__error">
+                  Couldn't save your answer. Please try again.
+                </p>
+              )}
             </div>
           )}
           {result.recommendation && result.recommendation.savingPence <= 0 && (

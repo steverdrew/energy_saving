@@ -13,6 +13,7 @@ import { createFirestoreOctopusImportStore } from './octopusImportStore.js'
 import { createFirestoreOctopusStore } from './octopusStore.js'
 import { authRouter } from './routes/auth.js'
 import { createOctopusRouter } from './routes/octopus.js'
+import { createFirestoreSavingsLedgerStore } from './savingsLedgerStore.js'
 
 const config = loadConfig()
 
@@ -34,6 +35,7 @@ export function createApp() {
       fetchActiveAgileTariffCode,
       store: createFirestoreOctopusStore(),
       importStore: createFirestoreOctopusImportStore(),
+      ledgerStore: createFirestoreSavingsLedgerStore(),
     }),
   )
 

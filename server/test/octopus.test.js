@@ -13,6 +13,7 @@ const { OctopusAuthError, OctopusRequestError } = await import('../src/octopusCl
 const { createOctopusRouter } = await import('../src/routes/octopus.js')
 const { createInMemoryOctopusImportStore } = await import('./helpers/fakeOctopusImportStore.js')
 const { createInMemoryOctopusStore } = await import('./helpers/fakeOctopusStore.js')
+const { createInMemorySavingsLedgerStore } = await import('./helpers/fakeSavingsLedgerStore.js')
 
 // The fake verifier treats the bearer token itself as the uid, so tests can
 // address "different users" just by using different token strings -- no
@@ -88,6 +89,7 @@ app.use(
     fetchActiveAgileTariffCode: fakeFetchActiveAgileTariffCode,
     store: createInMemoryOctopusStore(),
     importStore: createInMemoryOctopusImportStore(),
+    ledgerStore: createInMemorySavingsLedgerStore(),
   }),
 )
 
@@ -360,4 +362,113 @@ test('GET /cheapest-window includes a £ recommendation once usage history is im
   assert.equal(res.body.recommendation.costAtCurrentTariffPence, 21.95)
   assert.equal(res.body.recommendation.savingPence, 11.95)
   assert.equal(res.body.recommendation.unitRateOnly, true)
+})
+
+test('POST /recommendation-confirm requires authentication', async () => {
+  const res = await request(app).post('/api/octopus/recommendation-confirm').send({
+    windowStartsAt: '2026-09-01T00:00:00Z',
+    windowEndsAt: '2026-09-01T00:30:00Z',
+    applianceType: 'dishwasher',
+    savingPence: 12,
+    confirmed: true,
+  })
+  assert.equal(res.status, 401)
+})
+
+test('POST /recommendation-confirm rejects a missing confirmed field', async () => {
+  const res = await request(app)
+    .post('/api/octopus/recommendation-confirm')
+    .set('Authorization', 'Bearer user-u')
+    .send({
+      windowStartsAt: '2026-09-01T00:00:00Z',
+      windowEndsAt: '2026-09-01T00:30:00Z',
+      applianceType: 'dishwasher',
+      savingPence: 12,
+    })
+  assert.equal(res.status, 400)
+})
+
+test('POST /recommendation-confirm rejects a negative savingPence', async () => {
+  const res = await request(app)
+    .post('/api/octopus/recommendation-confirm')
+    .set('Authorization', 'Bearer user-u')
+    .send({
+      windowStartsAt: '2026-09-01T00:00:00Z',
+      windowEndsAt: '2026-09-01T00:30:00Z',
+      applianceType: 'dishwasher',
+      savingPence: -1,
+      confirmed: true,
+    })
+  assert.equal(res.status, 400)
+})
+
+test('POST /recommendation-confirm with confirmed:true credits the saving to the running total', async () => {
+  const confirmRes = await request(app)
+    .post('/api/octopus/recommendation-confirm')
+    .set('Authorization', 'Bearer user-v')
+    .send({
+      windowStartsAt: '2026-09-01T00:00:00Z',
+      windowEndsAt: '2026-09-01T00:30:00Z',
+      applianceType: 'dishwasher',
+      savingPence: 11.95,
+      confirmed: true,
+    })
+  assert.equal(confirmRes.status, 200)
+  assert.equal(confirmRes.body.confirmed, true)
+  assert.equal(confirmRes.body.creditedPence, 11.95)
+
+  const totalRes = await request(app)
+    .get('/api/octopus/savings-total')
+    .set('Authorization', 'Bearer user-v')
+  assert.equal(totalRes.status, 200)
+  assert.equal(totalRes.body.savedSoFarPence, 11.95)
+  assert.equal(totalRes.body.eventCount, 1)
+})
+
+test('POST /recommendation-confirm with confirmed:false credits nothing, but is still recorded', async () => {
+  const confirmRes = await request(app)
+    .post('/api/octopus/recommendation-confirm')
+    .set('Authorization', 'Bearer user-w')
+    .send({
+      windowStartsAt: '2026-09-01T00:00:00Z',
+      windowEndsAt: '2026-09-01T00:30:00Z',
+      applianceType: 'dishwasher',
+      savingPence: 11.95,
+      confirmed: false,
+    })
+  assert.equal(confirmRes.status, 200)
+  assert.equal(confirmRes.body.confirmed, false)
+  assert.equal(confirmRes.body.creditedPence, 0)
+
+  const totalRes = await request(app)
+    .get('/api/octopus/savings-total')
+    .set('Authorization', 'Bearer user-w')
+  assert.equal(totalRes.status, 200)
+  assert.equal(totalRes.body.savedSoFarPence, 0)
+  assert.equal(totalRes.body.eventCount, 1)
+})
+
+test('GET /savings-total sums multiple confirmed events and requires authentication', async () => {
+  const unauth = await request(app).get('/api/octopus/savings-total')
+  assert.equal(unauth.status, 401)
+
+  for (const savingPence of [5, 7.5]) {
+    await request(app)
+      .post('/api/octopus/recommendation-confirm')
+      .set('Authorization', 'Bearer user-x')
+      .send({
+        windowStartsAt: '2026-09-01T00:00:00Z',
+        windowEndsAt: '2026-09-01T00:30:00Z',
+        applianceType: 'dishwasher',
+        savingPence,
+        confirmed: true,
+      })
+  }
+
+  const totalRes = await request(app)
+    .get('/api/octopus/savings-total')
+    .set('Authorization', 'Bearer user-x')
+  assert.equal(totalRes.status, 200)
+  assert.equal(totalRes.body.savedSoFarPence, 12.5)
+  assert.equal(totalRes.body.eventCount, 2)
 })

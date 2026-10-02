@@ -109,6 +109,28 @@ export type CheapestWindowResult =
       recommendation: CheapestWindowRecommendation | null
     }
 
+// OA-41: showing a recommendation isn't the same as saving money, so the
+// running total only credits a recommendation the user explicitly confirmed
+// they acted on. Declining or not answering still records the event (£0
+// credited) rather than being silently dropped.
+export interface RecommendationConfirmationInput {
+  windowStartsAt: string
+  windowEndsAt: string
+  applianceType: string
+  savingPence: number
+  confirmed: boolean
+}
+
+export interface RecommendationConfirmationResult {
+  confirmed: boolean
+  creditedPence: number
+}
+
+export interface SavingsTotal {
+  savedSoFarPence: number
+  eventCount: number
+}
+
 export const api = {
   octopus: {
     connect: async (input: { apiKey: string; accountNumber: string }) =>
@@ -142,5 +164,13 @@ export const api = {
         headers: await authHeaders(),
       })
     },
+    confirmRecommendation: async (input: RecommendationConfirmationInput) =>
+      request<RecommendationConfirmationResult>('/api/octopus/recommendation-confirm', {
+        method: 'POST',
+        body: JSON.stringify(input),
+        headers: await authHeaders(),
+      }),
+    savingsTotal: async () =>
+      request<SavingsTotal>('/api/octopus/savings-total', { headers: await authHeaders() }),
   },
 }
