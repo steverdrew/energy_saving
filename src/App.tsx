@@ -2,6 +2,7 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
 import { useAuth } from './auth/AuthContext'
 import ProtectedRoute from './auth/ProtectedRoute'
+import { BrandMark } from './components/Logo'
 import { OctopusConnectionProvider } from './octopus/OctopusConnectionContext'
 import AccountPage from './pages/AccountPage'
 import CheapestWindowPage from './pages/CheapestWindowPage'
@@ -32,7 +33,7 @@ function App() {
       <div className="app-shell">
         <header className="app-header">
           <NavLink to="/" className="app-header__brand">
-            Shift &amp; Save
+            <BrandMark />
           </NavLink>
           <nav className="app-header__nav">
             <NavLink to="/" end>
