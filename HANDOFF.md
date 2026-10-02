@@ -1,12 +1,15 @@
 # HANDOFF
 
-_Last updated: 2026-10-02 (OA-5/OA-20: live and verified on beta — ready for Steve's sign-off)_
+_Last updated: 2026-10-02 (OA-59, OA-58, OA-6 implemented this session)_
 
 ## Current task
 
-None in progress. OA-5/OA-20 is functionally complete and verified live
-on beta by Steve. Next work is whatever Steve picks next (OA-6 roadmap
-item mentioned earlier, or OA-21/OA-26 sign-off follow-through).
+None in progress. OA-59 (stale connection state), OA-58 (authenticated
+home state) and OA-6 (import tariff + consumption history) are
+implemented, tested, and pushed to `claude/dazzling-ritchie-nofudq`.
+Not yet deployed/verified live on beta by Steve. Next work per Steve's
+stated roadmap order is OA-21 (savings methodology/trust copy) and
+OA-22 (compare current tariff vs Agile using the now-imported history).
 
 ## State
 
@@ -36,18 +39,46 @@ item mentioned earlier, or OA-21/OA-26 sign-off follow-through).
 - "See my savings" link intentionally hits a `501` stub
   (`savings-result` endpoint) — by design, gated behind OA-21 sign-off.
   Not a bug if Steve or anyone clicks it.
+- **OA-59**: Account, Connect Octopus and future authenticated pages now
+  share one `OctopusConnectionProvider`
+  (`src/octopus/OctopusConnectionContext.tsx`) instead of each fetching
+  `/api/octopus/connection` independently — fixes Account always
+  showing "connect your account" even when already connected. Also
+  removed the duplicate Sign out button on the Account page (header nav
+  already has one).
+- **OA-58**: `/` now redirects a signed-in visitor to `/account`
+  (`HomeRoute` in `src/App.tsx`) instead of always showing the
+  signed-out marketing landing page with a "sign in" CTA.
+- **OA-6**: real tariff + half-hourly consumption import is live.
+  - `POST /api/octopus/import` fetches the last 30 days of half-hourly
+    consumption (`fetchElectricityConsumption`, requires the user's own
+    API key) and standard unit rates (`fetchTariffUnitRates`, public
+    product data) for the connected meter/tariff, and stores both in a
+    new Firestore collection `octopusImports`
+    (`server/src/octopusImportStore.js`), keyed by Firebase UID.
+  - `GET /api/octopus/import-status` returns a summary (point counts,
+    period, `importedAt`) instead of the old `501` stub.
+  - Connect Octopus page has an "Import my usage history" button once
+    connected, showing the point counts/date range back.
+  - 30-day window is deliberately small for this MVP — see Decisions.
+  - `summarizeOctopusAccount` now also captures the meter
+    `serialNumber` (needed for the consumption endpoint), stored
+    alongside the existing `mpan`/`tariffCode` in each connection's
+    `meterContext`.
 
 ## Next step
 
-Nothing blocking. Options for Steve to pick from:
-1. Manually spot-check the remaining DoD items (wrong API key → clear
-   error; disconnect button; a second test account can't see the first
-   user's connection) if extra confidence is wanted before calling OA-5
-   fully signed off.
-2. Move to OA-21 (savings methodology sign-off) or OA-26 — both are
-   sign-off gates, not coding tickets; I can read them and report
-   blockers/prerequisites but can't declare them passed.
-3. Pick up OA-6 or another roadmap ticket.
+1. Steve to review real imported data (point counts, actual rate/usage
+   shape) on beta before OA-22's comparison maths gets built against
+   it — this was the explicit gate before building the comparison.
+2. OA-21 (savings methodology/trust copy) and OA-22 (current tariff vs
+   Agile comparison) are next per Steve's stated order; OA-22 can now
+   read real history from the `octopusImports` Firestore doc instead of
+   needing fixtures.
+3. Manually spot-check OA-59/OA-58/OA-6 live on beta once deployed:
+   Account page reflects real connection state after a refresh; `/`
+   redirects when signed in; Import button works with a real account
+   and real Octopus history comes back sane.
 4. Update README.md's "Server deployment (Cloud Run)" checklist to match
    the real working IAM configuration (listed below) — currently stale,
    purely a documentation cleanup, no urgency.
@@ -81,6 +112,15 @@ Nothing blocking. Options for Steve to pick from:
 - Old SQLite `users`/`sessions`/`consents` tables and `server/src/db.js`
   itself left in place untouched — dead code since OA-50, unrelated
   cleanup not in scope here.
+- OA-6: import window fixed at 30 days (`IMPORT_WINDOW_DAYS` in
+  `server/src/routes/octopus.js`), not full history. Keeps each import
+  request fast and each `octopusImports` Firestore doc well under the
+  1MiB document limit (30 days half-hourly ≈ 1,440 points per series).
+  Revisit once Steve has reviewed real imported data — a longer window
+  may need chunked/paginated storage rather than one doc per user.
+- OA-6: the Cloud Run runtime service account already has "Cloud
+  Datastore User", which covers the new `octopusImports` collection too
+  — no IAM change needed for this feature.
 
 ## Constraints and preferences
 

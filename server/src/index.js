@@ -3,7 +3,8 @@ import cors from 'cors'
 import express from 'express'
 import { loadConfig } from './config.js'
 import { requireFirebaseAuth } from './firebaseAuth.js'
-import { fetchOctopusAccount } from './octopusClient.js'
+import { fetchElectricityConsumption, fetchOctopusAccount, fetchTariffUnitRates } from './octopusClient.js'
+import { createFirestoreOctopusImportStore } from './octopusImportStore.js'
 import { createFirestoreOctopusStore } from './octopusStore.js'
 import { authRouter } from './routes/auth.js'
 import { createOctopusRouter } from './routes/octopus.js'
@@ -23,7 +24,10 @@ export function createApp() {
     createOctopusRouter({
       requireFirebaseAuth,
       fetchOctopusAccount,
+      fetchElectricityConsumption,
+      fetchTariffUnitRates,
       store: createFirestoreOctopusStore(),
+      importStore: createFirestoreOctopusImportStore(),
     }),
   )
 

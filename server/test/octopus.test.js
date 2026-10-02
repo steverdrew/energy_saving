@@ -11,6 +11,7 @@ const request = (await import('supertest')).default
 const { createRequireFirebaseAuth } = await import('../src/firebaseAuth.js')
 const { OctopusAuthError, OctopusRequestError } = await import('../src/octopusClient.js')
 const { createOctopusRouter } = await import('../src/routes/octopus.js')
+const { createInMemoryOctopusImportStore } = await import('./helpers/fakeOctopusImportStore.js')
 const { createInMemoryOctopusStore } = await import('./helpers/fakeOctopusStore.js')
 
 // The fake verifier treats the bearer token itself as the uid, so tests can
@@ -34,6 +35,7 @@ function fakeFetchOctopusAccount(accountNumber, apiKey) {
         electricity_meter_points: [
           {
             mpan: '1200000345678',
+            meters: [{ serial_number: '21E1234567' }],
             agreements: [
               { tariff_code: 'E-1R-AGILE-24-04-03-A', valid_from: '2024-01-01', valid_to: null },
             ],
@@ -44,6 +46,23 @@ function fakeFetchOctopusAccount(accountNumber, apiKey) {
   })
 }
 
+function fakeFetchElectricityConsumption(mpan, serialNumber, apiKey) {
+  if (apiKey !== 'good-key') {
+    throw new OctopusAuthError('That API key was not accepted.')
+  }
+  return Promise.resolve([
+    { intervalStart: '2026-09-01T00:00:00Z', intervalEnd: '2026-09-01T00:30:00Z', consumptionKwh: 0.21 },
+    { intervalStart: '2026-09-01T00:30:00Z', intervalEnd: '2026-09-01T01:00:00Z', consumptionKwh: 0.18 },
+  ])
+}
+
+function fakeFetchTariffUnitRates(_tariffCode) {
+  return Promise.resolve([
+    { validFrom: '2026-09-01T00:00:00Z', validTo: '2026-09-01T00:30:00Z', unitRateIncVatPence: 24.1 },
+    { validFrom: '2026-09-01T00:30:00Z', validTo: '2026-09-01T01:00:00Z', unitRateIncVatPence: 19.8 },
+  ])
+}
+
 const app = express()
 app.use(express.json())
 app.use(
@@ -51,7 +70,10 @@ app.use(
   createOctopusRouter({
     requireFirebaseAuth,
     fetchOctopusAccount: fakeFetchOctopusAccount,
+    fetchElectricityConsumption: fakeFetchElectricityConsumption,
+    fetchTariffUnitRates: fakeFetchTariffUnitRates,
     store: createInMemoryOctopusStore(),
+    importStore: createInMemoryOctopusImportStore(),
   }),
 )
 
@@ -148,13 +170,51 @@ test('DELETE /connection removes only the requesting user\'s connection', async 
   assert.equal(afterF.body.connected, true)
 })
 
-for (const [method, path] of [
-  ['get', '/api/octopus/import-status'],
-  ['get', '/api/octopus/savings-result'],
-]) {
+for (const [method, path] of [['get', '/api/octopus/savings-result']]) {
   test(`${method.toUpperCase()} ${path} returns 501 with a JSON error when authenticated`, async () => {
     const res = await request(app)[method](path).set('Authorization', 'Bearer user-a')
     assert.equal(res.status, 501)
     assert.equal(typeof res.body.error, 'string')
   })
 }
+
+test('GET /import-status reports not imported before any import has run', async () => {
+  const res = await request(app).get('/api/octopus/import-status').set('Authorization', 'Bearer user-g')
+  assert.equal(res.status, 200)
+  assert.equal(res.body.imported, false)
+})
+
+test('POST /import requires a connected account first', async () => {
+  const res = await request(app).post('/api/octopus/import').set('Authorization', 'Bearer user-h')
+  assert.equal(res.status, 400)
+})
+
+test('POST /import fetches and stores consumption and tariff rate history', async () => {
+  await request(app)
+    .post('/api/octopus/connect')
+    .set('Authorization', 'Bearer user-i')
+    .send({ accountNumber: 'A-12345678', apiKey: 'good-key' })
+
+  const res = await request(app).post('/api/octopus/import').set('Authorization', 'Bearer user-i')
+  assert.equal(res.status, 200)
+  assert.equal(res.body.imported, true)
+  assert.equal(res.body.consumptionPoints, 2)
+  assert.equal(res.body.ratePoints, 2)
+
+  const status = await request(app)
+    .get('/api/octopus/import-status')
+    .set('Authorization', 'Bearer user-i')
+  assert.equal(status.body.imported, true)
+  assert.equal(status.body.consumptionPoints, 2)
+  assert.equal(status.body.ratePoints, 2)
+})
+
+test('POST /import never leaks the decrypted API key back to the client', async () => {
+  await request(app)
+    .post('/api/octopus/connect')
+    .set('Authorization', 'Bearer user-j')
+    .send({ accountNumber: 'A-12345678', apiKey: 'good-key' })
+
+  const res = await request(app).post('/api/octopus/import').set('Authorization', 'Bearer user-j')
+  assert.equal(JSON.stringify(res.body).includes('good-key'), false)
+})

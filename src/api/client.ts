@@ -56,6 +56,15 @@ export interface OctopusConnection {
   connectedAt?: string
 }
 
+export interface OctopusImportStatus {
+  imported: boolean
+  periodFrom?: string
+  periodTo?: string
+  consumptionPoints?: number
+  ratePoints?: number
+  importedAt?: string
+}
+
 export const api = {
   octopus: {
     connect: async (input: { apiKey: string; accountNumber: string }) =>
@@ -73,8 +82,13 @@ export const api = {
         method: 'DELETE',
         headers: await authHeaders(),
       }),
+    import: async () =>
+      request<OctopusImportStatus>('/api/octopus/import', {
+        method: 'POST',
+        headers: await authHeaders(),
+      }),
     importStatus: async () =>
-      request<never>('/api/octopus/import-status', { headers: await authHeaders() }),
+      request<OctopusImportStatus>('/api/octopus/import-status', { headers: await authHeaders() }),
     savingsResult: async () =>
       request<never>('/api/octopus/savings-result', { headers: await authHeaders() }),
   },
