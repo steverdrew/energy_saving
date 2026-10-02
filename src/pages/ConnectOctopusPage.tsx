@@ -1,6 +1,7 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { ApiError, api, type OctopusConnection } from '../api/client'
+import { ApiError, api } from '../api/client'
+import { useOctopusConnection } from '../octopus/OctopusConnectionContext'
 import './ConnectOctopusPage.css'
 
 const ACCOUNT_NUMBER_RE = /^A-[A-Za-z0-9]{8}$/
@@ -21,8 +22,7 @@ function describeConnectError(err: unknown): string {
 }
 
 function ConnectOctopusPage() {
-  const [loadingStatus, setLoadingStatus] = useState(true)
-  const [connection, setConnection] = useState<OctopusConnection | null>(null)
+  const { connection, loading: loadingStatus, setConnection } = useOctopusConnection()
 
   const [accountNumber, setAccountNumber] = useState('')
   const [apiKey, setApiKey] = useState('')
@@ -30,24 +30,6 @@ function ConnectOctopusPage() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    api.octopus
-      .connection()
-      .then((result) => {
-        if (!cancelled) setConnection(result)
-      })
-      .catch(() => {
-        if (!cancelled) setConnection({ connected: false })
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingStatus(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -67,7 +49,7 @@ function ConnectOctopusPage() {
     setSubmitting(true)
     try {
       const result = await api.octopus.connect({ accountNumber: normalized, apiKey: apiKey.trim() })
-      setConnection(result)
+      if (result) setConnection(result)
       setAccountNumber('')
       setApiKey('')
     } catch (err) {
