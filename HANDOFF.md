@@ -1,23 +1,26 @@
 # HANDOFF
 
-_Last updated: 2026-10-02 (core loop OA-59→OA-57 shipped and merged to
-`main` via PR #14; backlog audit; polish tier OA-60/OA-61/OA-62 all
-done, implemented this session)_
+_Last updated: 2026-10-02 (core loop OA-59→OA-57 merged via PR #14;
+backlog audit + polish tier OA-60/61/62 merged via PR #15; deeper
+feature tier OA-45/OA-25/OA-24/OA-23/OA-7/OA-32 implemented this
+session, OA-44 deliberately untouched)_
 
 ## Current task
 
 None in progress. Order worked this session, per Steve: (1) core loop
-(OA-59 through OA-57) — shipped, merged to `main`. (2) Backlog audit —
-done, see Decisions/Next step. (3) Polish tier — all three done:
-OA-61 (landing page "What is Shift & Save?"/"Who we are"), OA-62 (SVG
-logo + BETA badge), and OA-60 (Connect Octopus form help) — its
-screenshot requirement was dropped by Steve ("don't worry about
-screenshots for now, we can live without them"), so the text/link
-guidance alone closes it out. Not yet started: the "deeper feature"
-tier (OA-23/24/25/32/44/45/46) and device control (OA-11–17, on hold
-per Steve). This batch is pushed to `claude/dazzling-ritchie-nofudq`
-(not yet merged to `main`) — build/lint/bundle-check/tests all pass
-locally.
+— merged (`main` @ `995bdea`). (2) Backlog audit — done. (3) Polish
+tier (OA-60/61/62) — merged (`main` @ `1b0bb2b`). (4) Deeper feature
+tier: **OA-45** (starting tariff state), **OA-25** (comparison
+confidence for Intelligent Go-style limitations), **OA-24** (tariff
+eligibility), **OA-23 + OA-7** (a real, separate "shifting
+opportunity" figure alongside tariff-fit), and **OA-32** (follow-
+through meter-consistency) are all implemented and tested this
+session — see State below. **OA-44 deliberately not started** — its
+own ticket says "Not part of the focused MVP... build only after the
+MVP proves customers act on savings guidance," so it's left alone
+rather than inferred into scope by "crack on". Not yet pushed/merged
+— still on `claude/dazzling-ritchie-nofudq`; build/lint/bundle-
+check/tests all pass locally (91 server, 6 frontend).
 
 ## State
 
@@ -207,6 +210,73 @@ locally.
   them"), so OA-60 is Done on text/link guidance alone. If this comes
   up again later, the gap and what's needed are recorded in Jira
   comments on OA-60.
+- **OA-45 + OA-25**: `server/src/tariffState.js` (new) classifies the
+  customer's *current* tariff (`classifyTariffKind`: agile / go /
+  intelligent_go / standard / unknown, from the product-code prefix)
+  and whether they recently switched onto it (`determineTariffState`,
+  using the agreement's `valid_from` — now captured as
+  `tariffValidFrom` in `summarizeOctopusAccount`,
+  `server/src/octopusClient.js`). `comparisonMethodForTariffKind`
+  returns `'bounded_estimate'` only for `intelligent_go` (its
+  personalised smart-charge bonus windows can't be reconstructed from
+  public rates — OA-25) and `'exact'` for everything else. Both
+  attached to `GET /savings-result` as `tariffState`.
+  `SavingsPage.tsx` now says "You're on X" in plain English; when the
+  *current* tariff is already Agile, the headline switches to "latest
+  Agile pricing vs. your current Agile agreement" framing instead of
+  the nonsensical "switch to Agile and save" copy; a recently-switched
+  caveat appears when `recentlySwitched`; a bounded-estimate caveat
+  appears when `comparisonMethod === 'bounded_estimate'`. Go/
+  Intelligent Go product-code prefixes (`'GO-'`, `'INTELLI'`) are a
+  best-effort pattern match, **not yet confirmed against a real
+  account on either tariff** — flagged below like
+  `fetchActiveAgileTariffCode` was before Steve verified it.
+- **OA-24**: `server/src/tariffEligibility.js` (new) — eligibility
+  metadata keyed by product-code prefix, kept in one sourceable place
+  rather than scattered through routes/UI (the ticket's own
+  requirement). Since OA-22 only ever compares against Agile, which
+  has no eligibility requirement, `eligibilityForTariffCode` returns
+  `eligible` for every real user today; `scenario_only` entries for
+  Go/Intelligent Go exist so a future comparison against them has
+  somewhere to declare "requires an EV" rather than being silently
+  treated as eligible by omission. Attached to `/savings-result` as
+  `eligibility`; `SavingsPage` shows "Available to you." beneath the
+  headline.
+- **OA-23 + OA-7**: `/savings-result` now accepts the same optional
+  `durationMinutes`/`energyKwh` pair `/cheapest-window` already does,
+  and when given, computes a `shiftingOpportunity` figure — reusing
+  `findCheapestWindow`/`averageRate` (`cheapestWindow.js`, built for
+  OA-9) over the *already-imported historical* current-tariff rates
+  instead of a future Agile window. This is the second, clearly
+  separate layer OA-7 asked for: tariff-fit (`estimatedSavingPence`)
+  reprices the same usage at the same times; `shiftingOpportunity`
+  models moving one appliance cycle to the historically-cheapest slot
+  instead, always per-cycle and labelled `unitRateOnly: true` — never
+  summed into the tariff-fit number. `SavingsPage` adds a "Shifting
+  opportunity" section below the main result, with its own appliance
+  picker (same `DEFAULT_APPLIANCE_PROFILES` as `CheapestWindowPage`)
+  and its own fetch, so it can be modest/collapsible without blocking
+  the main result's load.
+- **OA-32**: `POST /recommendation-confirm` now accepts an optional
+  `energyKwh` (the frontend already has it on `result.recommendation`
+  from OA-40) and, only when `confirmed: true`, makes a best-effort
+  check of whether whole-house consumption during the recorded window
+  is at least roughly consistent with the appliance having run
+  (`checkMeterConsistency` in `server/src/routes/octopus.js`: sums
+  actual consumption for the window, compares against
+  `energyKwh * 0.6` as a loose floor). Result is one of `'consistent'
+  | 'inconsistent' | 'unknown'` — `'unknown'` whenever there's no
+  connection, no `energyKwh` given, or Octopus has no reading yet for
+  the window (half-hourly data commonly lags about a day). Per the
+  ticket's own rule, this **never changes `creditedPence`** — self-
+  report via `confirmed` remains the only thing that credits a saving;
+  the meter check only attaches a confidence label, and whole-house
+  data is never treated as device-level proof. `GET /savings-total`
+  now also returns `consistentCount`. No UI surfaces this yet — not
+  required by OA-32's acceptance criteria (it asks for the data to be
+  capturable for Gate 5 metrics, not a UI), and the running total's
+  copy is already dense; a judgment call to leave out until there's a
+  concrete reason to show it.
 
 ## Next step
 
@@ -240,14 +310,16 @@ locally.
      "What is Octopus Agile?" instead of the required "How dynamic
      tariffs work" — fixed and pushed, then marked Done.
    - **Left as To Do — genuinely incomplete**, not just unverified:
-     OA-7 (saving calc needs a separate "shifting opportunity" number
-     alongside tariff-fit; only tariff-fit exists), OA-10 (My Savings
-     view needs that same split, plus appliance-level breakdown),
-     OA-18 (provider-neutral auth abstraction — code is Octopus-
-     specific throughout), OA-20 (privacy baseline — encryption/no-
-     logging done, but no account-deletion flow, consent recording, or
-     documented retention rules), OA-39 (onboarding — no insufficient-
-     data state, no time-to-first-saving instrumentation).
+     OA-10 (My Savings view has the tariff-fit/shifting split now via
+     OA-23, but still lacks appliance-level breakdown across *all*
+     appliances at once and the explicit "still best, no action
+     needed" framing the ticket wants), OA-18 (provider-neutral auth
+     abstraction — code is Octopus-specific throughout), OA-20
+     (privacy baseline — encryption/no-logging done, but no account-
+     deletion flow, consent recording, or documented retention rules),
+     OA-39 (onboarding — no insufficient-data state, no time-to-
+     first-saving instrumentation). OA-7 moved to Done later this
+     session once OA-23 actually built its missing half — see below.
    - **Left alone — epics, not individually verifiable**: OA-1, OA-2,
      OA-3, OA-33, OA-34, OA-35. Epic closure is a reporting decision,
      not something to infer from code; flagged for Steve rather than
@@ -256,13 +328,25 @@ locally.
      OA-32 and beyond) beyond the handful needed to answer "what's
      next" — only spot-checked tickets that looked plausibly stale.
      A fuller audit is possible if useful later.
-5. Polish tier complete — OA-60, OA-61, OA-62 all Done. This batch
-   (commit `7b92bf0` plus this HANDOFF update) is pushed to
-   `claude/dazzling-ritchie-nofudq` but not yet merged to `main` —
-   open a PR for it, or fold it into the next PR. Next up per the
-   agreed order: the "deeper feature" tickets (OA-23, OA-24, OA-25,
-   OA-32, OA-44, OA-45, OA-46).
-6. Device control (OA-12/OA-15) remains explicitly **not** to be
+5. Polish tier (OA-60/61/62) merged via PR #15 (`1b0bb2b`).
+6. **Deeper feature tier — mostly done this session** (not yet
+   pushed): OA-45, OA-25, OA-24, OA-23 (+ OA-7), OA-32 all
+   implemented, tested (91 server tests), build/lint/bundle-check
+   clean. **OA-46** (real-world savings equivalents, e.g. "about 18
+   coffees") is the one deeper-feature ticket **not yet built** this
+   pass — small and independent of the others, good next pick.
+   **OA-44 deliberately skipped** — its own ticket marks it post-MVP.
+   Open a PR for this batch once pushed, same pattern as PR #14/#15.
+7. Before relying on OA-45's Go/Intelligent Go detection in anger:
+   `classifyTariffKind` (`server/src/tariffState.js`)'s `'GO-'` and
+   `'INTELLI'` prefix matches are a best-effort guess at Octopus's
+   real product-code naming, **not yet confirmed against a real Go or
+   Intelligent Go account** — same category of risk
+   `fetchActiveAgileTariffCode` carried before Steve verified it
+   against the real API. Low urgency while this app only has
+   Agile/standard-tariff beta users, but flag it before leaning on it
+   for a Go/Intelligent Go customer.
+8. Device control (OA-12/OA-15) remains explicitly **not** to be
    started without Steve's go-ahead.
 8. Update README.md's "Server deployment (Cloud Run)" checklist to match
    the real working IAM configuration (listed below) — currently stale,
@@ -289,6 +373,34 @@ locally.
 
 ## Decisions
 
+- OA-23/OA-7: implemented "shifting opportunity" by reusing OA-9's
+  `findCheapestWindow`/`averageRate` over historical rates instead of
+  building a parallel optimiser — the maths for "cheapest slot vs.
+  average rate for one cycle" is identical whether the rates are
+  forward-looking (Agile, next 48h) or backward-looking (current
+  tariff, already-imported period); only the data fed in differs.
+  Avoids two near-duplicate implementations of the same core idea.
+- OA-23: deliberately per-cycle, not an aggregate across the whole
+  import period or a frequency-based annual projection — same
+  rationale as OA-40's decision: no real data exists yet on how often
+  a given appliance actually runs, so aggregating would mean
+  inventing a frequency assumption rather than reading one.
+- OA-45/OA-25: chose prefix-matching on the tariff's product code
+  (`'AGILE'`, `'GO-'`, `'INTELLI'`) over a lookup table, matching the
+  existing `productCodeFromTariffCode`/`regionLetterFromTariffCode`
+  style already in `octopusClient.js` rather than introducing a new
+  pattern. Go/Intelligent Go prefixes are unverified against a real
+  account — see Next step.
+- OA-32: meter-consistency check runs synchronously inside
+  `POST /recommendation-confirm` (best-effort, swallows failures to
+  `'unknown'`) rather than as a background job — there's no job
+  infrastructure in this app, and the check is cheap (one consumption
+  fetch for a half-hour-to-few-hour window). If Octopus's data lag
+  means the window's reading usually isn't available yet at confirm
+  time, this will mostly report `'unknown'` in practice; a delayed/
+  retry check would need a scheduler this app doesn't have, and
+  wasn't worth building for a label that doesn't change `creditedPence`
+  anyway.
 - Firestore chosen (over e.g. Cloud SQL) — already inside the
   `shiftandsaveapp` Firebase project.
 - `europe-west2` (London) chosen as the Cloud Run region.

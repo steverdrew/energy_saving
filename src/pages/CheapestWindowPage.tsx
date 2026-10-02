@@ -88,6 +88,7 @@ function CheapestWindowPage() {
         applianceType,
         savingPence: result.recommendation.savingPence,
         confirmed,
+        energyKwh: result.recommendation.energyKwh,
       })
       .then(() => {
         setConfirmedYes(confirmed)

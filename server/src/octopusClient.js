@@ -113,6 +113,7 @@ export function summarizeOctopusAccount(account) {
   return {
     mpan: meterPoint?.mpan ?? null,
     tariffCode: currentAgreement?.tariff_code ?? null,
+    tariffValidFrom: currentAgreement?.valid_from ?? null,
     serialNumber: meterPoint?.meters?.[0]?.serial_number ?? null,
   }
 }

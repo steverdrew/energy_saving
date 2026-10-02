@@ -8,6 +8,8 @@ import {
   summarizeOctopusAccount,
 } from '../octopusClient.js'
 import { compareCurrentTariffToAgile } from '../savingsComparison.js'
+import { eligibilityForTariffCode } from '../tariffEligibility.js'
+import { determineTariffState } from '../tariffState.js'
 
 const ACCOUNT_NUMBER_RE = /^A-[A-Za-z0-9]{8}$/
 
@@ -199,6 +201,23 @@ export function createOctopusRouter({
       return res.status(400).json({ error: 'Import your usage history first.' })
     }
 
+    // OA-23: optional, like /cheapest-window's energyKwh -- when given,
+    // also reports the modelled shifting-opportunity saving for one cycle
+    // of this appliance, as a second, clearly separate number from the
+    // tariff-fit comparison below (OA-7).
+    let durationMinutes = null
+    let energyKwh = null
+    if (req.query.durationMinutes !== undefined || req.query.energyKwh !== undefined) {
+      durationMinutes = Number(req.query.durationMinutes)
+      energyKwh = Number(req.query.energyKwh)
+      if (!Number.isFinite(durationMinutes) || durationMinutes <= 0 || !Number.isFinite(energyKwh) || energyKwh <= 0) {
+        return res
+          .status(400)
+          .json({ error: 'durationMinutes and energyKwh must both be positive numbers when either is given.' })
+      }
+    }
+
+    const connection = await store.get(req.firebaseUid)
     const regionLetter = regionLetterFromTariffCode(record.tariffCode)
 
     let agileTariffCode
@@ -225,6 +244,39 @@ export function createOctopusRouter({
     )
     const annualizedSavingPence = Math.round(comparison.estimatedSavingPence * (365 / windowDays) * 100) / 100
 
+    const tariffState = determineTariffState({
+      tariffCode: record.tariffCode,
+      tariffValidFrom: connection?.meterContext?.tariffValidFrom ?? null,
+    })
+    const eligibility = eligibilityForTariffCode(agileTariffCode)
+
+    // OA-23/OA-7: the "shifting opportunity" layer -- what moving this one
+    // appliance's cycle to the cheapest slot within the *already-imported*
+    // historical period would have cost, vs. the period's average rate on
+    // the tariff the saving is quoted against (the customer's current
+    // tariff -- see OA-45's double-counting rule). This is strictly
+    // separate from the tariff-fit comparison above: tariff-fit reprices
+    // the same usage at the same times; this models moving the usage
+    // itself, and is always labelled projected/estimated, never summed
+    // into estimatedSavingPence.
+    let shiftingOpportunity = null
+    if (durationMinutes !== null) {
+      const window = findCheapestWindow(record.rates, durationMinutes)
+      if (window) {
+        const averageCurrentTariffRateIncVatPence = averageRate(record.rates)
+        const costAtCheapestPence = round2(energyKwh * window.averageUnitRateIncVatPence)
+        const costAtAverageRatePence = round2(energyKwh * averageCurrentTariffRateIncVatPence)
+        shiftingOpportunity = {
+          energyKwh,
+          averageCurrentTariffRateIncVatPence,
+          costAtCheapestPence,
+          costAtAverageRatePence,
+          savingPence: round2(costAtAverageRatePence - costAtCheapestPence),
+          unitRateOnly: true,
+        }
+      }
+    }
+
     // OA-21: unit rates only, no standing charge -- flagged explicitly so a
     // future standing-charge addition is an upgrade to this same result
     // shape, not a silent change of what the number means.
@@ -238,6 +290,9 @@ export function createOctopusRouter({
       annualizedSavingPence,
       unitRateOnly: true,
       agileTariffCode,
+      tariffState,
+      eligibility,
+      shiftingOpportunity,
     })
   })
 
@@ -312,13 +367,47 @@ export function createOctopusRouter({
     res.json({ found: true, agileTariffCode, ...window, recommendation })
   })
 
+  // OA-32: best-effort, on-demand check of whether whole-house consumption
+  // during the recommended window is consistent with the appliance having
+  // actually run -- never proof (it's whole-house, not device-level), and
+  // never used to change creditedPence, only to attach a confidence label
+  // self-report remains the only thing that credits a saving (OA-41).
+  // Octopus's half-hourly consumption data commonly lags by about a day,
+  // so 'unknown' (not 'inconsistent') is the honest answer whenever no
+  // reading covers the window yet.
+  async function checkMeterConsistency({ uid, windowStartsAt, windowEndsAt, expectedEnergyKwh }) {
+    const connection = await store.get(uid)
+    const { mpan, serialNumber } = connection?.meterContext ?? {}
+    if (!connection || !mpan || !serialNumber) return 'unknown'
+
+    let consumption
+    try {
+      const apiKey = decrypt(connection.encryptedApiKey)
+      consumption = await fetchElectricityConsumption(mpan, serialNumber, apiKey, {
+        periodFrom: windowStartsAt,
+        periodTo: windowEndsAt,
+      })
+    } catch {
+      return 'unknown'
+    }
+
+    if (!Array.isArray(consumption) || consumption.length === 0) return 'unknown'
+
+    const actualKwh = consumption.reduce((sum, c) => sum + (c.consumptionKwh ?? 0), 0)
+    // Whole-house usage during the window should be at least roughly in
+    // line with the appliance's own energy use if it ran -- a tolerance
+    // below the full expected amount, since actual draw varies by cycle
+    // and this is never meant to be a precise device-level check.
+    return actualKwh >= expectedEnergyKwh * 0.6 ? 'consistent' : 'inconsistent'
+  }
+
   // OA-41: "did you run it at the recommended time?" -- showing a
   // recommendation is not the same as saving money, so the running total
   // (`GET /savings-total`) only credits an event the user explicitly
   // confirmed. A declined or unanswered recommendation is still recorded
   // (for a later projected-vs-actual comparison) but credits £0.
   router.post('/recommendation-confirm', requireFirebaseAuth, async (req, res) => {
-    const { windowStartsAt, windowEndsAt, applianceType, savingPence, confirmed } = req.body ?? {}
+    const { windowStartsAt, windowEndsAt, applianceType, savingPence, confirmed, energyKwh } = req.body ?? {}
 
     if (typeof windowStartsAt !== 'string' || typeof windowEndsAt !== 'string' || !windowStartsAt || !windowEndsAt) {
       return res.status(400).json({ error: 'windowStartsAt and windowEndsAt are both required.' })
@@ -332,8 +421,25 @@ export function createOctopusRouter({
     if (typeof confirmed !== 'boolean') {
       return res.status(400).json({ error: 'confirmed must be true or false.' })
     }
+    if (energyKwh !== undefined && (typeof energyKwh !== 'number' || !Number.isFinite(energyKwh) || energyKwh <= 0)) {
+      return res.status(400).json({ error: 'energyKwh must be a positive number when given.' })
+    }
 
     const creditedPence = confirmed ? savingPence : 0
+
+    // OA-32: self-report (confirmed) is the only thing recorded
+    // immediately and the only thing that credits a saving. The
+    // meter-consistency check is best-effort and attached as a separate
+    // field -- it never overrides or delays the self-report.
+    let meterConsistency = 'unknown'
+    if (confirmed && energyKwh !== undefined) {
+      meterConsistency = await checkMeterConsistency({
+        uid: req.firebaseUid,
+        windowStartsAt,
+        windowEndsAt,
+        expectedEnergyKwh: energyKwh,
+      })
+    }
 
     await ledgerStore.addEvent(req.firebaseUid, {
       source: 'manual',
@@ -343,16 +449,21 @@ export function createOctopusRouter({
       savingPence,
       confirmed,
       creditedPence,
+      meterConsistency,
       confirmedAt: new Date().toISOString(),
     })
 
-    res.json({ confirmed, creditedPence })
+    res.json({ confirmed, creditedPence, meterConsistency })
   })
 
   router.get('/savings-total', requireFirebaseAuth, async (req, res) => {
     const events = await ledgerStore.listEvents(req.firebaseUid)
     const savedSoFarPence = round2(events.reduce((sum, event) => sum + (event.creditedPence ?? 0), 0))
-    res.json({ savedSoFarPence, eventCount: events.length })
+    // OA-32: a count, not a recalculation of the total -- meter data can
+    // never change what's credited, only describe how much of it the
+    // meter happens to corroborate.
+    const consistentCount = events.filter((e) => e.meterConsistency === 'consistent').length
+    res.json({ savedSoFarPence, eventCount: events.length, consistentCount })
   })
 
   return router

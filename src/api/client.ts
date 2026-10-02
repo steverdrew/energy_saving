@@ -75,6 +75,41 @@ export interface OctopusImportStatus {
   importedAt?: string
 }
 
+// OA-45/OA-25: where the customer is starting from, and how confidently
+// the comparison can represent it. 'intelligent_go' is the only kind
+// whose comparisonMethod is 'bounded_estimate' today -- its dynamically
+// assigned bonus smart-charge windows can't be reconstructed from public
+// rates, so a comparison only covers the guaranteed published windows.
+export interface TariffState {
+  kind: 'agile' | 'go' | 'intelligent_go' | 'standard' | 'unknown'
+  comparisonMethod: 'exact' | 'bounded_estimate'
+  recentlySwitched: boolean
+  daysSinceSwitch: number | null
+}
+
+// OA-24: eligibility for the tariff being shown as the comparison --
+// never inferred from price alone. 'eligible' is the only status Agile
+// can produce; the others exist for tariffs this app doesn't compare
+// against yet.
+export interface TariffEligibility {
+  status: 'eligible' | 'scenario_only' | 'cannot_determine'
+  requirement: string | null
+}
+
+// OA-23/OA-7: the second, separate layer from tariff-fit -- what moving
+// one appliance cycle to the cheapest slot within the imported historical
+// period would have cost, vs. that period's average rate on the tariff
+// the saving is quoted against. Always projected/estimated, never summed
+// into estimatedSavingPence.
+export interface ShiftingOpportunity {
+  energyKwh: number
+  averageCurrentTariffRateIncVatPence: number
+  costAtCheapestPence: number
+  costAtAverageRatePence: number
+  savingPence: number
+  unitRateOnly: true
+}
+
 // OA-22/OA-21: unit rates only, no standing charge -- see
 // docs/SAVINGS_METHODOLOGY.md. `unitRateOnly` is always true today but is
 // sent explicitly so a future standing-charge addition is a new, distinct
@@ -89,6 +124,9 @@ export interface SavingsResult {
   annualizedSavingPence: number
   unitRateOnly: true
   agileTariffCode: string
+  tariffState: TariffState
+  eligibility: TariffEligibility
+  shiftingOpportunity: ShiftingOpportunity | null
 }
 
 // OA-40: only present when energyKwh was passed to cheapestWindow() and
@@ -129,16 +167,25 @@ export interface RecommendationConfirmationInput {
   applianceType: string
   savingPence: number
   confirmed: boolean
+  energyKwh?: number
 }
+
+// OA-32: best-effort, whole-house corroboration -- never device-level
+// proof, and never changes creditedPence. 'unknown' when there's no
+// connection, no energyKwh was given, or Octopus has no reading yet for
+// the window (consumption data commonly lags by about a day).
+export type MeterConsistency = 'consistent' | 'inconsistent' | 'unknown'
 
 export interface RecommendationConfirmationResult {
   confirmed: boolean
   creditedPence: number
+  meterConsistency: MeterConsistency
 }
 
 export interface SavingsTotal {
   savedSoFarPence: number
   eventCount: number
+  consistentCount: number
 }
 
 // OA-56: suggested categories from the ticket -- the UI shows these plus
@@ -197,8 +244,17 @@ export const api = {
       }),
     importStatus: async () =>
       request<OctopusImportStatus>('/api/octopus/import-status', { headers: await authHeaders() }),
-    savingsResult: async () =>
-      request<SavingsResult>('/api/octopus/savings-result', { headers: await authHeaders() }),
+    savingsResult: async (shiftingOpportunityInput?: { durationMinutes: number; energyKwh: number }) => {
+      const params = new URLSearchParams()
+      if (shiftingOpportunityInput) {
+        params.set('durationMinutes', String(shiftingOpportunityInput.durationMinutes))
+        params.set('energyKwh', String(shiftingOpportunityInput.energyKwh))
+      }
+      const query = params.toString()
+      return request<SavingsResult>(`/api/octopus/savings-result${query ? `?${query}` : ''}`, {
+        headers: await authHeaders(),
+      })
+    },
     cheapestWindow: async (durationMinutes: number, energyKwh?: number) => {
       const params = new URLSearchParams({ durationMinutes: String(durationMinutes) })
       if (energyKwh != null) params.set('energyKwh', String(energyKwh))
