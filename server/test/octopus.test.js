@@ -448,6 +448,164 @@ test('POST /recommendation-confirm with confirmed:false credits nothing, but is 
   assert.equal(totalRes.body.eventCount, 1)
 })
 
+test('GET /savings-result includes tariff state, eligibility and a null shiftingOpportunity by default', async () => {
+  await request(app)
+    .post('/api/octopus/connect')
+    .set('Authorization', 'Bearer user-y')
+    .send({ accountNumber: 'A-12345678', apiKey: 'good-key' })
+  await request(app).post('/api/octopus/import').set('Authorization', 'Bearer user-y')
+
+  const res = await request(app).get('/api/octopus/savings-result').set('Authorization', 'Bearer user-y')
+
+  assert.equal(res.status, 200)
+  assert.deepEqual(res.body.tariffState, {
+    kind: 'standard',
+    comparisonMethod: 'exact',
+    recentlySwitched: false,
+    daysSinceSwitch: res.body.tariffState.daysSinceSwitch,
+  })
+  assert.equal(res.body.eligibility.status, 'eligible')
+  assert.equal(res.body.shiftingOpportunity, null)
+})
+
+test('GET /savings-result rejects durationMinutes without energyKwh', async () => {
+  const res = await request(app)
+    .get('/api/octopus/savings-result?durationMinutes=30')
+    .set('Authorization', 'Bearer user-y')
+  assert.equal(res.status, 400)
+})
+
+test('GET /savings-result includes a shiftingOpportunity figure, separate from tariff-fit, when given a duration and energy', async () => {
+  const res = await request(app)
+    .get('/api/octopus/savings-result?durationMinutes=30&energyKwh=1')
+    .set('Authorization', 'Bearer user-y')
+
+  assert.equal(res.status, 200)
+  // current-tariff fixture rates: 24.1p at 00:00, 19.8p at 00:30 -- cheapest 30-minute slot is 00:30.
+  assert.equal(res.body.shiftingOpportunity.averageCurrentTariffRateIncVatPence, 21.95)
+  assert.equal(res.body.shiftingOpportunity.costAtCheapestPence, 19.8)
+  assert.equal(res.body.shiftingOpportunity.costAtAverageRatePence, 21.95)
+  assert.equal(res.body.shiftingOpportunity.savingPence, 2.15)
+  assert.equal(res.body.shiftingOpportunity.unitRateOnly, true)
+  // separate from the tariff-fit number, never summed into it
+  assert.notEqual(res.body.shiftingOpportunity.savingPence, res.body.estimatedSavingPence)
+})
+
+test('POST /recommendation-confirm reports meterConsistency: unknown when confirmed but no energyKwh given', async () => {
+  const res = await request(app)
+    .post('/api/octopus/recommendation-confirm')
+    .set('Authorization', 'Bearer user-z')
+    .send({
+      windowStartsAt: '2026-09-01T00:00:00Z',
+      windowEndsAt: '2026-09-01T01:00:00Z',
+      applianceType: 'dishwasher',
+      savingPence: 5,
+      confirmed: true,
+    })
+  assert.equal(res.status, 200)
+  assert.equal(res.body.meterConsistency, 'unknown')
+})
+
+test('POST /recommendation-confirm reports meterConsistency: unknown when not confirmed, even with energyKwh', async () => {
+  const res = await request(app)
+    .post('/api/octopus/recommendation-confirm')
+    .set('Authorization', 'Bearer user-z')
+    .send({
+      windowStartsAt: '2026-09-01T00:00:00Z',
+      windowEndsAt: '2026-09-01T01:00:00Z',
+      applianceType: 'dishwasher',
+      savingPence: 5,
+      confirmed: false,
+      energyKwh: 0.3,
+    })
+  assert.equal(res.status, 200)
+  assert.equal(res.body.meterConsistency, 'unknown')
+})
+
+test('POST /recommendation-confirm reports meterConsistency: unknown for a user with no Octopus connection', async () => {
+  const res = await request(app)
+    .post('/api/octopus/recommendation-confirm')
+    .set('Authorization', 'Bearer user-never-connected')
+    .send({
+      windowStartsAt: '2026-09-01T00:00:00Z',
+      windowEndsAt: '2026-09-01T01:00:00Z',
+      applianceType: 'dishwasher',
+      savingPence: 5,
+      confirmed: true,
+      energyKwh: 0.3,
+    })
+  assert.equal(res.status, 200)
+  assert.equal(res.body.meterConsistency, 'unknown')
+})
+
+test('POST /recommendation-confirm reports meterConsistency: consistent when actual usage covers the expected energy', async () => {
+  await request(app)
+    .post('/api/octopus/connect')
+    .set('Authorization', 'Bearer user-aa')
+    .send({ accountNumber: 'A-12345678', apiKey: 'good-key' })
+
+  // fixture consumption for this window sums to 0.39 kWh; 0.3 * 0.6 = 0.18 <= 0.39.
+  const res = await request(app)
+    .post('/api/octopus/recommendation-confirm')
+    .set('Authorization', 'Bearer user-aa')
+    .send({
+      windowStartsAt: '2026-09-01T00:00:00Z',
+      windowEndsAt: '2026-09-01T01:00:00Z',
+      applianceType: 'dishwasher',
+      savingPence: 5,
+      confirmed: true,
+      energyKwh: 0.3,
+    })
+  assert.equal(res.status, 200)
+  assert.equal(res.body.meterConsistency, 'consistent')
+})
+
+test('POST /recommendation-confirm reports meterConsistency: inconsistent when actual usage falls well short of expected energy', async () => {
+  await request(app)
+    .post('/api/octopus/connect')
+    .set('Authorization', 'Bearer user-bb')
+    .send({ accountNumber: 'A-12345678', apiKey: 'good-key' })
+
+  // fixture consumption for this window sums to 0.39 kWh; 2 * 0.6 = 1.2 > 0.39.
+  const res = await request(app)
+    .post('/api/octopus/recommendation-confirm')
+    .set('Authorization', 'Bearer user-bb')
+    .send({
+      windowStartsAt: '2026-09-01T00:00:00Z',
+      windowEndsAt: '2026-09-01T01:00:00Z',
+      applianceType: 'dishwasher',
+      savingPence: 5,
+      confirmed: true,
+      energyKwh: 2,
+    })
+  assert.equal(res.status, 200)
+  assert.equal(res.body.meterConsistency, 'inconsistent')
+})
+
+test('POST /recommendation-confirm rejects a non-positive energyKwh', async () => {
+  const res = await request(app)
+    .post('/api/octopus/recommendation-confirm')
+    .set('Authorization', 'Bearer user-cc')
+    .send({
+      windowStartsAt: '2026-09-01T00:00:00Z',
+      windowEndsAt: '2026-09-01T01:00:00Z',
+      applianceType: 'dishwasher',
+      savingPence: 5,
+      confirmed: true,
+      energyKwh: 0,
+    })
+  assert.equal(res.status, 400)
+})
+
+test('GET /savings-total reports consistentCount alongside savedSoFarPence', async () => {
+  const totalRes = await request(app)
+    .get('/api/octopus/savings-total')
+    .set('Authorization', 'Bearer user-aa')
+  assert.equal(totalRes.status, 200)
+  assert.equal(totalRes.body.eventCount, 1)
+  assert.equal(totalRes.body.consistentCount, 1)
+})
+
 test('GET /savings-total sums multiple confirmed events and requires authentication', async () => {
   const unauth = await request(app).get('/api/octopus/savings-total')
   assert.equal(unauth.status, 401)
