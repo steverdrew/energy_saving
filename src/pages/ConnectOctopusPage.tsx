@@ -1,10 +1,53 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError, api, type OctopusImportStatus } from '../api/client'
 import { useOctopusConnection } from '../octopus/OctopusConnectionContext'
 import './ConnectOctopusPage.css'
 
 const ACCOUNT_NUMBER_RE = /^A-[A-Za-z0-9]{8}$/
+
+// OA-60: "where do I find this?" help for each credential field --
+// collapsed by default so it doesn't crowd the form, expandable without
+// losing anything already typed (it's just local UI state, not a
+// navigation). No screenshot is embedded here yet -- doing that honestly
+// needs a real, authenticated Octopus dashboard to photograph, which only
+// Steve has access to; see HANDOFF.md.
+function CredentialHelp({ steps, linkHref, linkLabel }: { steps: string[]; linkHref: string; linkLabel: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="connect-octopus-page__field-help">
+      <button
+        type="button"
+        className="connect-octopus-page__field-help-toggle"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        Where do I find this?
+      </button>
+      {open && (
+        <div className="connect-octopus-page__field-help-panel">
+          <ol>
+            {steps.map((step, i) => (
+              <li key={i}>{step}</li>
+            ))}
+          </ol>
+          <a href={linkHref} target="_blank" rel="noopener noreferrer">
+            {linkLabel} →
+          </a>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FieldWithHelp({ children, help }: { children: ReactNode; help: ReactNode }) {
+  return (
+    <div className="connect-octopus-page__field">
+      {children}
+      {help}
+    </div>
+  )
+}
 
 function describeConnectError(err: unknown): string {
   if (err instanceof ApiError) {
@@ -155,33 +198,64 @@ function ConnectOctopusPage() {
         Enter your Octopus Energy account number and API key. This is a temporary MVP
         connection method — it'll be replaced by a proper Octopus sign-in later.
       </p>
-      <ul className="connect-octopus-page__help">
-        <li>Your account number looks like <strong>A-12345678</strong> — find it on a bill or your Octopus online account.</li>
-        <li>Your API key is in your Octopus online account's developer settings.</li>
-      </ul>
-
       <form className="connect-octopus-page__form" onSubmit={handleSubmit}>
-        <label>
-          Account number
-          <input
-            type="text"
-            required
-            value={accountNumber}
-            onChange={(e) => setAccountNumber(e.target.value)}
-            placeholder="A-12345678"
-            autoComplete="off"
-          />
-        </label>
-        <label>
-          API key
-          <input
-            type="password"
-            required
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            autoComplete="off"
-          />
-        </label>
+        <FieldWithHelp
+          help={
+            <CredentialHelp
+              steps={[
+                'Open your Octopus dashboard.',
+                'Find your account number in your account details/dashboard.',
+                'Copy the value beginning with A- and paste it here.',
+              ]}
+              linkHref="https://octopus.energy/dashboard/"
+              linkLabel="Open Octopus dashboard"
+            />
+          }
+        >
+          <label>
+            Octopus account number
+            <input
+              type="text"
+              required
+              value={accountNumber}
+              onChange={(e) => setAccountNumber(e.target.value)}
+              placeholder="A-12345678"
+              autoComplete="off"
+            />
+            <span className="connect-octopus-page__field-helper-text">
+              Your account number starts with <strong>A-</strong>.
+            </span>
+          </label>
+        </FieldWithHelp>
+
+        <FieldWithHelp
+          help={
+            <CredentialHelp
+              steps={[
+                'Open Octopus API access while signed in.',
+                'Copy your API key.',
+                'Return to Shift & Save and paste it here.',
+              ]}
+              linkHref="https://octopus.energy/dashboard/new/accounts/personal-details/api-access/"
+              linkLabel="Open Octopus API access"
+            />
+          }
+        >
+          <label>
+            Octopus API key
+            <input
+              type="password"
+              required
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              autoComplete="off"
+            />
+            <span className="connect-octopus-page__field-helper-text">
+              This is a private key from your Octopus account. We use it only to read the energy
+              data needed for your analysis.
+            </span>
+          </label>
+        </FieldWithHelp>
 
         {fieldError && <p className="connect-octopus-page__error">{fieldError}</p>}
         {submitError && <p className="connect-octopus-page__error">{submitError}</p>}

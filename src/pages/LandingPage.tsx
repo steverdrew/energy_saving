@@ -57,12 +57,17 @@ function LandingPage() {
         ))}
       </section>
 
-      <section className="landing-trust" aria-label="Why trust us">
-        {TRUST_POINTS.map((point) => (
-          <p className="landing-trust__item" key={point}>
-            {point}
-          </p>
-        ))}
+      <section className="landing-about" aria-label="What is Shift & Save?">
+        <h2>What is Shift &amp; Save?</h2>
+        <p>
+          Shift &amp; Save helps you get more from dynamic energy tariffs without having to watch
+          electricity prices all day.
+        </p>
+        <p>
+          We look at your real energy use, show whether a tariff like Octopus Agile could save you
+          money, and tell you the best practical times to run things around the home.
+        </p>
+        <p>You stay in control. We make the complicated bit simple.</p>
       </section>
 
       <section className="landing-compat" aria-label="Compatibility">
@@ -78,6 +83,33 @@ function LandingPage() {
           Use something else?{' '}
           <Link to="/tell-us-what-you-have">Tell us what you have.</Link>
         </p>
+      </section>
+
+      <section className="landing-about" aria-label="Who we are">
+        <h2>Who we are</h2>
+        <p>
+          Shift &amp; Save is an independent UK product built to make smart energy tariffs easier to
+          understand and use.
+        </p>
+        <p>
+          We started with a simple question: if cheaper electricity is available at different times
+          of the day, why should ordinary households have to study 48 prices to benefit from it?
+        </p>
+        <p>
+          So we built Shift &amp; Save to do the maths, make the options clear and help people decide
+          what is actually worth doing.
+        </p>
+        <p className="landing-about__independence">
+          <strong>Shift &amp; Save is independent of Octopus Energy.</strong>
+        </p>
+      </section>
+
+      <section className="landing-trust" aria-label="Why trust us">
+        {TRUST_POINTS.map((point) => (
+          <p className="landing-trust__item" key={point}>
+            {point}
+          </p>
+        ))}
       </section>
 
       <p className="landing-explainer-link">

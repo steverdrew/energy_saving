@@ -1,16 +1,23 @@
 # HANDOFF
 
-_Last updated: 2026-10-02 (OA-59, OA-58, OA-6, OA-21, OA-22, OA-8, OA-9/OA-30/OA-31, OA-40/OA-43, OA-41, OA-55/OA-56/OA-57 implemented this session)_
+_Last updated: 2026-10-02 (core loop OA-59→OA-57 shipped and merged to
+`main` via PR #14; backlog audit; polish tickets OA-61/OA-62 done,
+OA-60 partially done, implemented this session)_
 
 ## Current task
 
-None in progress. All core-loop tickets (OA-59 through OA-41) and the
-beta-feedback/compatibility tickets (OA-55, OA-56, OA-57) are
-implemented, tested, pushed to `claude/dazzling-ritchie-nofudq`, and
-moved to **Done in Jira** (standing rule — see Constraints). Nothing is
-deployed/verified live on beta yet. Remaining roadmap: none —
-everything through OA-57 is done. Next would be device-control
-(OA-12/OA-15), which Steve explicitly said not to start yet.
+None in progress. Order worked this session, per Steve: (1) core loop
+(OA-59 through OA-57) — shipped, merged to `main`. (2) Backlog audit —
+done, see Decisions/Next step. (3) Polish tier: OA-61 (landing page
+"What is Shift & Save?"/"Who we are") and OA-62 (SVG logo + BETA
+badge) are complete; **OA-60 (Connect Octopus form help) is only
+partially done** — all the text/link guidance is built, but the
+ticket's screenshot requirement is genuinely blocked (see Next step).
+Not yet started: the "deeper feature" tier (OA-23/24/25/32/44/45/46)
+and device control (OA-11–17, on hold per Steve). Nothing in this
+batch is pushed/merged yet — still on
+`claude/dazzling-ritchie-nofudq`, build/lint/bundle-check/tests all
+pass locally.
 
 ## State
 
@@ -164,6 +171,45 @@ everything through OA-57 is done. Next would be device-control
   deliberately separate from OA-56's `compatibilityRequests` so
   guidance-quality feedback and compatibility/integration feedback are
   never mixed.
+- **OA-62**: header brand is now a real mark, not text-only.
+  `src/components/Logo.tsx` exports `LogoMark` (a simple bar-chart
+  motif — a short, highlighted bar amid taller ones, i.e. a cheap
+  price window amid expensive ones, the same idea `CheapestWindowPage`
+  surfaces) and `BrandMark` (mark + "Shift & Save" wordmark + a small
+  BETA pill), used in `App.tsx`'s header for both signed-in and
+  signed-out states (one header, so "works in public and
+  authenticated states" is automatic). `public/favicon.svg` replaced
+  with a standalone version of the same mark on a solid accent-purple
+  background. **Not done**: `public/pwa-192x192.png` and
+  `pwa-512x512.png` (the PWA install icons) still show the old Vite
+  default mark — regenerating proper raster icons from the new SVG
+  needs an image rasterizer not set up in this repo; flagged rather
+  than left silently inconsistent.
+- **OA-61**: added "What is Shift & Save?" and "Who we are" sections
+  to `LandingPage.tsx`, using the ticket's own suggested copy near-
+  verbatim, placed per its suggested flow (How it works → What is
+  Shift & Save? → Works with/Coming soon → Who we are → Trust). Trust
+  section now follows Who we are rather than preceding Works with, so
+  the independence statement lands twice (once in Who we are, once in
+  Trust) — deliberate repetition, not a mistake, since both the
+  ticket's own suggested copy and the existing trust strip state it.
+- **OA-60**: `ConnectOctopusPage.tsx` now has a collapsible "Where do
+  I find this?" control under each credential field (`CredentialHelp`
+  component), with the exact numbered steps and links the ticket
+  specifies (`octopus.energy/dashboard/` for the account number,
+  `.../api-access/` for the API key), opening in a new tab so typed
+  form state isn't lost. Helper copy under each field also matches the
+  ticket's required wording ("Your account number starts with A-",
+  etc). **What's genuinely missing**: the screenshot/annotated-crop
+  requirement. Producing one honestly needs a real, authenticated
+  Octopus dashboard/API-access page to photograph (both pages require
+  login) — I have no Octopus account and no way to capture that
+  legitimately in this sandbox, and fabricating a mockup of someone
+  else's UI would risk showing something inaccurate. This needs Steve:
+  take a screenshot of his own dashboard (account number masked, e.g.
+  `A-••••••3E1B`) and of the API-access page (never a usable live
+  key), then either hand them to me to drop into the panel or add them
+  directly. Left OA-60 **not** moved to Done — see Next step.
 
 ## Next step
 
@@ -184,10 +230,47 @@ everything through OA-57 is done. Next would be device-control
    signed in.
 3. Everything on the original roadmap through OA-57 is now built and
    merged to `main`.
-   Remaining tickets (OA-12/OA-15, device control) are explicitly
-   **not** to be started without Steve's go-ahead — raise with him
-   before picking anything further.
-4. Update README.md's "Server deployment (Cloud Run)" checklist to match
+4. **Backlog audit (2026-10-02)**: many Jira tickets predating this
+   session were still "To Do"/"In Progress" despite being satisfied by
+   the current app. Verified each against actual code/config before
+   transitioning (not just taken on trust):
+   - **Moved to Done**: OA-4 (app shell), OA-37 (landing/connect
+     copy), OA-47 (CI/cloud-ready — `.github/workflows/ci.yml` runs
+     lint+build+bundle-check+test for web and test+health-check for
+     server), OA-48 (Firebase integration), OA-53 (My Savings gated
+     behind auth — `ProtectedRoute`). OA-54 (landing page
+     proposition) needed one real fix first — its explainer link read
+     "What is Octopus Agile?" instead of the required "How dynamic
+     tariffs work" — fixed and pushed, then marked Done.
+   - **Left as To Do — genuinely incomplete**, not just unverified:
+     OA-7 (saving calc needs a separate "shifting opportunity" number
+     alongside tariff-fit; only tariff-fit exists), OA-10 (My Savings
+     view needs that same split, plus appliance-level breakdown),
+     OA-18 (provider-neutral auth abstraction — code is Octopus-
+     specific throughout), OA-20 (privacy baseline — encryption/no-
+     logging done, but no account-deletion flow, consent recording, or
+     documented retention rules), OA-39 (onboarding — no insufficient-
+     data state, no time-to-first-saving instrumentation).
+   - **Left alone — epics, not individually verifiable**: OA-1, OA-2,
+     OA-3, OA-33, OA-34, OA-35. Epic closure is a reporting decision,
+     not something to infer from code; flagged for Steve rather than
+     auto-closed.
+   - Did **not** audit the full remaining backlog (OA-11 through
+     OA-32 and beyond) beyond the handful needed to answer "what's
+     next" — only spot-checked tickets that looked plausibly stale.
+     A fuller audit is possible if useful later.
+5. **OA-60 needs Steve**: the screenshot/annotated-crop requirement
+   for the Connect Octopus field help can't be done honestly without
+   his real, logged-in Octopus dashboard — see State above for exactly
+   what's needed (masked account number, no live API key). Once
+   provided, drop them into `ConnectOctopusPage.tsx`'s
+   `CredentialHelp` panels and mark OA-60 Done.
+6. Polish tier not yet started: none left — OA-60/61/62 are the full
+   set from that tier. Next up per the agreed order: the "deeper
+   feature" tickets (OA-23, OA-24, OA-25, OA-32, OA-44, OA-45, OA-46).
+7. Device control (OA-12/OA-15) remains explicitly **not** to be
+   started without Steve's go-ahead.
+8. Update README.md's "Server deployment (Cloud Run)" checklist to match
    the real working IAM configuration (listed below) — currently stale,
    purely a documentation cleanup, no urgency.
 
