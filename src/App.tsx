@@ -1,4 +1,4 @@
-import { NavLink, Route, Routes } from 'react-router-dom'
+import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
 import { useAuth } from './auth/AuthContext'
 import ProtectedRoute from './auth/ProtectedRoute'
@@ -10,6 +10,17 @@ import ExplainerPage from './pages/ExplainerPage'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import SavingsPage from './pages/SavingsPage'
+
+// The marketing landing page is aimed at signed-out visitors (its only CTA
+// is "sign in"). A signed-in user landing on "/" — e.g. from a bookmark —
+// should see their actual account state instead, so send them to the page
+// that already reflects it.
+function HomeRoute() {
+  const { user, loading } = useAuth()
+  if (loading) return null
+  if (user) return <Navigate to="/account" replace />
+  return <LandingPage />
+}
 
 function App() {
   const { user, loading, logout } = useAuth()
@@ -41,7 +52,7 @@ function App() {
 
         <main className="app-main">
           <Routes>
-            <Route path="/" element={<LandingPage />} />
+            <Route path="/" element={<HomeRoute />} />
             <Route path="/login" element={<LoginPage />} />
             <Route
               path="/account"
