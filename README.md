@@ -182,6 +182,20 @@ With the same Firebase test account:
    the header now shows "Account" (routing straight to `/account`)
    instead of "Sign in".
 
+### Beta verification (OA-53: My Savings is gated)
+
+1. Visit `https://shiftandsaveapp.web.app/savings` directly while signed
+   out — confirm it redirects to `/login` rather than showing the page.
+2. Confirm the signed-out header nav does **not** show "My Savings"
+   (only Home / Sign in).
+3. Sign in from that redirect — confirm you land back on `/savings`
+   (not `/account` or the homepage).
+4. Confirm the signed-in header nav now shows "My Savings".
+5. Refresh `/savings` while signed in — confirm you stay on the page,
+   not bounced to `/login`.
+6. Sign out — confirm `/savings` is no longer reachable and the nav
+   item disappears again.
+
 ## Conventions and constraints
 
 See `CLAUDE.md`. Current project state, decisions and next steps are in

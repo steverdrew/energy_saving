@@ -22,9 +22,9 @@ function App() {
           <NavLink to="/" end>
             Home
           </NavLink>
-          <NavLink to="/savings">My Savings</NavLink>
           {loading ? null : user ? (
             <>
+              <NavLink to="/savings">My Savings</NavLink>
               <NavLink to="/account">Account</NavLink>
               <button type="button" className="app-header__signout" onClick={() => logout()}>
                 Sign out
@@ -49,7 +49,14 @@ function App() {
             }
           />
           <Route path="/how-smart-tariffs-work" element={<ExplainerPage />} />
-          <Route path="/savings" element={<SavingsPage />} />
+          <Route
+            path="/savings"
+            element={
+              <ProtectedRoute>
+                <SavingsPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/debug" element={<DebugPage />} />
         </Routes>
       </main>
