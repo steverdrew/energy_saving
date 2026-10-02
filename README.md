@@ -167,6 +167,21 @@ With the same Firebase test account:
    `/login`, and that signing in from there lands you back on `/account`
    (not just the default landing page).
 
+### Beta verification (OA-52: Sign in on the landing page)
+
+1. Visit `https://shiftandsaveapp.web.app/` while signed out — confirm a
+   "Sign in" link is visible in the header next to "Find my saving",
+   and that "Find my saving" remains the visually dominant button.
+2. Click "Sign in" — confirm it goes to `/login`.
+3. Narrow the browser to a phone width (or use mobile) — confirm the
+   header nav wraps instead of overflowing, and "Sign in" stays
+   reachable and tappable.
+4. Tab through the header with the keyboard only — confirm "Sign in" is
+   reachable and activates with Enter.
+5. Sign in with the Firebase test account, then revisit `/` — confirm
+   the header now shows "Account" (routing straight to `/account`)
+   instead of "Sign in".
+
 ## Conventions and constraints
 
 See `CLAUDE.md`. Current project state, decisions and next steps are in
