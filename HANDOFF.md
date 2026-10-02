@@ -9,13 +9,82 @@ criteria, and transitioned to Done; OA-81 (household appliance setup)
 created by Steve directly in Jira and built this session; all three
 merged to `main` via PR #26 and deployed to prod (Deploy server +
 Deploy beta both green); OA-82 (public landing page prerendering) and
-OA-83 (recomposed landing-page comparison) both built this session and
-merged/deployed to prod; OA-65 not started)_
+OA-83 (recomposed landing-page comparison, in two passes -- see below)
+both built this session and merged/deployed to prod; OA-65 not
+started)_
 
 ## Current task (latest)
 
-**OA-83** ("Recompose landing-page interactive comparison to match the
-design mockup") — composition/spacing/hierarchy rework of
+**OA-83, second pass** ("Evolve landing-page interactive comparison
+beyond the initial mockup") -- Steve rewrote the ticket after the
+first pass merged (title, description and acceptance criteria all
+replaced), explicitly reframing it as "deliberately improve the
+mockup, not reproduce it literally" and calling out specific things
+from the first pass to change. Reopened (Done -> In Progress) and
+addressed the concrete, scoped items:
+
+- Removed the visible `<h2>` section heading added in the first pass
+  -- the new ticket calls it out by name as "functional but generic"
+  and explicitly offers "no standalone title" as an option. The
+  section's existing `aria-label` and the eyebrow line keep it named
+  for assistive tech.
+- Removed the bordered "pill" around each step's tariff-context line
+  and the bordered "callout" box around the Optimise step's figures --
+  the new ticket's "remove generic SaaS cues... another pill, another
+  glass card" item. Replaced with plain text at reduced opacity; all
+  three steps (Baseline/Compare/Optimise) now use the same unboxed
+  layout for visual continuity between states (previously Optimise was
+  the only step with a box, which was itself an inconsistency).
+  Strengthened each step's caption to reference the previous step
+  explicitly ("usage is identical to Baseline", "Same tariff as
+  Compare") per "strong visual continuity across all three states."
+- Compressed the heat map from the shared `HeatMap` component's default
+  one-row-of-48-cells layout into a 12-column wrapped grid, scoped to
+  `.landing-demo__heatmap-card` via CSS only (`grid-template-columns:
+  repeat(12, ...)`, letting it auto-wrap into rows) -- addresses
+  "reduce heat-map dominance... row count/density... if a compressed
+  multi-day representation communicates the story better, prefer that
+  over a giant grid." No change to `HeatMap.tsx` or its data/ARIA
+  labels, so Actual/Compare/Optimised are unaffected; taller cells from
+  the new shape also give the usage-ratio bar more room to read
+  clearly, plus a crisper top edge on the bar itself, for "make price
+  vs usage immediately legible."
+- Tightened spacing further throughout (section margin/padding, tabs
+  gap, grid gap, stat margins) and narrowed the heat-map card's
+  max-width (460px -> 340px) now that it's a compact block rather than
+  a wide bar, so the whole comparison reads as more contained.
+- Fixed two layout regressions surfaced while verifying the above: the
+  baseline stat's "kWh · £" line could wrap mid-separator at the
+  narrower story-column width (fixed by keeping each figure's own span
+  on one line via `white-space: nowrap` and folding the separator into
+  the second span rather than its own flex item); and the heat map's
+  legend ("Cheapest...Most expensive" / "Bar height = usage") wrapped
+  mid-phrase at the card's new narrower width (fixed by explicitly
+  wrapping the "Bar height = usage" note onto its own full-width line
+  rather than letting flex wrap break it arbitrarily).
+- **Not done this pass** (judged out of a reasonable scope/effort
+  tradeoff for one session; flagged in the Jira comment): the ticket's
+  item 5, making the Baseline->Compare and Compare->Optimise
+  transformations themselves "the main visual event" via some kind of
+  per-cell diffed/highlighted motion (e.g. visually spotlighting the
+  specific flexible-load slots that move between Compare and Optimise,
+  not just the whole panel fading in). The existing full-panel
+  fade/slide on step change is unchanged. This would need either a new
+  optional `HeatMap` prop (additive, but still a shared-component
+  change) or bespoke landing-page-only motion logic -- real
+  engineering, not a CSS tweak -- so it's left as a follow-up rather
+  than attempted partially.
+- Verified the same way as the first pass: `npm run
+  build`/`lint`/`test`/`check-bundle` all pass; visually re-verified
+  (desktop 1280px, mobile 390px) via `vite preview` + local headless
+  Chromium, static/no-JS render of the default Baseline step only
+  (same Firebase/auth sandbox limitation as before -- Compare/Optimise
+  reviewed by reading the JSX, not screenshotted).
+
+## Previous task
+
+**OA-83, first pass** ("Recompose landing-page interactive comparison
+to match the design mockup") — composition/spacing/hierarchy rework of
 `LandingDemo` (the Baseline/Compare/Optimise tabbed comparison on the
 logged-out landing page), scoped strictly to the ticket's written
 requirements plus a design-mockup video Steve shared mid-session
