@@ -196,6 +196,56 @@ With the same Firebase test account:
 6. Sign out — confirm `/savings` is no longer reachable and the nav
    item disappears again.
 
+## Connect Octopus (OA-5 / OA-20)
+
+Authenticated users can connect their Octopus Energy account from
+`/connect-octopus`, using the MVP account-number + API-key method (this
+will be replaced by OAuth later).
+
+- **Server-side only.** The web app never talks to Octopus directly —
+  `server/src/octopusClient.js` makes the real call, authenticated with
+  your Firebase ID token (`server/src/firebaseAuth.js` verifies it; no
+  separate server-side session).
+- **Encrypted at rest.** Both the account number and API key are
+  encrypted (AES-256-GCM, `server/src/crypto.js`) before being stored in
+  `octopus_connections`, keyed by Firebase UID. The API key is never
+  returned to the browser after submission, in logs, or anywhere else —
+  only a redacted form (`A-****1234`) and non-secret meter context
+  (MPAN, tariff code) come back.
+- **Ownership boundary.** Every row is keyed by Firebase UID; one user's
+  connection is never readable by another (see
+  `server/test/octopus.test.js`).
+- **Disconnect** (`DELETE /api/octopus/connection`) removes the stored
+  row entirely — no manual database step needed.
+
+### Not yet live on beta
+
+`server/` has no deployment target — OA-49 deploys **Hosting only** (the
+static web build). This feature's server-side code exists, is fully
+tested, and is ready to deploy, but there is currently nowhere for the
+beta web app to send these requests. Getting this onto
+`shiftandsaveapp.web.app` for real needs a decision on where the
+Express server runs (e.g. Cloud Run/Cloud Functions alongside the
+Firebase project) and what persists `octopus_connections` once it's not
+running on a single machine's disk (SQLite's file doesn't survive a
+typical serverless container restart) — see `HANDOFF.md` for the open
+questions.
+
+### Testing locally (until a backend is deployed)
+
+```bash
+cd server && npm install && cp .env.example .env   # fill in CLIENT_ORIGIN, DATABASE_PATH, ENCRYPTION_KEY
+npm run dev
+
+# separate terminal, repo root
+npm install && npm run dev
+```
+
+Sign in at `http://localhost:5173/login` (needs a Firebase user — use
+your own test account), then visit `/connect-octopus` and enter your own
+Octopus account number and API key directly into the page. Nothing
+about this requires pasting credentials anywhere outside that form.
+
 ## Conventions and constraints
 
 See `CLAUDE.md`. Current project state, decisions and next steps are in
