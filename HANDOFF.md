@@ -4,11 +4,49 @@ _Last updated: 2026-10-02 (core loop via PR #14; backlog audit +
 polish tier via PR #15; deeper feature tier via PR #16/#17; beta
 mop-up cluster OA-63/64/68/69/66/67 merged via PR #18; revised build
 order OA-70/71/72/74 merged via PR #19/#20/#21/#22, all Done in Jira;
-OA-75 (methodology versioning, removes the sign-off gate) and OA-76
-(Optimised implementation) both added to Jira and OA-76 built this
-session; OA-65 not started)_
+OA-75 and OA-76 built, gap-closed against their actual Jira acceptance
+criteria, and transitioned to Done; OA-81 (household appliance setup)
+created by Steve directly in Jira and built this session; OA-65 not
+started)_
 
-## Current task
+## Current task (latest)
+
+**OA-81** ("Build household appliance setup for flexible-load modelling")
+built this session, between OA-76 and OA-65 in the build order:
+
+- `server/src/applianceProfiles.js`: server-side mirror of OA-30's
+  canonical appliance model (`src/domain/applianceProfile.ts`) — the
+  server stays plain JS so this duplicates its shape/defaults by hand
+  rather than importing the TS file; kept deliberately in sync.
+- `server/src/householdApplianceStore.js`: Firestore, one doc per UID
+  (collection `householdAppliances`), bounded at 4 supported appliance
+  types so no subcollection needed.
+- `server/src/routes/householdAppliances.js` +
+  `GET/POST /api/household-appliances`,
+  `PATCH/DELETE /api/household-appliances/:applianceType`: list/add/
+  confirm-values/disable. Validates positive-only runtime/energy,
+  rejects unsupported appliance types, disables rather than deletes
+  (so re-adding keeps earlier confirmed values), and only an explicitly
+  confirmed field's source flips to `user_confirmed` — everything else
+  stays `generic_default`.
+- `src/pages/ApplianceSetupPage.tsx` (new `/appliances` route/nav item):
+  a checklist of the 4 supported types; each checked one expands to
+  show/edit typical runtime and energy, each tagged "We'll estimate
+  this" / "You told us this".
+- Per the ticket's own "Relationship to OA-76": this ticket does **not**
+  wire anything into `flexibleLoadEvents.js` — declaring an appliance
+  here never identifies a historical event or creates a Step 3 saving
+  by itself. `detectFlexibleLoadEvents` stays untouched and still
+  returns `[]`; Optimised remains honestly at £0 timing opportunity
+  until a future event-confirmation ticket exists.
+- 14 new server tests covering the ticket's own listed cases (no
+  appliances selected, each category added, generic default retained,
+  user-confirmed runtime/energy, unsupported type rejected, disable
+  removes from active setup, ownership-doesn't-create-an-event, re-add
+  keeps confirmed values, persistence round-trip). 152 server tests
+  pass total, 29 web tests pass, build/lint/bundle-check clean.
+
+## Previous task
 
 Steve revised the build order after the mop-up cluster, then again
 after OA-73: **OA-69 (done) → OA-70 → OA-71 → OA-72 → OA-74 → OA-73 →
