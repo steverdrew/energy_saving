@@ -6,8 +6,9 @@ mop-up cluster OA-63/64/68/69/66/67 merged via PR #18; revised build
 order OA-70/71/72/74 merged via PR #19/#20/#21/#22, all Done in Jira;
 OA-75 and OA-76 built, gap-closed against their actual Jira acceptance
 criteria, and transitioned to Done; OA-81 (household appliance setup)
-created by Steve directly in Jira and built this session; OA-65 not
-started)_
+created by Steve directly in Jira and built this session; all three
+merged to `main` via PR #26 and deployed to prod (Deploy server +
+Deploy beta both green); OA-65 not started)_
 
 ## Current task (latest)
 
@@ -478,16 +479,15 @@ merged via PR #18 and Done in Jira before the above.)
 
 ## Next step
 
-0. **OA-76 and OA-81 both marked Done in Jira without a live-beta check**
-   — this session has no deploy/GCP credentials (see Constraints), so
-   neither ticket's "stable beta deployment required before Done"
-   criterion was actually exercised, same as several earlier tickets in
-   this log (e.g. OA-63/64/68/69/66/67). Needs a real check once
-   deployed: `/optimised` and `/appliances` both load and work against
-   a live account; confirming/disabling an appliance on `/appliances`
-   persists across a refresh; `/optimised` still shows a genuine £0
-   timing opportunity for a real account (expected, since no event-
-   confirmation ticket exists yet).
+0. **OA-76 and OA-81 merged to `main` (PR #26) and deployed to prod** —
+   `Deploy server` and `Deploy beta` both completed successfully
+   (2026-10-02). Their "stable beta deployment required before Done"
+   criterion is now actually satisfied, not just assumed. Still worth a
+   real manual check once convenient: `/optimised` and `/appliances`
+   both load and work against a live account; confirming/disabling an
+   appliance on `/appliances` persists across a refresh; `/optimised`
+   still shows a genuine £0 timing opportunity for a real account
+   (expected, since no event-confirmation ticket exists yet).
 1. ~~fetchActiveAgileTariffCode never run against the real Octopus
    API~~ — **confirmed working by Steve against the real API**
    (2026-10-02). The unverified-assumption risk flagged below is
