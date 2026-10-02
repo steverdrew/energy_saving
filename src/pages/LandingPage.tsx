@@ -81,7 +81,7 @@ function LandingPage() {
       </section>
 
       <p className="landing-explainer-link">
-        <Link to="/how-smart-tariffs-work">What is Octopus Agile?</Link>
+        <Link to="/how-smart-tariffs-work">How dynamic tariffs work</Link>
       </p>
     </>
   )
