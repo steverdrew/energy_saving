@@ -30,7 +30,7 @@ function LandingPage() {
         <p className="landing-hero__sub">
           Find out how much you could save on Octopus, and how to do it.
         </p>
-        <Link to="/signup" className="landing-hero__cta">
+        <Link to="/login" className="landing-hero__cta">
           Find my saving
         </Link>
       </section>

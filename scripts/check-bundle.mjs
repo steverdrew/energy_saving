@@ -34,7 +34,10 @@ const hits = []
 for (const file of files) {
   const contents = readFileSync(file, 'utf8')
   for (const name of SERVER_ENV_VARS) {
-    if (contents.includes(name)) {
+    // Word-boundary match: a bare env var name, not a substring of an
+    // unrelated identifier (e.g. "PORT" inside "HAS_NATIVE_SUPPORT").
+    const pattern = new RegExp(`(?<![A-Za-z0-9_])${name}(?![A-Za-z0-9_])`)
+    if (pattern.test(contents)) {
       hits.push({ file, name })
     }
   }

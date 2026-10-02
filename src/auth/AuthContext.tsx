@@ -1,59 +1,61 @@
 import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from 'react'
-import { api, type AuthUser, type SignupInput } from '../api/client'
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  type User,
+} from 'firebase/auth'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { auth } from '../firebase'
+import { describeAuthError } from './firebaseErrors'
 
-export type { AuthUser }
+export interface AuthUser {
+  id: string
+  email: string | null
+}
 
 interface AuthContextValue {
   user: AuthUser | null
   loading: boolean
-  signup: (input: SignupInput) => Promise<void>
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
-  deleteAccount: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
+
+function toAuthUser(firebaseUser: User | null): AuthUser | null {
+  if (!firebaseUser) return null
+  return { id: firebaseUser.uid, email: firebaseUser.email }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.auth
-      .me()
-      .then((body) => setUser(body?.user ?? null))
-      .finally(() => setLoading(false))
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(toAuthUser(firebaseUser))
+      setLoading(false)
+    })
+    return unsubscribe
   }, [])
 
-  const signup = useCallback(async (input: SignupInput) => {
-    const body = await api.auth.signup(input)
-    setUser(body?.user ?? null)
-  }, [])
+  async function login(email: string, password: string) {
+    if (!email || !password) {
+      throw new Error('Enter your email and password.')
+    }
+    try {
+      await signInWithEmailAndPassword(auth, email, password)
+    } catch (err) {
+      throw new Error(describeAuthError(err))
+    }
+  }
 
-  const login = useCallback(async (email: string, password: string) => {
-    const body = await api.auth.login(email, password)
-    setUser(body?.user ?? null)
-  }, [])
-
-  const logout = useCallback(async () => {
-    await api.auth.logout()
-    setUser(null)
-  }, [])
-
-  const deleteAccount = useCallback(async () => {
-    await api.auth.deleteAccount()
-    setUser(null)
-  }, [])
+  async function logout() {
+    await firebaseSignOut(auth)
+  }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signup, login, logout, deleteAccount }}>
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   )

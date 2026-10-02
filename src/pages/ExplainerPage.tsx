@@ -87,7 +87,7 @@ function ExplainerPage() {
       </section>
 
       <section>
-        <Link to="/signup" className="explainer__cta">
+        <Link to="/login" className="explainer__cta">
           Find my saving
         </Link>
       </section>

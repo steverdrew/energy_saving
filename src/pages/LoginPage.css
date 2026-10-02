@@ -29,17 +29,6 @@
   color: var(--text-h);
 }
 
-.auth-form__consent {
-  flex-direction: row !important;
-  align-items: flex-start;
-  gap: 8px !important;
-  font-size: 13px;
-}
-
-.auth-form__consent input {
-  margin-top: 3px;
-}
-
 .auth-form__submit {
   padding: 12px;
   font-size: 16px;
@@ -60,14 +49,4 @@
   color: #e05252;
   font-size: 14px;
   margin: 0;
-}
-
-.auth-form__switch {
-  background: none;
-  border: none;
-  color: var(--accent);
-  cursor: pointer;
-  font-size: 14px;
-  padding: 0;
-  text-align: left;
 }
