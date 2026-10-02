@@ -22,6 +22,14 @@ const TRUST_POINTS = [
   'Built independently of Octopus Energy.',
 ]
 
+// OA-55: only ever list something here once it's been tested end to end in
+// the beta -- today that's Octopus Energy (tariff import) and manual
+// appliance timers (the Cheapest Times guidance), presented as a real
+// supported mode, not a fallback. No device/smart-plug integration exists
+// yet (that's OA-12/OA-15, deliberately not started), so none is named.
+const WORKS_WITH = ['Octopus Energy', 'Manual appliance timers']
+const COMING_SOON = ['Smart plugs', 'More connected appliances']
+
 function LandingPage() {
   return (
     <>
@@ -55,6 +63,21 @@ function LandingPage() {
             {point}
           </p>
         ))}
+      </section>
+
+      <section className="landing-compat" aria-label="Compatibility">
+        <div className="landing-compat__group">
+          <h2>Works with</h2>
+          <p>{WORKS_WITH.join(' · ')}</p>
+        </div>
+        <div className="landing-compat__group">
+          <h2>Coming soon</h2>
+          <p>{COMING_SOON.join(' · ')}</p>
+        </div>
+        <p className="landing-compat__cta">
+          Use something else?{' '}
+          <Link to="/tell-us-what-you-have">Tell us what you have.</Link>
+        </p>
       </section>
 
       <p className="landing-explainer-link">

@@ -5,6 +5,7 @@ import ProtectedRoute from './auth/ProtectedRoute'
 import { OctopusConnectionProvider } from './octopus/OctopusConnectionContext'
 import AccountPage from './pages/AccountPage'
 import CheapestWindowPage from './pages/CheapestWindowPage'
+import CompatibilityFeedbackPage from './pages/CompatibilityFeedbackPage'
 import ConnectOctopusPage from './pages/ConnectOctopusPage'
 import DebugPage from './pages/DebugPage'
 import ExplainerPage from './pages/ExplainerPage'
@@ -73,6 +74,7 @@ function App() {
               }
             />
             <Route path="/how-smart-tariffs-work" element={<ExplainerPage />} />
+            <Route path="/tell-us-what-you-have" element={<CompatibilityFeedbackPage />} />
             <Route
               path="/savings"
               element={

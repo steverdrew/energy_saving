@@ -1,0 +1,56 @@
+.compat-feedback-page {
+  max-width: 480px;
+}
+
+.compat-feedback-page__intro {
+  margin-top: 12px;
+  opacity: 0.85;
+}
+
+.compat-feedback-page__form {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.compat-feedback-page__form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.compat-feedback-page__form input,
+.compat-feedback-page__form select,
+.compat-feedback-page__form textarea {
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 16px;
+  background: var(--bg);
+  color: var(--text-h);
+  font-family: inherit;
+}
+
+.compat-feedback-page__form button {
+  padding: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  color: var(--bg);
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.compat-feedback-page__form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.compat-feedback-page__error {
+  color: #e05252;
+  font-size: 14px;
+  margin: 0;
+}

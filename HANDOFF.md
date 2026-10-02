@@ -1,25 +1,16 @@
 # HANDOFF
 
-_Last updated: 2026-10-02 (OA-59, OA-58, OA-6, OA-21, OA-22, OA-8, OA-9/OA-30/OA-31, OA-40/OA-43, OA-41 implemented this session)_
+_Last updated: 2026-10-02 (OA-59, OA-58, OA-6, OA-21, OA-22, OA-8, OA-9/OA-30/OA-31, OA-40/OA-43, OA-41, OA-55/OA-56/OA-57 implemented this session)_
 
 ## Current task
 
-None in progress. OA-21's methodology was reviewed and **signed off by
-Steve** (2026-10-02, see `docs/SAVINGS_METHODOLOGY.md` Decisions). With
-that gate cleared: OA-22's comparison maths is wired into a real
-`GET /api/octopus/savings-result` endpoint, OA-8's result screen
-(`src/pages/SavingsPage.tsx`) shows a real £ estimate, OA-9/OA-30/OA-31
-(cheapest Agile window + appliance profiles + manual guidance) is built
-(`GET /api/octopus/cheapest-window` + `CheapestWindowPage.tsx`),
-OA-40/OA-43 (recommend an action with its £ value, "run X at Y save
-£Z" copy) extends that same endpoint and page with a per-cycle £
-comparison against the current tariff, and OA-41 (running saved-so-far
-total) adds explicit "did you run it?" confirmation plus a savings
-ledger, per Steve's exact model (see State below). OA-59, OA-58, OA-6,
-OA-21, OA-22, OA-8, OA-9, OA-30, OA-31, OA-40, OA-43, OA-41 are all
-implemented, tested, and pushed to `claude/dazzling-ritchie-nofudq`.
-All of them are also moved to **Done in Jira** (standing rule — see
-Constraints). Nothing is deployed/verified live on beta yet.
+None in progress. All core-loop tickets (OA-59 through OA-41) and the
+beta-feedback/compatibility tickets (OA-55, OA-56, OA-57) are
+implemented, tested, pushed to `claude/dazzling-ritchie-nofudq`, and
+moved to **Done in Jira** (standing rule — see Constraints). Nothing is
+deployed/verified live on beta yet. Remaining roadmap: none —
+everything through OA-57 is done. Next would be device-control
+(OA-12/OA-15), which Steve explicitly said not to start yet.
 
 ## State
 
@@ -140,6 +131,39 @@ Constraints). Nothing is deployed/verified live on beta yet.
   - Ledger events carry `source: 'manual'` today; the shape has room
     for a future `'automated'` source once device control (OA-12/15)
     can observe an actual run, without changing this endpoint's shape.
+- **OA-55**: landing page (`src/pages/LandingPage.tsx`) now has a
+  "Works with / Coming soon" section. **Works with** lists only what's
+  actually been tested end-to-end in the beta today: Octopus Energy
+  and manual appliance timers (presented as a real supported mode, not
+  a fallback) — no smart plug or LG ThinQ listed, since no device
+  integration exists yet (OA-12/15 deliberately not started). **Coming
+  soon** names categories only ("Smart plugs", "More connected
+  appliances"), no brand logos. A "Tell us what you have" link goes to
+  OA-56's form.
+- **OA-56**: new compatibility-request flow, two entry points —
+  `LandingPage`'s "Tell us what you have" (signed-out) and
+  `CheapestWindowPage`'s "Can't connect your appliance or device? Tell
+  us the brand/model" (signed-in). Both open
+  `CompatibilityFeedbackPage` (`/tell-us-what-you-have`, unprotected
+  route since a signed-out visitor must reach it). `POST
+  /api/compatibility-requests` is public (`optionalFirebaseAuth` —
+  new middleware in `server/src/firebaseAuth.js` that attaches a uid
+  if a valid token is present but never rejects an anonymous request),
+  stores device type + optional brand/model/smart-plug/platform/note
+  in a new Firestore collection `compatibilityRequests`
+  (`server/src/compatibilityRequestStore.js`), one doc per submission.
+  No admin UI for Steve to review submissions — see Decisions.
+- **OA-57**: contextual "Was this recommendation useful? Yes / Not
+  really / I couldn't do it" on `CheapestWindowPage`, shown under every
+  cheapest-window result (not gated behind a £ recommendation, unlike
+  OA-41's confirm block — this asks about the guidance itself). "Yes"
+  submits immediately (one tap); a negative answer offers an optional
+  short reason before sending. `POST /api/feedback` (always
+  authenticated) stores events in a new Firestore collection
+  `guidanceFeedback` (`server/src/guidanceFeedbackStore.js`),
+  deliberately separate from OA-56's `compatibilityRequests` so
+  guidance-quality feedback and compatibility/integration feedback are
+  never mixed.
 
 ## Next step
 
@@ -158,10 +182,15 @@ Constraints). Nothing is deployed/verified live on beta yet.
    connect → import → "See my savings" shows a real, sane £ figure
    with the caveat visible; Cheapest Times shows a real upcoming
    window *and* a real per-cycle £ saving for at least one appliance
-   once usage is imported; Account page reflects real connection state
-   after a refresh; `/` redirects when signed in.
-3. Pick up the next roadmap item: OA-55 (Works with / Coming soon),
-   then OA-56/OA-57 (compatibility, real beta feedback).
+   once usage is imported; confirming "Yes" on it updates the saved-
+   so-far total on My Savings; the "Was this useful?" and "Tell us
+   what you have" flows submit successfully; Account page reflects
+   real connection state after a refresh; `/` redirects when signed
+   in.
+3. Everything on the original roadmap through OA-57 is now built.
+   Remaining tickets (OA-12/OA-15, device control) are explicitly
+   **not** to be started without Steve's go-ahead — raise with him
+   before picking anything further.
 4. Update README.md's "Server deployment (Cloud Run)" checklist to match
    the real working IAM configuration (listed below) — currently stale,
    purely a documentation cleanup, no urgency.
@@ -240,6 +269,34 @@ Constraints). Nothing is deployed/verified live on beta yet.
   assumption rather than reading one from data. If OA-41 or a later
   ticket wants an annual figure here, that needs its own explicit
   frequency input (e.g. "how many times a week"), not a guess.
+- OA-55: deliberately listed only Octopus Energy and manual appliance
+  timers under "Works with" — the ticket's own example text names a
+  smart plug and LG ThinQ, but those are illustrative, not a
+  requirement, and the explicit rule ("only list a brand/product after
+  it's been tested end to end in the beta") rules them out since no
+  device integration exists yet. "Coming soon" names categories only,
+  per the ticket's own "no specific brand logos unless genuinely
+  underway" rule.
+- OA-56: no admin UI was built for Steve to review compatibility
+  requests — there's no admin-auth concept anywhere in this app yet,
+  and building one just to list form submissions would be a bigger
+  change than the ticket's own scope. Steve inspects/exports via the
+  Firestore console (`compatibilityRequests` collection) directly,
+  same pattern as other operational tasks in this project. Revisit
+  only if that becomes impractical at real beta volume.
+- OA-56: added `optionalFirebaseAuth` (`server/src/firebaseAuth.js`)
+  rather than reusing `requireFirebaseAuth`, since this is the first
+  endpoint a signed-out visitor must be able to call — an invalid or
+  expired token is treated as anonymous, not rejected, since the
+  alternative (reject the whole submission over a stale token) is
+  worse than just not attributing it to a user.
+- OA-57: kept guidance feedback (`guidanceFeedback`) and compatibility
+  requests (`compatibilityRequests`) as separate Firestore collections
+  and separate endpoints, rather than one generic "feedback" shape —
+  directly satisfies the ticket's own acceptance criterion that
+  guidance-quality feedback must be distinguishable from
+  compatibility/integration feedback, and the two have genuinely
+  different fields (brand/model vs. response/comment).
 - Extracted `src/format.ts` (`formatGbp`) once the exact same pence→£
   formatter appeared in both `SavingsPage` and `CheapestWindowPage` —
   real duplication, not speculative, so worth the shared module.

@@ -24,6 +24,16 @@ async function authHeaders(): Promise<Record<string, string>> {
   return { Authorization: `Bearer ${token}` }
 }
 
+// OA-56: the compatibility-request form is usable by a signed-out landing
+// page visitor as well as a signed-in app user -- unlike authHeaders(),
+// this never throws; it just omits the header when nobody is signed in.
+async function optionalAuthHeaders(): Promise<Record<string, string>> {
+  const user = auth.currentUser
+  if (!user) return {}
+  const token = await user.getIdToken()
+  return { Authorization: `Bearer ${token}` }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
   const headers = {
     ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
@@ -131,6 +141,38 @@ export interface SavingsTotal {
   eventCount: number
 }
 
+// OA-56: suggested categories from the ticket -- the UI shows these plus
+// 'other', brand/model/platform fields left optional throughout.
+export type CompatibilityDeviceType =
+  | 'washing_machine'
+  | 'dishwasher'
+  | 'tumble_dryer'
+  | 'dehumidifier'
+  | 'smart_plug'
+  | 'ev_charger'
+  | 'battery'
+  | 'heating_heat_pump'
+  | 'other'
+
+export interface CompatibilityRequestInput {
+  deviceType: CompatibilityDeviceType
+  brand?: string
+  model?: string
+  smartPlugBrandModel?: string
+  connectedPlatform?: string
+  note?: string
+}
+
+// OA-57: one tap for the common case ("yes"), an optional short reason only
+// offered when the answer is negative.
+export type GuidanceFeedbackResponse = 'yes' | 'not_really' | 'could_not'
+
+export interface GuidanceFeedbackInput {
+  relatedId: string
+  response: GuidanceFeedbackResponse
+  comment?: string
+}
+
 export const api = {
   octopus: {
     connect: async (input: { apiKey: string; accountNumber: string }) =>
@@ -172,5 +214,21 @@ export const api = {
       }),
     savingsTotal: async () =>
       request<SavingsTotal>('/api/octopus/savings-total', { headers: await authHeaders() }),
+  },
+  compatibility: {
+    submitRequest: async (input: CompatibilityRequestInput) =>
+      request<{ ok: true }>('/api/compatibility-requests', {
+        method: 'POST',
+        body: JSON.stringify(input),
+        headers: await optionalAuthHeaders(),
+      }),
+  },
+  feedback: {
+    submitGuidanceFeedback: async (input: GuidanceFeedbackInput) =>
+      request<{ ok: true }>('/api/feedback', {
+        method: 'POST',
+        body: JSON.stringify(input),
+        headers: await authHeaders(),
+      }),
   },
 }

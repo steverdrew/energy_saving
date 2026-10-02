@@ -62,6 +62,36 @@
   font-size: 15px;
 }
 
+.landing-compat {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 24px;
+  padding: 16px 0 24px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+.landing-compat__group h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+  margin-bottom: 4px;
+}
+
+.landing-compat__group p {
+  margin: 0;
+}
+
+.landing-compat__cta {
+  width: 100%;
+  margin: 0;
+}
+
 .landing-explainer-link {
   text-align: center;
   font-size: 15px;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ApiError, api, type CheapestWindowResult } from '../api/client'
+import { ApiError, api, type CheapestWindowResult, type GuidanceFeedbackResponse } from '../api/client'
 import {
   DEFAULT_APPLIANCE_PROFILES,
   isEstimate,
@@ -36,6 +36,10 @@ function describeWindowError(err: unknown): string {
 
 type ConfirmState = 'unanswered' | 'submitting' | 'answered' | 'error'
 
+// OA-57: one tap for "yes"; a negative answer offers an optional short
+// reason before sending, rather than submitting silently.
+type FeedbackState = 'unanswered' | 'awaiting-reason' | 'submitting' | 'answered' | 'error'
+
 function CheapestWindowPage() {
   const [applianceType, setApplianceType] = useState<ApplianceType>(APPLIANCE_TYPES[0])
   const [phase, setPhase] = useState<Phase>('loading')
@@ -43,6 +47,9 @@ function CheapestWindowPage() {
   const [error, setError] = useState<string | null>(null)
   const [confirmState, setConfirmState] = useState<ConfirmState>('unanswered')
   const [confirmedYes, setConfirmedYes] = useState(false)
+  const [feedbackState, setFeedbackState] = useState<FeedbackState>('unanswered')
+  const [feedbackResponse, setFeedbackResponse] = useState<GuidanceFeedbackResponse | null>(null)
+  const [feedbackComment, setFeedbackComment] = useState('')
 
   const profile = DEFAULT_APPLIANCE_PROFILES[applianceType]
 
@@ -50,6 +57,8 @@ function CheapestWindowPage() {
     let cancelled = false
     setPhase('loading')
     setConfirmState('unanswered')
+    setFeedbackState('unanswered')
+    setFeedbackComment('')
 
     api.octopus
       .cheapestWindow(profile.typicalProgrammeDurationMinutes.value, profile.typicalEnergyPerCycleKwh.value)
@@ -87,6 +96,31 @@ function CheapestWindowPage() {
       .catch(() => setConfirmState('error'))
   }
 
+  function submitFeedback(response: GuidanceFeedbackResponse, comment?: string) {
+    if (!result?.found) return
+    setFeedbackState('submitting')
+    api.feedback
+      .submitGuidanceFeedback({
+        relatedId: `${result.startsAt}_${result.endsAt}_${applianceType}`,
+        response,
+        comment,
+      })
+      .then(() => {
+        setFeedbackResponse(response)
+        setFeedbackState('answered')
+      })
+      .catch(() => setFeedbackState('error'))
+  }
+
+  function chooseFeedback(response: GuidanceFeedbackResponse) {
+    if (response === 'yes') {
+      submitFeedback(response)
+    } else {
+      setFeedbackResponse(response)
+      setFeedbackState('awaiting-reason')
+    }
+  }
+
   return (
     <section className="cheapest-window-page">
       <h1>Cheapest time to run it</h1>
@@ -104,6 +138,10 @@ function CheapestWindowPage() {
           ))}
         </select>
       </label>
+      <p className="cheapest-window-page__compat-link">
+        Can't connect your appliance or device?{' '}
+        <Link to="/tell-us-what-you-have">Tell us the brand/model.</Link>
+      </p>
 
       {phase === 'loading' && <p>Looking up prices…</p>}
 
@@ -188,6 +226,50 @@ function CheapestWindowPage() {
               then could save you.
             </p>
           )}
+
+          <div className="cheapest-window-page__feedback">
+            {feedbackState === 'unanswered' && (
+              <>
+                <p>Was this recommendation useful?</p>
+                <div className="cheapest-window-page__feedback-buttons">
+                  <button type="button" onClick={() => chooseFeedback('yes')}>
+                    Yes
+                  </button>
+                  <button type="button" onClick={() => chooseFeedback('not_really')}>
+                    Not really
+                  </button>
+                  <button type="button" onClick={() => chooseFeedback('could_not')}>
+                    I couldn't do it
+                  </button>
+                </div>
+              </>
+            )}
+            {feedbackState === 'awaiting-reason' && (
+              <>
+                <label className="cheapest-window-page__feedback-reason">
+                  Want to say why? (optional)
+                  <textarea
+                    value={feedbackComment}
+                    onChange={(e) => setFeedbackComment(e.target.value)}
+                    rows={2}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => feedbackResponse && submitFeedback(feedbackResponse, feedbackComment || undefined)}
+                >
+                  Send
+                </button>
+              </>
+            )}
+            {feedbackState === 'submitting' && <p className="cheapest-window-page__caveat">Sending…</p>}
+            {feedbackState === 'answered' && (
+              <p className="cheapest-window-page__caveat">Thanks for letting us know.</p>
+            )}
+            {feedbackState === 'error' && (
+              <p className="cheapest-window-page__error">Couldn't send that. Please try again.</p>
+            )}
+          </div>
         </div>
       )}
     </section>
