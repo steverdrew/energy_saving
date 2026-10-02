@@ -66,8 +66,17 @@ export interface OctopusConnection {
   connectedAt?: string
 }
 
+// OA-63: zero readings and zero rates is never "success" -- status makes
+// the real outcome explicit instead of inferring it from counts in the
+// UI. 'not_imported': no import has run yet. 'success': usable data for
+// both. 'no_data': Octopus returned nothing usable for either (no
+// "covering X to Y" claim in that case -- periodFrom/periodTo are
+// omitted). 'partial': one of readings/rates came back, the other didn't.
+export type OctopusImportResultStatus = 'not_imported' | 'success' | 'no_data' | 'partial'
+
 export interface OctopusImportStatus {
   imported: boolean
+  status: OctopusImportResultStatus
   periodFrom?: string
   periodTo?: string
   consumptionPoints?: number
@@ -76,13 +85,19 @@ export interface OctopusImportStatus {
 }
 
 // OA-45/OA-25: where the customer is starting from, and how confidently
-// the comparison can represent it. 'intelligent_go' is the only kind
+// the comparison can represent it. 'intelligent_go' is the only family
 // whose comparisonMethod is 'bounded_estimate' today -- its dynamically
 // assigned bonus smart-charge windows can't be reconstructed from public
 // rates, so a comparison only covers the guaranteed published windows.
+// 'unknown' never falls back to 'flexible'/'fixed' by guessing -- see
+// server/src/tariffClassification.js (OA-68/OA-69), the one canonical
+// place a raw tariff code becomes this shape.
 export interface TariffState {
-  kind: 'agile' | 'go' | 'intelligent_go' | 'standard' | 'unknown'
-  comparisonMethod: 'exact' | 'bounded_estimate'
+  family: 'agile' | 'go' | 'intelligent_go' | 'outgoing' | 'dual_rate' | 'flexible' | 'fixed' | 'unknown'
+  rateShape: 'flat' | 'time_of_use' | 'dynamic_half_hourly' | 'smart_personalised' | 'dual_rate' | 'export' | 'unknown'
+  displayName: string | null
+  comparisonMethod: 'exact' | 'bounded_estimate' | 'unavailable'
+  raw: string | null
   recentlySwitched: boolean
   daysSinceSwitch: number | null
 }
@@ -142,14 +157,30 @@ export interface CheapestWindowRecommendation {
   unitRateOnly: true
 }
 
-// OA-9: a forward-looking cheapest contiguous Agile window for a given
-// appliance cycle duration -- distinct from SavingsResult, which looks
-// backward at already-imported history.
+// OA-66/OA-67: why no window was found -- never silently nothing.
+// 'unsupported_tariff': the current tariff couldn't be classified, so no
+// timing claim is made. 'flat_rate': every rate in the lookahead window
+// is identical, so there's no "cheapest" slot to find. 'no_window_available':
+// nothing long/contiguous enough remains today. 'tomorrow_not_published':
+// today's remaining slots aren't enough and tomorrow's rates aren't out yet.
+export type CheapestWindowUnavailableReason =
+  | 'unsupported_tariff'
+  | 'flat_rate'
+  | 'no_window_available'
+  | 'tomorrow_not_published'
+
+// OA-9/OA-66/OA-67: a forward-looking cheapest contiguous window on the
+// customer's own current tariff (never a silent Agile substitute) for a
+// given appliance cycle duration, filtered to windows that haven't
+// already elapsed -- distinct from SavingsResult, which looks backward
+// at already-imported history. `canStartNow` is true when the window
+// begins with the current half-hour, i.e. there's nothing to wait for.
 export type CheapestWindowResult =
-  | { found: false }
+  | { found: false; reason: CheapestWindowUnavailableReason; tariffState: TariffState }
   | {
       found: true
-      agileTariffCode: string
+      tariffState: TariffState
+      canStartNow: boolean
       startsAt: string
       endsAt: string
       averageUnitRateIncVatPence: number

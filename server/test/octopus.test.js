@@ -77,6 +77,14 @@ function fakeFetchActiveAgileTariffCode(regionLetter) {
   return Promise.resolve(`E-1R-AGILE-24-10-01-${regionLetter}`)
 }
 
+// The main fixture's current tariff ('E-1R-VAR-22-11-01-A') doesn't match
+// any confident family prefix, so classification falls through to
+// Octopus's own product data -- this fake stands in for that lookup,
+// same as a real standard variable ("Flexible") product would report.
+function fakeFetchProductDetails() {
+  return Promise.resolve({ isVariable: true, displayName: null, fullName: null })
+}
+
 const app = express()
 app.use(express.json())
 app.use(
@@ -87,6 +95,7 @@ app.use(
     fetchElectricityConsumption: fakeFetchElectricityConsumption,
     fetchTariffUnitRates: fakeFetchTariffUnitRates,
     fetchActiveAgileTariffCode: fakeFetchActiveAgileTariffCode,
+    fetchProductDetails: fakeFetchProductDetails,
     store: createInMemoryOctopusStore(),
     importStore: createInMemoryOctopusImportStore(),
     ledgerStore: createInMemorySavingsLedgerStore(),
@@ -190,6 +199,7 @@ test('GET /import-status reports not imported before any import has run', async 
   const res = await request(app).get('/api/octopus/import-status').set('Authorization', 'Bearer user-g')
   assert.equal(res.status, 200)
   assert.equal(res.body.imported, false)
+  assert.equal(res.body.status, 'not_imported')
 })
 
 test('POST /import requires a connected account first', async () => {
@@ -206,15 +216,83 @@ test('POST /import fetches and stores consumption and tariff rate history', asyn
   const res = await request(app).post('/api/octopus/import').set('Authorization', 'Bearer user-i')
   assert.equal(res.status, 200)
   assert.equal(res.body.imported, true)
+  assert.equal(res.body.status, 'success')
   assert.equal(res.body.consumptionPoints, 2)
   assert.equal(res.body.ratePoints, 2)
+  assert.equal(res.body.periodFrom !== undefined, true)
 
   const status = await request(app)
     .get('/api/octopus/import-status')
     .set('Authorization', 'Bearer user-i')
   assert.equal(status.body.imported, true)
+  assert.equal(status.body.status, 'success')
   assert.equal(status.body.consumptionPoints, 2)
   assert.equal(status.body.ratePoints, 2)
+})
+
+test('POST /import reports status: no_data, with no covering-dates claim, when Octopus returns nothing usable', async () => {
+  const emptyApp = express()
+  emptyApp.use(express.json())
+  emptyApp.use(
+    '/api/octopus',
+    createOctopusRouter({
+      requireFirebaseAuth,
+      fetchOctopusAccount: fakeFetchOctopusAccount,
+      fetchElectricityConsumption: () => Promise.resolve([]),
+      fetchTariffUnitRates: () => Promise.resolve([]),
+      fetchActiveAgileTariffCode: fakeFetchActiveAgileTariffCode,
+    fetchProductDetails: fakeFetchProductDetails,
+      store: createInMemoryOctopusStore(),
+      importStore: createInMemoryOctopusImportStore(),
+    }),
+  )
+  await request(emptyApp)
+    .post('/api/octopus/connect')
+    .set('Authorization', 'Bearer user-empty')
+    .send({ accountNumber: 'A-12345678', apiKey: 'good-key' })
+
+  const res = await request(emptyApp).post('/api/octopus/import').set('Authorization', 'Bearer user-empty')
+  assert.equal(res.status, 200)
+  assert.equal(res.body.imported, true)
+  assert.equal(res.body.status, 'no_data')
+  assert.equal(res.body.consumptionPoints, 0)
+  assert.equal(res.body.ratePoints, 0)
+  assert.equal(res.body.periodFrom, undefined)
+  assert.equal(res.body.periodTo, undefined)
+
+  const status = await request(emptyApp)
+    .get('/api/octopus/import-status')
+    .set('Authorization', 'Bearer user-empty')
+  assert.equal(status.body.status, 'no_data')
+  assert.equal(status.body.periodFrom, undefined)
+})
+
+test('POST /import reports status: partial when only one of readings/rates comes back', async () => {
+  const partialApp = express()
+  partialApp.use(express.json())
+  partialApp.use(
+    '/api/octopus',
+    createOctopusRouter({
+      requireFirebaseAuth,
+      fetchOctopusAccount: fakeFetchOctopusAccount,
+      fetchElectricityConsumption: fakeFetchElectricityConsumption,
+      fetchTariffUnitRates: () => Promise.resolve([]),
+      fetchActiveAgileTariffCode: fakeFetchActiveAgileTariffCode,
+    fetchProductDetails: fakeFetchProductDetails,
+      store: createInMemoryOctopusStore(),
+      importStore: createInMemoryOctopusImportStore(),
+    }),
+  )
+  await request(partialApp)
+    .post('/api/octopus/connect')
+    .set('Authorization', 'Bearer user-partial')
+    .send({ accountNumber: 'A-12345678', apiKey: 'good-key' })
+
+  const res = await request(partialApp).post('/api/octopus/import').set('Authorization', 'Bearer user-partial')
+  assert.equal(res.status, 200)
+  assert.equal(res.body.status, 'partial')
+  assert.equal(res.body.consumptionPoints, 2)
+  assert.equal(res.body.ratePoints, 0)
 })
 
 test('POST /import never leaks the decrypted API key back to the client', async () => {
@@ -297,26 +375,6 @@ test('GET /cheapest-window requires a connected account', async () => {
   assert.equal(res.status, 400)
 })
 
-test('GET /cheapest-window returns the cheapest Agile window for the requested duration', async () => {
-  await request(app)
-    .post('/api/octopus/connect')
-    .set('Authorization', 'Bearer user-q')
-    .send({ accountNumber: 'A-12345678', apiKey: 'good-key' })
-
-  const res = await request(app)
-    .get('/api/octopus/cheapest-window?durationMinutes=30')
-    .set('Authorization', 'Bearer user-q')
-
-  assert.equal(res.status, 200)
-  assert.equal(res.body.found, true)
-  assert.equal(res.body.agileTariffCode, 'E-1R-AGILE-24-10-01-A')
-  // fixture agile rates: 10p at 00:00, 40p at 00:30 -- cheapest 30-minute slot is 00:00.
-  assert.equal(res.body.startsAt, '2026-09-01T00:00:00Z')
-  assert.equal(res.body.averageUnitRateIncVatPence, 10)
-  assert.equal(res.body.slotsUsed, 1)
-  assert.equal(res.body.recommendation, null)
-})
-
 test('GET /cheapest-window rejects a non-positive energyKwh', async () => {
   await request(app)
     .post('/api/octopus/connect')
@@ -329,40 +387,13 @@ test('GET /cheapest-window rejects a non-positive energyKwh', async () => {
   assert.equal(res.status, 400)
 })
 
-test('GET /cheapest-window omits the recommendation when energyKwh is given but nothing is imported yet', async () => {
-  await request(app)
-    .post('/api/octopus/connect')
-    .set('Authorization', 'Bearer user-s')
-    .send({ accountNumber: 'A-12345678', apiKey: 'good-key' })
-
-  const res = await request(app)
-    .get('/api/octopus/cheapest-window?durationMinutes=30&energyKwh=1')
-    .set('Authorization', 'Bearer user-s')
-  assert.equal(res.status, 200)
-  assert.equal(res.body.found, true)
-  assert.equal(res.body.recommendation, null)
-})
-
-test('GET /cheapest-window includes a £ recommendation once usage history is imported', async () => {
-  await request(app)
-    .post('/api/octopus/connect')
-    .set('Authorization', 'Bearer user-t')
-    .send({ accountNumber: 'A-12345678', apiKey: 'good-key' })
-  await request(app).post('/api/octopus/import').set('Authorization', 'Bearer user-t')
-
-  const res = await request(app)
-    .get('/api/octopus/cheapest-window?durationMinutes=30&energyKwh=1')
-    .set('Authorization', 'Bearer user-t')
-
-  assert.equal(res.status, 200)
-  assert.equal(res.body.found, true)
-  // current tariff fixture rates average: (24.1 + 19.8) / 2 = 21.95p.
-  assert.equal(res.body.recommendation.averageCurrentTariffRateIncVatPence, 21.95)
-  assert.equal(res.body.recommendation.costAtCheapestPence, 10)
-  assert.equal(res.body.recommendation.costAtCurrentTariffPence, 21.95)
-  assert.equal(res.body.recommendation.savingPence, 11.95)
-  assert.equal(res.body.recommendation.unitRateOnly, true)
-})
+// Deeper /cheapest-window behaviour (tariff-aware OA-66, future-only
+// OA-67, flat-rate and unsupported-tariff handling) lives in
+// cheapestWindowRoute.test.js, with its own dynamically-anchored rate
+// fixtures -- this file's fakeFetchTariffUnitRates returns fixed
+// historical dates that OA-67's "exclude elapsed slots" filtering would
+// always treat as already passed, which would make those assertions
+// about actual production time, not about the route's logic.
 
 test('POST /recommendation-confirm requires authentication', async () => {
   const res = await request(app).post('/api/octopus/recommendation-confirm').send({
@@ -458,9 +489,14 @@ test('GET /savings-result includes tariff state, eligibility and a null shifting
   const res = await request(app).get('/api/octopus/savings-result').set('Authorization', 'Bearer user-y')
 
   assert.equal(res.status, 200)
+  // fixture tariff code doesn't match a confident prefix, so classification
+  // falls through to the fake fetchProductDetails (isVariable: true).
   assert.deepEqual(res.body.tariffState, {
-    kind: 'standard',
+    family: 'flexible',
+    rateShape: 'flat',
+    displayName: 'a standard variable tariff',
     comparisonMethod: 'exact',
+    raw: 'E-1R-VAR-22-11-01-A',
     recentlySwitched: false,
     daysSinceSwitch: res.body.tariffState.daysSinceSwitch,
   })

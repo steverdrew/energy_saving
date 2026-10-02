@@ -1,22 +1,21 @@
 # HANDOFF
 
 _Last updated: 2026-10-02 (core loop via PR #14; backlog audit +
-polish tier via PR #15; deeper feature tier OA-45/25/24/23/7/32 via
-PR #16; OA-46 via PR #17 — all merged to `main`, all Done in Jira;
-OA-44 deliberately untouched)_
+polish tier via PR #15; deeper feature tier via PR #16/#17; beta
+mop-up cluster OA-63/64/68/69/66/67 implemented this session, not yet
+pushed; OA-65 not started)_
 
 ## Current task
 
-None in progress. Everything Steve asked for this session, in the
-order given, is merged to `main` and Done in Jira: (1) core loop
-(`995bdea`, PR #14), (2) backlog audit, (3) polish tier OA-60/61/62
-(`1b0bb2b`, PR #15), (4) deeper feature tier OA-45/25/24/23/7/32
-(`6f45343`, PR #16) and OA-46 (`23d40b0`, PR #17). **OA-44
-deliberately not started** — its own ticket says "Not part of the
-focused MVP... build only after the MVP proves customers act on
-savings guidance." Nothing is currently in progress; see Next step
-for what's genuinely left in the backlog vs. what needs Steve's
-input before picking up.
+Steve identified a mop-up cluster of real beta bugs, separated from
+the next product surface, with an explicit build order: **OA-63 →
+OA-64 → OA-68 → OA-69 → OA-66 → OA-67, then OA-65**. All six mop-up
+tickets are implemented and tested this session (106 server tests, 12
+frontend) but **not yet pushed/merged** — see Next step. OA-65
+(Today/Tomorrow schedule + heat map) is a genuinely new, large product
+surface and hasn't been started; per Steve's own framing it should
+only follow a clean, trusted tariff/import foundation, which this
+batch is building.
 
 ## State
 
@@ -281,6 +280,88 @@ input before picking up.
   so far: £63.40 — about 18 coffees" — never replacing or outweighing
   the £ amount. 6 new frontend unit tests
   (`src/format.test.ts`).
+- **OA-63**: `/import` and `/import-status` now return an explicit
+  `status: 'not_imported' | 'success' | 'no_data' | 'partial'`
+  (`importStatusFromCounts` in `server/src/routes/octopus.js`), derived
+  from actual persisted consumption/rate counts — never `imported:
+  true` alone meaning "a request completed" regardless of whether
+  Octopus returned anything usable. `periodFrom`/`periodTo` are
+  omitted (no "covering X to Y" claim) whenever `status === 'no_data'`.
+  `ConnectOctopusPage`'s new `ImportStatusMessage` renders genuinely
+  different copy for each status, including which half is missing for
+  `partial`. Root cause of *why* a real account might get zero/partial
+  data wasn't fully diagnosable from this sandbox (no live Octopus
+  access) — see Decisions for the one concrete related fix made
+  (import/export meter-point selection) and OA-69 below for the tariff
+  angle.
+- **OA-64**: "Re-import appeared to do nothing" turned out to most
+  likely be a side effect of OA-63 — when both counts are zero both
+  before and after, the old copy was identical pre/post-click, so a
+  real click looked like a no-op. Fixed by (a) always rendering `Last
+  checked: <timestamp>` from `importedAt`, which changes on every
+  click regardless of the data outcome, and (b) the status-specific
+  copy from OA-63 itself changing wording whenever the actual outcome
+  differs. Reviewed the click→request→state-update path end to end;
+  found no wiring bug (handler attached, button disabled while
+  `importing`, errors surfaced, state always updated from the
+  response) — nothing else to fix there without a live reproduction.
+- **OA-68 + OA-69**: built as one piece of work — OA-69's canonical
+  model supersedes OA-68's narrower fix rather than duplicating
+  classification logic twice. New `server/src/tariffClassification.js`
+  is now **the one place** a raw Octopus tariff code becomes a family
+  (`agile`/`go`/`intelligent_go`/`outgoing`/`dual_rate`/`flexible`/
+  `fixed`/`unknown`) — `tariffState.js`, `tariffEligibility.js`, and
+  both `/savings-result` and `/cheapest-window` all consume it rather
+  than independently parsing a code string (OA-69's explicit
+  requirement). Classification order: (1) confident prefix matches
+  (`AGILE`, `INTELLI`, `OUTGOING`/`SEG`, `GO`, checked in that order so
+  Intelligent Go's code never gets caught by the plainer `GO` match),
+  (2) the tariff code's own rate-type segment (`E-2R-` = dual-rate,
+  e.g. Economy 7-style — an authoritative signal from Octopus's own
+  code structure, not a guess), (3) a fallback to Octopus's own
+  product data (`fetchProductDetails`, new in `octopusClient.js`,
+  reads `is_variable` to decide `flexible` vs `fixed`) — **only** this
+  authoritative signal, never the product code's naming, decides
+  `flexible`/`fixed`. Anything that reaches none of these becomes
+  `unknown`, with the raw code preserved for diagnosis — never
+  silently `standard` or `agile` (OA-69's explicit fail-safe rule,
+  and the direct fix for OA-68's reported bug). Documented fixture
+  matrix: `server/test/fixtures/tariffCodes.js` +
+  `server/test/tariffClassification.test.js`. `displayName` now comes
+  from this one module too — `SavingsPage`'s "You're on X" line reads
+  it directly rather than keeping its own client-side label map.
+- **OA-66 + OA-67**: `/cheapest-window` rebuilt as tariff-aware and
+  future-only, in that order since they're independent fixes to the
+  same handler. Tariff-aware: fetches the customer's **own** current
+  tariff code's published rates (via the canonical classification
+  above) instead of always calling `fetchActiveAgileTariffCode` — a
+  Go or Intelligent Go customer now gets a recommendation computed on
+  their own tariff's rates, never an Agile-derived one; `unknown`
+  tariffs get `{found: false, reason: 'unsupported_tariff'}` rather
+  than a fabricated answer; genuinely flat tariffs (`isFlatRate`, ≥2
+  rates all equal — a single remaining late-night slot is never
+  "flat") get `{found: false, reason: 'flat_rate'}` instead of an
+  arbitrary "cheapest" half-hour. Future-only: `excludeElapsedSlots`
+  filters out any rate whose `validTo` has already passed before the
+  cheapest-window search runs, so a window can never be chosen whose
+  start has already gone; `canStartNow: true` on the response when the
+  chosen window begins with the current half-hour; `{found: false,
+  reason: 'tomorrow_not_published'}` when the shortfall against the
+  full 48h lookahead suggests tomorrow's rates aren't out yet, vs.
+  `'no_window_available'` when they are and nothing still fits.
+  `CheapestWindowPage` now shows "Start now" copy when `canStartNow`,
+  a bounded-estimate caveat for Intelligent Go-style tariffs, and
+  reason-specific copy for every unavailable state. Also added a
+  5-minute background refetch on that page — the live-beta report
+  ("recommended a window that had already passed by 23:30") most
+  likely came from a stale fetch sitting in an open tab rather than a
+  bad computation at request time (the route always computes "now"
+  fresh per request), so this closes that gap regardless of the exact
+  mechanism. New dedicated test file
+  (`server/test/cheapestWindowRoute.test.js`) with wall-clock-anchored
+  fixtures, since the existing `octopus.test.js` fixtures use fixed
+  historical dates that `excludeElapsedSlots` would always treat as
+  elapsed.
 
 ## Next step
 
@@ -369,6 +450,36 @@ input before picking up.
 8. Update README.md's "Server deployment (Cloud Run)" checklist to match
    the real working IAM configuration (listed below) — currently stale,
    purely a documentation cleanup, no urgency.
+9. **Mop-up cluster (OA-63/64/68/69/66/67) is implemented and tested
+   but not yet pushed.** Push, open a PR (same pattern as #14–#17),
+   wait for CI, merge, then move all six to Done in Jira and verify
+   live on beta: connect an account on a non-Agile tariff if possible
+   (or at least re-check the existing Agile beta account), confirm
+   "You're on X" is correct, confirm Cheapest Times no longer defaults
+   to Agile for a non-Agile tariff, and check the import card's new
+   per-status copy against a real import.
+10. **OA-65 (Today/Tomorrow schedule + heat map) is a new, large
+    product surface and hasn't been started.** Steve's framing: build
+    it only once the tariff/import foundation (this mop-up batch) is
+    trusted — check in before starting, since it's a genuinely new UI
+    surface (retiring the standalone Cheapest Times page from primary
+    navigation), not a bug fix.
+11. **Go/Intelligent Go classification is still unverified against a
+    real account** (`classifyTariffKind`'s prefix guesses in
+    `tariffClassification.js`) — same category of risk
+    `fetchActiveAgileTariffCode` carried before Steve verified it. If
+    Steve has (or can get) a real Go/Intelligent Go account's raw
+    `tariff_code`, confirming it against the fixture matrix would
+    retire this risk the same way Agile's was retired.
+12. OA-63's root cause (why a real account might see zero/partial
+    import data) was only partially diagnosable without live Octopus
+    access. One concrete, real bug was found and fixed along the way
+    (import/export meter-point selection — see Decisions); if zero/
+    partial imports persist on beta after this batch, the next place
+    to look is whether the connected agreement's `tariff_code` itself
+    only recently changed (a tariff-rate lookup for a brand-new
+    agreement can legitimately return less data for the start of the
+    30-day window than for a long-standing one).
 
 ## Key references
 
@@ -391,6 +502,42 @@ input before picking up.
 
 ## Decisions
 
+- OA-69: resolved OA-68 by building the canonical model OA-69 asked
+  for directly, rather than patching the narrower bug first and
+  rebuilding it properly second — the two tickets are the same piece
+  of code either way, and doing it once avoids a throwaway
+  intermediate version.
+- OA-68/OA-69: classification never guesses `flexible`/`fixed` from a
+  product code's naming — only Octopus's own `is_variable` product
+  flag decides that, via a new `fetchProductDetails` call. This is
+  slower (one extra network round-trip) than string-matching, but
+  string-matching *is* the bug this ticket exists to fix, so a
+  marginally slower, authoritative signal was the right trade.
+- OA-68/OA-69: `E-2R-` (the tariff code's own rate-type segment) is
+  trusted as an authoritative dual-rate signal, ahead of the
+  Octopus-product-data fallback — it's part of Octopus's documented
+  tariff code structure, not a guess about product naming, so it's
+  checked before paying for a network round-trip.
+- OA-63: fixed `summarizeOctopusAccount` to prefer a meter point where
+  `is_export` is falsy, rather than always taking
+  `electricity_meter_points[0]` — a household with solar export could
+  have more than one electricity meter point, and picking the wrong
+  one would explain a connected account with a technically-valid but
+  wrong mpan/tariff. Found while investigating OA-63/69 together;
+  real but unconfirmed without a live multi-meter-point account to
+  test against.
+- OA-66/OA-67: no "what if I were on Agile" scenario comparison was
+  built for `/cheapest-window` — the ticket allows it as a distinct,
+  clearly-labelled mode, but doesn't require it, and the actual
+  reported bug was Agile being used as a silent *default*, which
+  removing fixes on its own. Revisit only if Steve specifically wants
+  the scenario view.
+- OA-67: added a 5-minute client-side refetch on `CheapestWindowPage`
+  rather than only trusting the backend to always return a live
+  window — the backend already computes "now" fresh per request, so
+  the most likely real explanation for a visibly-elapsed recommendation
+  is a stale fetch sitting in an open tab, not a computation bug. Fixed
+  both ends rather than assuming which one was responsible.
 - OA-23/OA-7: implemented "shifting opportunity" by reusing OA-9's
   `findCheapestWindow`/`averageRate` over historical rates instead of
   building a parallel optimiser — the maths for "cheapest slot vs.

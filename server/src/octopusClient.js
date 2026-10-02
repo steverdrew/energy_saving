@@ -101,10 +101,17 @@ export async function fetchOctopusAccount(accountNumber, apiKey) {
  * Pulls out the minimal, non-secret account context this product needs
  * (OA-5), plus the meter serial number OA-6's consumption import needs --
  * not the full raw payload, and never consumption readings themselves.
+ *
+ * OA-69: a property can have more than one electricity meter point (e.g.
+ * a household with solar export alongside their import meter) -- Octopus
+ * marks each with `is_export`, so we pick the import meter point
+ * explicitly rather than always taking index 0, which could silently
+ * select an export-only meter point and tariff.
  */
 export function summarizeOctopusAccount(account) {
   const property = account?.properties?.[0]
-  const meterPoint = property?.electricity_meter_points?.[0]
+  const meterPoints = property?.electricity_meter_points ?? []
+  const meterPoint = meterPoints.find((mp) => !mp.is_export) ?? meterPoints[0]
   const agreements = meterPoint?.agreements ?? []
   const now = Date.now()
   const currentAgreement =
@@ -115,6 +122,41 @@ export function summarizeOctopusAccount(account) {
     tariffCode: currentAgreement?.tariff_code ?? null,
     tariffValidFrom: currentAgreement?.valid_from ?? null,
     serialNumber: meterPoint?.meters?.[0]?.serial_number ?? null,
+  }
+}
+
+/**
+ * OA-68/OA-69: authoritative product metadata from Octopus's own product
+ * endpoint, used as a fallback when a tariff code doesn't match one of
+ * our known family prefixes -- `is_variable` distinguishes a standard
+ * variable ("Flexible") tariff from a fixed one using Octopus's own flag
+ * rather than guessing from the product code's naming. Public product
+ * data, no API key needed.
+ */
+export async function fetchProductDetails(productCode) {
+  let res
+  try {
+    res = await fetch(`${OCTOPUS_API_BASE}/products/${encodeURIComponent(productCode)}/`)
+  } catch {
+    throw new OctopusRequestError('Could not reach Octopus.')
+  }
+  if (!res.ok) {
+    throw new OctopusRequestError(`Octopus returned an unexpected error (${res.status}).`)
+  }
+
+  let body
+  try {
+    body = await res.json()
+  } catch {
+    throw new OctopusRequestError('Octopus returned an unexpected response.')
+  }
+
+  return {
+    code: body.code ?? productCode,
+    fullName: body.full_name ?? null,
+    displayName: body.display_name ?? null,
+    isVariable: typeof body.is_variable === 'boolean' ? body.is_variable : null,
+    isTracker: typeof body.is_tracker === 'boolean' ? body.is_tracker : null,
   }
 }
 

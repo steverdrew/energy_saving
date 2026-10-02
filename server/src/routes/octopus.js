@@ -8,7 +8,8 @@ import {
   summarizeOctopusAccount,
 } from '../octopusClient.js'
 import { compareCurrentTariffToAgile } from '../savingsComparison.js'
-import { eligibilityForTariffCode } from '../tariffEligibility.js'
+import { TARIFF_FAMILY } from '../tariffClassification.js'
+import { eligibilityForFamily } from '../tariffEligibility.js'
 import { determineTariffState } from '../tariffState.js'
 
 const ACCOUNT_NUMBER_RE = /^A-[A-Za-z0-9]{8}$/
@@ -25,6 +26,37 @@ const CHEAPEST_WINDOW_LOOKAHEAD_HOURS = 48
 
 function round2(n) {
   return Math.round(n * 100) / 100
+}
+
+// OA-66: a tariff whose every rate in the lookahead window is identical
+// has no "cheapest time" to find -- treating one arbitrary slot as the
+// winner would fabricate a timing benefit that doesn't exist.
+function isFlatRate(rates) {
+  // A single remaining slot (e.g. very late at night, before tomorrow's
+  // prices are out) isn't evidence of a flat tariff -- there's nothing
+  // to compare it against.
+  if (!Array.isArray(rates) || rates.length < 2) return false
+  const first = rates[0].unitRateIncVatPence
+  return rates.every((r) => r.unitRateIncVatPence === first)
+}
+
+// OA-67: never recommend a window whose actionable start has already
+// passed. Rates already carry their own validTo, so "has this slot
+// fully elapsed" doesn't need any separate half-hour-rounding logic --
+// a slot still counts while `now` falls anywhere inside it.
+function excludeElapsedSlots(rates, now) {
+  return rates.filter((r) => new Date(r.validTo).getTime() > now.getTime())
+}
+
+// OA-63: zero data is a problem to explain, not a successful result to
+// summarise -- `imported: true` alone used to mean "a request completed",
+// even when Octopus returned nothing usable. `status` makes the real
+// outcome explicit so the UI can never show zero readings/rates as if
+// history exists for that period.
+function importStatusFromCounts(consumptionPoints, ratePoints) {
+  if (consumptionPoints > 0 && ratePoints > 0) return 'success'
+  if (consumptionPoints === 0 && ratePoints === 0) return 'no_data'
+  return 'partial'
 }
 
 function roundDownToHalfHour(date) {
@@ -52,6 +84,7 @@ export function createOctopusRouter({
   fetchElectricityConsumption,
   fetchTariffUnitRates,
   fetchActiveAgileTariffCode,
+  fetchProductDetails,
   store,
   importStore,
   ledgerStore,
@@ -170,10 +203,14 @@ export function createOctopusRouter({
       importedAt,
     })
 
+    const status = importStatusFromCounts(consumption.length, rates.length)
     res.json({
       imported: true,
-      periodFrom: periodFromIso,
-      periodTo: periodToIso,
+      status,
+      // A "covering X to Y" claim only makes sense once there's at least
+      // some data in that period -- never for a flat no_data result.
+      periodFrom: status === 'no_data' ? undefined : periodFromIso,
+      periodTo: status === 'no_data' ? undefined : periodToIso,
       consumptionPoints: consumption.length,
       ratePoints: rates.length,
       importedAt,
@@ -183,14 +220,18 @@ export function createOctopusRouter({
   router.get('/import-status', requireFirebaseAuth, async (req, res) => {
     const record = await importStore.get(req.firebaseUid)
     if (!record) {
-      return res.json({ imported: false })
+      return res.json({ imported: false, status: 'not_imported' })
     }
+    const consumptionPoints = record.consumption?.length ?? 0
+    const ratePoints = record.rates?.length ?? 0
+    const status = importStatusFromCounts(consumptionPoints, ratePoints)
     res.json({
       imported: true,
-      periodFrom: record.periodFrom,
-      periodTo: record.periodTo,
-      consumptionPoints: record.consumption?.length ?? 0,
-      ratePoints: record.rates?.length ?? 0,
+      status,
+      periodFrom: status === 'no_data' ? undefined : record.periodFrom,
+      periodTo: status === 'no_data' ? undefined : record.periodTo,
+      consumptionPoints,
+      ratePoints,
       importedAt: record.importedAt,
     })
   })
@@ -244,11 +285,15 @@ export function createOctopusRouter({
     )
     const annualizedSavingPence = Math.round(comparison.estimatedSavingPence * (365 / windowDays) * 100) / 100
 
-    const tariffState = determineTariffState({
+    const tariffState = await determineTariffState({
       tariffCode: record.tariffCode,
       tariffValidFrom: connection?.meterContext?.tariffValidFrom ?? null,
+      fetchProductDetails,
     })
-    const eligibility = eligibilityForTariffCode(agileTariffCode)
+    // The comparison tariff here is always Agile (OA-22's explicit
+    // scope) -- no need to reclassify a code we already know the family
+    // of.
+    const eligibility = eligibilityForFamily(TARIFF_FAMILY.AGILE)
 
     // OA-23/OA-7: the "shifting opportunity" layer -- what moving this one
     // appliance's cycle to the cheapest slot within the *already-imported*
@@ -319,21 +364,31 @@ export function createOctopusRouter({
       return res.status(400).json({ error: 'Connect your Octopus account first.' })
     }
 
-    const regionLetter = regionLetterFromTariffCode(connection.meterContext?.tariffCode ?? '')
-    if (!regionLetter) {
+    const tariffCode = connection.meterContext?.tariffCode ?? null
+    if (!tariffCode) {
       return res
         .status(400)
         .json({ error: "We don't have enough meter information yet. Reconnect your account." })
     }
 
-    const periodFrom = roundDownToHalfHour(new Date())
+    // OA-66: "cheapest time" means cheapest for the tariff the customer is
+    // actually on -- this used to always fetch the generically active
+    // Agile product's rates regardless of the connected tariff. Now it
+    // fetches the customer's own tariff code's published rates, whatever
+    // family it is; there is no silent fallback to Agile.
+    const tariffState = await determineTariffState({ tariffCode, fetchProductDetails })
+
+    if (tariffState.family === TARIFF_FAMILY.UNKNOWN) {
+      return res.json({ found: false, reason: 'unsupported_tariff', tariffState })
+    }
+
+    const now = new Date()
+    const periodFrom = roundDownToHalfHour(now)
     const periodTo = new Date(periodFrom.getTime() + CHEAPEST_WINDOW_LOOKAHEAD_HOURS * 60 * 60 * 1000)
 
-    let agileTariffCode
     let rates
     try {
-      agileTariffCode = await fetchActiveAgileTariffCode(regionLetter)
-      rates = await fetchTariffUnitRates(agileTariffCode, {
+      rates = await fetchTariffUnitRates(tariffCode, {
         periodFrom: periodFrom.toISOString(),
         periodTo: periodTo.toISOString(),
       })
@@ -341,10 +396,30 @@ export function createOctopusRouter({
       return res.status(502).json({ error: 'Could not reach Octopus right now. Please try again.' })
     }
 
-    const window = findCheapestWindow(rates, durationMinutes)
-    if (!window) {
-      return res.json({ found: false })
+    if (isFlatRate(rates)) {
+      return res.json({ found: false, reason: 'flat_rate', tariffState })
     }
+
+    // OA-67: never recommend a window that's already elapsed, even if it
+    // was technically still inside the originally fetched range.
+    const futureRates = excludeElapsedSlots(rates, now)
+
+    const window = findCheapestWindow(futureRates, durationMinutes)
+    if (!window) {
+      // Enough future slots existed but none were long/contiguous enough
+      // vs. the full lookahead actually having been published yet.
+      const latestRateEnd = rates.reduce(
+        (latest, r) => Math.max(latest, new Date(r.validTo).getTime()),
+        0,
+      )
+      const reason = latestRateEnd < periodTo.getTime() - 60 * 60 * 1000 ? 'tomorrow_not_published' : 'no_window_available'
+      return res.json({ found: false, reason, tariffState })
+    }
+
+    // OA-67: explicit "start now" when the current moment falls inside
+    // the chosen window's first slot, rather than leaving the user to
+    // work out whether an imminent-looking window is still actionable.
+    const canStartNow = new Date(window.startsAt).getTime() <= now.getTime()
 
     let recommendation = null
     if (energyKwh !== null) {
@@ -364,7 +439,7 @@ export function createOctopusRouter({
       }
     }
 
-    res.json({ found: true, agileTariffCode, ...window, recommendation })
+    res.json({ found: true, tariffState, canStartNow, ...window, recommendation })
   })
 
   // OA-32: best-effort, on-demand check of whether whole-house consumption

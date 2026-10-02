@@ -71,6 +71,50 @@ function describeImportError(err: unknown): string {
   return "We couldn't import your usage history right now. Please try again."
 }
 
+// OA-63: the six states the ticket asks for -- each with copy that's
+// visibly different from the others, including from itself across a
+// re-run, so clicking the button is never ambiguous about what happened.
+function ImportStatusMessage({
+  importing,
+  importError,
+  importStatus,
+}: {
+  importing: boolean
+  importError: string | null
+  importStatus: OctopusImportStatus | null
+}) {
+  if (importing) return <p>Importing…</p>
+  if (importError) return <p className="connect-octopus-page__error">{importError}</p>
+  if (!importStatus || importStatus.status === 'not_imported') {
+    return <p>Import your recent half-hourly usage and tariff rate history to see your savings.</p>
+  }
+  if (importStatus.status === 'success') {
+    return (
+      <p>
+        Imported {importStatus.consumptionPoints} usage readings and {importStatus.ratePoints} tariff
+        rates, covering {importStatus.periodFrom?.slice(0, 10)} to {importStatus.periodTo?.slice(0, 10)}.
+      </p>
+    )
+  }
+  if (importStatus.status === 'partial') {
+    const missingConsumption = !importStatus.consumptionPoints
+    return (
+      <p>
+        We could only import part of your usage history: {missingConsumption ? 'no usage readings' : 'no tariff rates'}{' '}
+        came back from Octopus, though {missingConsumption ? 'tariff rates did' : 'usage readings did'}. This can
+        happen if your account or meter is still being set up.
+      </p>
+    )
+  }
+  return (
+    <p>
+      We couldn't import your usage history yet. Octopus returned no usage or tariff data for this
+      period — this can happen if your account or meter is still being set up, or you've only just
+      switched tariffs.
+    </p>
+  )
+}
+
 function ConnectOctopusPage() {
   const { connection, loading: loadingStatus, setConnection } = useOctopusConnection()
 
@@ -170,17 +214,20 @@ function ConnectOctopusPage() {
 
         <div className="connect-octopus-page__import">
           <h2>Usage history</h2>
-          {importStatus?.imported ? (
-            <p>
-              Imported {importStatus.consumptionPoints} usage readings and {importStatus.ratePoints} tariff
-              rates, covering {importStatus.periodFrom?.slice(0, 10)} to {importStatus.periodTo?.slice(0, 10)}.
+          <ImportStatusMessage importing={importing} importError={importError} importStatus={importStatus} />
+          {importStatus?.importedAt && !importing && (
+            <p className="connect-octopus-page__meta">
+              Last checked: {new Date(importStatus.importedAt).toLocaleString('en-GB')}
             </p>
-          ) : (
-            <p>Import your recent half-hourly usage and tariff rate history to see your savings.</p>
           )}
-          {importError && <p className="connect-octopus-page__error">{importError}</p>}
           <button type="button" onClick={handleImport} disabled={importing}>
-            {importing ? 'Importing…' : importStatus?.imported ? 'Re-import' : 'Import my usage history'}
+            {importing
+              ? 'Importing…'
+              : importStatus?.imported
+                ? importStatus.status === 'success'
+                  ? 'Re-import'
+                  : 'Try import again'
+                : 'Import my usage history'}
           </button>
         </div>
 

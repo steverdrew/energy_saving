@@ -55,26 +55,37 @@ function CheapestWindowPage() {
 
   useEffect(() => {
     let cancelled = false
-    setPhase('loading')
+
+    function load(isRefresh: boolean) {
+      if (!isRefresh) setPhase('loading')
+      api.octopus
+        .cheapestWindow(profile.typicalProgrammeDurationMinutes.value, profile.typicalEnergyPerCycleKwh.value)
+        .then((res) => {
+          if (cancelled || !res) return
+          setResult(res)
+          setPhase(res.found ? 'result' : 'not-found')
+        })
+        .catch((err) => {
+          if (cancelled || isRefresh) return // a background refresh failing silently is fine; don't blow away a working view
+          setError(describeWindowError(err))
+          setPhase('error')
+        })
+    }
+
     setConfirmState('unanswered')
     setFeedbackState('unanswered')
     setFeedbackComment('')
+    load(false)
 
-    api.octopus
-      .cheapestWindow(profile.typicalProgrammeDurationMinutes.value, profile.typicalEnergyPerCycleKwh.value)
-      .then((res) => {
-        if (cancelled || !res) return
-        setResult(res)
-        setPhase(res.found ? 'result' : 'not-found')
-      })
-      .catch((err) => {
-        if (cancelled) return
-        setError(describeWindowError(err))
-        setPhase('error')
-      })
+    // OA-67: a window that was genuinely still ahead when first fetched
+    // can elapse while this page is just left open -- re-check
+    // periodically rather than showing an increasingly stale "cheapest
+    // window" indefinitely.
+    const interval = setInterval(() => load(true), 5 * 60 * 1000)
 
     return () => {
       cancelled = true
+      clearInterval(interval)
     }
   }, [profile])
 
@@ -126,7 +137,9 @@ function CheapestWindowPage() {
     <section className="cheapest-window-page">
       <h1>Cheapest time to run it</h1>
       <p className="cheapest-window-page__intro">
-        Based on published Octopus Agile prices for today (and tomorrow, once published).
+        {phase === 'result' && result?.found && result.tariffState.displayName
+          ? `Based on your current tariff (${result.tariffState.displayName})'s published prices for today (and tomorrow, once published).`
+          : 'Based on your current tariff’s published prices for today (and tomorrow, once published).'}
       </p>
 
       <label className="cheapest-window-page__picker">
@@ -148,25 +161,47 @@ function CheapestWindowPage() {
 
       {phase === 'error' && <p className="cheapest-window-page__error">{error}</p>}
 
-      {phase === 'not-found' && (
+      {phase === 'not-found' && result && !result.found && (
         <p>
-          We couldn't find a clear cheapest window yet — prices for later today or tomorrow may not be
-          published. Try again closer to the time you want to run it.
+          {result.reason === 'unsupported_tariff' &&
+            "We don't yet recognise your current tariff well enough to time this safely. We'll avoid guessing rather than show you the wrong thing."}
+          {result.reason === 'flat_rate' &&
+            'Your current tariff charges the same rate at every time of day, so there’s no cheaper time to pick.'}
+          {result.reason === 'tomorrow_not_published' &&
+            "We couldn't find a long enough window in what's published so far — tomorrow's prices aren't out yet. Try again later today."}
+          {result.reason === 'no_window_available' &&
+            "We couldn't find a clear cheapest window yet — try again closer to the time you want to run it."}
         </p>
       )}
 
       {phase === 'result' && result?.found && (
         <div className="cheapest-window-page__result">
           <p className="cheapest-window-page__headline">
-            Run your {profile.label.toLowerCase()} between{' '}
-            <strong>{formatLondonTime(result.startsAt)}</strong> and{' '}
-            <strong>{formatLondonTime(result.endsAt)}</strong> — the cheapest window today, averaging{' '}
-            <strong>{result.averageUnitRateIncVatPence.toFixed(1)}p/kWh</strong>.
+            {result.canStartNow ? (
+              <>
+                <strong>Start now</strong> — run your {profile.label.toLowerCase()} now until{' '}
+                <strong>{formatLondonTime(result.endsAt)}</strong>, averaging{' '}
+                <strong>{result.averageUnitRateIncVatPence.toFixed(1)}p/kWh</strong>.
+              </>
+            ) : (
+              <>
+                Run your {profile.label.toLowerCase()} between{' '}
+                <strong>{formatLondonTime(result.startsAt)}</strong> and{' '}
+                <strong>{formatLondonTime(result.endsAt)}</strong> — the cheapest window coming up, averaging{' '}
+                <strong>{result.averageUnitRateIncVatPence.toFixed(1)}p/kWh</strong>.
+              </>
+            )}
           </p>
           {isEstimate(profile.typicalProgrammeDurationMinutes) && (
             <p className="cheapest-window-page__caveat">
               Based on a typical {profile.typicalProgrammeDurationMinutes.value}-minute cycle for this
               appliance type — not your specific model.
+            </p>
+          )}
+          {result.tariffState.comparisonMethod === 'bounded_estimate' && (
+            <p className="cheapest-window-page__caveat">
+              Your tariff includes personalised smart-charging periods we can't reconstruct, so this only
+              reflects the guaranteed published window — treat it as a bounded estimate.
             </p>
           )}
           {profile.safety.notes && (
