@@ -11,6 +11,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
@@ -25,7 +27,9 @@
 
 .app-header__nav {
   display: flex;
-  gap: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
 }
 
 .app-header__nav a {

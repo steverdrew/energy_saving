@@ -1,60 +1,56 @@
 # HANDOFF
 
-_Last updated: 2026-10-02 (OA-51: wire login into the account page)_
+_Last updated: 2026-10-02 (OA-52: Sign in link on the landing page)_
 
 ## Current task
 
-OA-51: make a successful Firebase login lead to a real, minimal
-authenticated account page (not a dead end), with auth-redirect loops
-handled cleanly in both directions and no flash of the wrong page while
-Firebase reports its auth state. Implementation done locally; not yet
-committed/pushed/PR'd.
+OA-52: give the public landing page a visible, secondary "Sign in" entry
+point back into the account flow, usable on mobile and by keyboard, that
+resolves straight to the account page for already-authenticated
+visitors. Implementation done locally; not yet committed/pushed/PR'd.
 
 ## State
 
-- OA-47, OA-49, OA-50, and two post-merge hotfixes are merged to `main`
-  and live on beta.
-- OA-51 code is complete and validated locally (lint, build,
-  check-bundle, web tests, server tests all pass) but sits uncommitted
-  on top of `main` — not yet on a branch, no PR yet.
+- OA-47, OA-49, OA-50, OA-51, and two hotfixes are merged to `main` and
+  live on beta.
+- OA-52 turned out to be mostly already satisfied by OA-50/51's global
+  app header (`src/App.tsx`), which is shared by every page including
+  the landing page: it already shows "Sign in" → `/login` when
+  signed out, or "Account" → `/account` when signed in. The remaining
+  gap was mobile: the header had no wrap behavior and could overflow on
+  narrow viewports. Fixed with a `flex-wrap` + responsive gap change in
+  `src/App.css` — no new nav logic needed.
+- Validated locally (lint, build, check-bundle, web tests, server
+  tests all pass) but sits uncommitted on top of `main` — not yet on a
+  branch, no PR yet.
 
 ## Next step
 
-Commit this work on a new branch off `main` (e.g.
-`oa-51-account-page`), push, open a PR, watch CI, merge once green, then
-run the "Beta verification (OA-51)" steps in `README.md` against the
-deployed beta URL.
+Commit this work on a new branch off `main` (e.g. `oa-52-landing-signin`),
+push, open a PR, watch CI, merge once green, then run the "Beta
+verification (OA-52)" steps in `README.md` against the deployed beta URL.
 
 ## Key references
 
-- Ticket: OA-51, Jira Octopus Agile project.
-- `src/pages/LoginPage.tsx` — now gates on `loading` before rendering
-  (no flash), redirects already-authenticated visitors, reads the
-  post-login destination from `?from=`.
-- `src/auth/ProtectedRoute.tsx` — redirects to `/login?from=<path>`
-  (query param, not router state, so it survives a real page refresh).
-- `src/pages/AccountPage.tsx` / `.css` — minimal authenticated shell:
-  email, sign out, a "Find my saving" entry point (links to the existing
-  `/savings` route) and a static "Your savings" placeholder card.
-- `src/App.tsx` — nav also gates on `loading` to avoid flashing "Sign
-  in" before flipping to "Account".
-- README.md "Beta verification (OA-51)" section.
+- Ticket: OA-52, Jira Octopus Agile project.
+- `src/App.css` — `.app-header` / `.app-header__nav` now wrap on narrow
+  viewports instead of overflowing.
+- `src/App.tsx` — pre-existing (OA-50/51) conditional nav: "Sign in" vs.
+  "Account" + "Sign out", shared across all pages.
+- README.md "Beta verification (OA-52)" section.
 
 ## Decisions
 
-- Post-login/redirect destination travels as a `?from=` query param, not
-  React Router location state — state doesn't survive an actual browser
-  refresh while sitting on `/login`, a query param does.
-- `destinationFrom()` in `LoginPage.tsx` only accepts paths starting with
-  a single `/` (rejects `//evil.com`-style values) — `?from=` is
-  attacker-controllable input, so it's treated as untrusted and never
-  used for an off-app redirect.
-- "Find my saving" on the account page links to the existing `/savings`
-  route rather than inventing a new one — OA-51 explicitly scopes this
-  as a shell/entry point, with the real Octopus connection flow and
-  savings results out of scope (future tickets).
-- No new auth/session state: the account page and nav both read
-  `useAuth()` directly; Firebase remains the sole source of truth.
+- No new Sign in link/component was added — the existing global header
+  nav already covers every acceptance criterion (one-click reach to
+  `/login`, resolves to `/account` when authenticated, keyboard
+  accessible via native `<a>`/`<button>`, "Find my saving" stays the
+  visually dominant CTA). Scope was narrowed to the one real gap:
+  mobile wrapping.
+- Did not rename the "Octopus Agent" header brand text to "Shift & Save"
+  — tickets reference Shift & Save as the consumer brand, but no ticket
+  so far has asked for a rebrand, and OA-52's scope is the Sign in link,
+  not visual rebranding. Flagging as a likely future ticket.
 
 ## Constraints and preferences
 
@@ -69,12 +65,8 @@ deployed beta URL.
 
 ## Gotchas
 
-- Both `LoginPage` and the `App.tsx` header nav must check
-  `loading` from `useAuth()`, not just `user` — otherwise there's a
-  one-frame flash of the signed-out UI for an already-authenticated
-  visitor before Firebase's `onAuthStateChanged` callback fires.
-- The Firebase project **ID** (`shiftandsaveapp`) vs. **number**
-  (`761386319734`) distinction from OA-49 still applies to
-  `src/firebase.ts`'s config.
+- The header's brand text still reads "Octopus Agent" even though
+  tickets since OA-49 call the consumer brand "Shift & Save" — not
+  addressed yet, no ticket has asked for it.
 - Don't commit the beta test account's password anywhere — it lives only
   in Firebase Console → Authentication → Users.
