@@ -238,15 +238,17 @@ export function createOctopusRouter({
     })
   })
 
-  // OA-71: "Actual" -- the customer's real tariff(s), real half-hourly
-  // usage and real cost for the already-imported window. No counterfactual
-  // modelling (that's OA-72); this just reconstructs what happened,
-  // including reconstructing cost correctly across a mid-period tariff
-  // switch rather than pretending one tariff covered the whole window.
-  router.get('/actual-period', requireFirebaseAuth, async (req, res) => {
-    const record = await importStore.get(req.firebaseUid)
+  // OA-71/OA-72: the shared "what actually happened" reconstruction --
+  // real tariff(s), real half-hourly usage, real cost for the already-
+  // imported window, correctly split across any mid-period tariff switch
+  // rather than pretending one tariff covered the whole window. Used by
+  // /actual-period directly, and as the fixed baseline half of
+  // /like-for-like's comparison, so both show exactly the same Actual
+  // numbers.
+  async function loadActualReconstruction(uid) {
+    const record = await importStore.get(uid)
     if (!record) {
-      return res.status(400).json({ error: 'Import your usage history first.' })
+      return { error: { status: 400, body: { error: 'Import your usage history first.' } } }
     }
 
     const importStatus = importStatusFromCounts(record.consumption?.length ?? 0, record.rates?.length ?? 0)
@@ -255,12 +257,12 @@ export function createOctopusRouter({
       // precise-looking £0 total, and no point spending an extra Octopus
       // round trip to check for a tariff switch within a period that has
       // no usage data anyway.
-      return res.json({ periodFrom: undefined, periodTo: undefined, importStatus, complete: false })
+      return { record, importStatus, actual: null, tariffSwitched: false, tariffSegments: [] }
     }
 
-    const connection = await store.get(req.firebaseUid)
+    const connection = await store.get(uid)
     if (!connection) {
-      return res.status(400).json({ error: 'Connect your Octopus account first.' })
+      return { error: { status: 400, body: { error: 'Connect your Octopus account first.' } } }
     }
 
     let account
@@ -270,9 +272,9 @@ export function createOctopusRouter({
       account = await fetchOctopusAccount(accountNumber, apiKey)
     } catch (err) {
       if (err instanceof OctopusAuthError) {
-        return res.status(401).json({ error: err.message })
+        return { error: { status: 401, body: { error: err.message } } }
       }
-      return res.status(502).json({ error: 'Could not reach Octopus right now. Please try again.' })
+      return { error: { status: 502, body: { error: 'Could not reach Octopus right now. Please try again.' } } }
     }
 
     const agreements = meterAgreementsFromAccount(account)
@@ -303,7 +305,7 @@ export function createOctopusRouter({
         )
       }
     } catch {
-      return res.status(502).json({ error: 'Could not reach Octopus right now. Please try again.' })
+      return { error: { status: 502, body: { error: 'Could not reach Octopus right now. Please try again.' } } }
     }
 
     const actual = buildActualPeriod({
@@ -325,6 +327,23 @@ export function createOctopusRouter({
       }),
     )
 
+    return { record, importStatus, actual, tariffSwitched, tariffSegments }
+  }
+
+  // OA-71: "Actual" -- the customer's real tariff(s), real half-hourly
+  // usage and real cost for the already-imported window. No counterfactual
+  // modelling (that's OA-72); this just reconstructs what happened.
+  router.get('/actual-period', requireFirebaseAuth, async (req, res) => {
+    const result = await loadActualReconstruction(req.firebaseUid)
+    if (result.error) {
+      return res.status(result.error.status).json(result.error.body)
+    }
+    const { record, importStatus, actual, tariffSwitched, tariffSegments } = result
+
+    if (importStatus === 'no_data') {
+      return res.json({ periodFrom: undefined, periodTo: undefined, importStatus, complete: false })
+    }
+
     // OA-21-style flag: unit rates only, no standing charge -- stated
     // explicitly rather than left for the UI to assume.
     res.json({
@@ -340,6 +359,106 @@ export function createOctopusRouter({
       matchedSlots: actual.matchedSlots,
       expectedSlots: actual.expectedSlots,
       points: actual.points,
+    })
+  })
+
+  // OA-72: "Like-for-like" -- same half-hourly consumption as Actual, never
+  // moved, repriced against a different tariff's own historical rates for
+  // these same dates ("I'm on X -- what would these exact 30 days have
+  // cost on Y?"). 'agile' is the one comparison family this app can
+  // safely auto-resolve to the customer's own region (via the same
+  // lookup OA-22 already uses and tests); any other comparison tariff
+  // must be given as an explicit, already region-qualified Octopus
+  // tariff code -- this app doesn't guess other families' product-code
+  // conventions (see tariffClassification.js).
+  router.get('/like-for-like', requireFirebaseAuth, async (req, res) => {
+    const result = await loadActualReconstruction(req.firebaseUid)
+    if (result.error) {
+      return res.status(result.error.status).json(result.error.body)
+    }
+    const { record, importStatus, actual, tariffSwitched, tariffSegments } = result
+
+    if (importStatus === 'no_data') {
+      return res.json({ periodFrom: undefined, periodTo: undefined, importStatus, comparisonAvailable: false })
+    }
+
+    const { comparisonTariffCode: rawComparisonTariffCode, comparisonFamily } = req.query
+    let comparisonTariffCode = typeof rawComparisonTariffCode === 'string' ? rawComparisonTariffCode.trim() : ''
+
+    if (comparisonFamily === 'agile') {
+      try {
+        comparisonTariffCode = await fetchActiveAgileTariffCode(regionLetterFromTariffCode(record.tariffCode))
+      } catch {
+        return res.status(502).json({ error: 'Could not reach Octopus right now. Please try again.' })
+      }
+    }
+
+    if (!comparisonTariffCode) {
+      return res.status(400).json({ error: 'comparisonTariffCode or comparisonFamily=agile is required.' })
+    }
+
+    const comparisonClassification = await classifyTariff(comparisonTariffCode, { fetchProductDetails })
+    if (comparisonClassification.comparisonMethod !== 'exact') {
+      // OA-25: never fabricate exactness for a tariff whose historical
+      // rates can't be fully reconstructed from public data (e.g.
+      // Intelligent Go's personalised smart-charge windows), or one this
+      // app doesn't recognise at all.
+      return res.json({
+        periodFrom: record.periodFrom,
+        periodTo: record.periodTo,
+        importStatus,
+        comparisonAvailable: false,
+        comparisonMethod: comparisonClassification.comparisonMethod,
+        comparisonTariffCode,
+        comparisonDisplayName: comparisonClassification.displayName,
+      })
+    }
+
+    let comparisonRates
+    try {
+      // Historical rates for the *actual* imported window's dates --
+      // never today's rates substituted for a historical comparison.
+      comparisonRates = await fetchTariffUnitRates(comparisonTariffCode, {
+        periodFrom: record.periodFrom,
+        periodTo: record.periodTo,
+      })
+    } catch {
+      return res.status(502).json({ error: 'Could not reach Octopus right now. Please try again.' })
+    }
+
+    // The exact same consumption series as Actual, only repriced -- never
+    // moved to a different time.
+    const comparison = buildActualPeriod({
+      consumption: record.consumption,
+      ratesBySegment: [{ tariffCode: comparisonTariffCode, rates: comparisonRates }],
+      periodFrom: record.periodFrom,
+      periodTo: record.periodTo,
+    })
+
+    res.json({
+      periodFrom: record.periodFrom,
+      periodTo: record.periodTo,
+      importStatus,
+      unitRateOnly: true,
+      comparisonAvailable: true,
+      comparisonMethod: comparisonClassification.comparisonMethod,
+      actual: {
+        tariffSwitched,
+        tariffSegments,
+        totalKwh: actual.totalKwh,
+        totalCostPence: actual.totalCostPence,
+        complete: actual.complete,
+        points: actual.points,
+      },
+      comparison: {
+        tariffCode: comparisonTariffCode,
+        displayName: comparisonClassification.displayName,
+        totalKwh: comparison.totalKwh,
+        totalCostPence: comparison.totalCostPence,
+        complete: comparison.complete,
+        points: comparison.points,
+      },
+      differencePence: round2(actual.totalCostPence - comparison.totalCostPence),
     })
   })
 

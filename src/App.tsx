@@ -7,6 +7,7 @@ import { OctopusConnectionProvider } from './octopus/OctopusConnectionContext'
 import AccountPage from './pages/AccountPage'
 import ActualPage from './pages/ActualPage'
 import CheapestWindowPage from './pages/CheapestWindowPage'
+import ComparePage from './pages/ComparePage'
 import CompatibilityFeedbackPage from './pages/CompatibilityFeedbackPage'
 import ConnectOctopusPage from './pages/ConnectOctopusPage'
 import DebugPage from './pages/DebugPage'
@@ -43,6 +44,7 @@ function App() {
             {loading ? null : user ? (
               <>
                 <NavLink to="/actual">Actual</NavLink>
+                <NavLink to="/compare">Compare</NavLink>
                 <NavLink to="/savings">My Savings</NavLink>
                 <NavLink to="/cheapest-window">Cheapest Times</NavLink>
                 <NavLink to="/account">Account</NavLink>
@@ -83,6 +85,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ActualPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/compare"
+              element={
+                <ProtectedRoute>
+                  <ComparePage />
                 </ProtectedRoute>
               }
             />

@@ -129,3 +129,33 @@ export function formatSlotTime(iso: string): string {
     minute: '2-digit',
   }).format(new Date(iso))
 }
+
+const dateKeyFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/London',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
+/**
+ * Buckets a flat half-hourly point list (as the server returns from
+ * /actual-period and /like-for-like) into one HeatMapDay per
+ * Europe/London calendar date -- a UTC day boundary would split a London
+ * evening across two rows, which this en-CA (YYYY-MM-DD) key avoids.
+ */
+export function groupSlotsByLondonDay(slots: HeatMapSlot[]): HeatMapDay[] {
+  const byDate = new Map<string, HeatMapSlot[]>()
+  for (const slot of slots) {
+    const key = dateKeyFormatter.format(new Date(slot.startsAt))
+    const bucket = byDate.get(key) ?? []
+    bucket.push(slot)
+    byDate.set(key, bucket)
+  }
+
+  return [...byDate.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, daySlots]) => ({
+      date,
+      slots: [...daySlots].sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()),
+    }))
+}

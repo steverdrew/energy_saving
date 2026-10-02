@@ -290,6 +290,36 @@ export interface ActualPeriodResult {
   points?: ActualPeriodPoint[]
 }
 
+// OA-72: "Like-for-like" -- same consumption as Actual, repriced against
+// a different tariff's own historical rates for the same dates.
+// comparisonAvailable: false means the comparison tariff can't be (fully)
+// reconstructed (OA-25) -- comparisonMethod explains why, never a
+// fabricated exact figure.
+export interface LikeForLikeSide {
+  tariffCode?: string
+  displayName?: string | null
+  tariffSwitched?: boolean
+  tariffSegments?: ActualPeriodTariffSegment[]
+  totalKwh: number
+  totalCostPence: number
+  complete: boolean
+  points: ActualPeriodPoint[]
+}
+
+export interface LikeForLikeResult {
+  periodFrom?: string
+  periodTo?: string
+  importStatus: ActualPeriodImportStatus
+  unitRateOnly?: true
+  comparisonAvailable: boolean
+  comparisonMethod?: 'exact' | 'bounded_estimate' | 'unavailable'
+  comparisonTariffCode?: string
+  comparisonDisplayName?: string | null
+  actual?: LikeForLikeSide
+  comparison?: LikeForLikeSide
+  differencePence?: number
+}
+
 export const api = {
   octopus: {
     connect: async (input: { apiKey: string; accountNumber: string }) =>
@@ -342,6 +372,12 @@ export const api = {
       request<SavingsTotal>('/api/octopus/savings-total', { headers: await authHeaders() }),
     actualPeriod: async () =>
       request<ActualPeriodResult>('/api/octopus/actual-period', { headers: await authHeaders() }),
+    likeForLike: async (comparison: { comparisonTariffCode?: string; comparisonFamily?: 'agile' }) => {
+      const params = new URLSearchParams()
+      if (comparison.comparisonFamily) params.set('comparisonFamily', comparison.comparisonFamily)
+      if (comparison.comparisonTariffCode) params.set('comparisonTariffCode', comparison.comparisonTariffCode)
+      return request<LikeForLikeResult>(`/api/octopus/like-for-like?${params}`, { headers: await authHeaders() })
+    },
   },
   compatibility: {
     submitRequest: async (input: CompatibilityRequestInput) =>

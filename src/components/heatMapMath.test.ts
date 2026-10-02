@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   findAnnotations,
   formatSlotTime,
+  groupSlotsByLondonDay,
   maxUsage,
   rateColorStepIndex,
   rateRange,
@@ -109,5 +110,30 @@ describe('findAnnotations', () => {
 describe('formatSlotTime', () => {
   it('formats an ISO timestamp as a London local time', () => {
     expect(formatSlotTime('2026-06-15T13:30:00Z')).toBe('14:30')
+  })
+})
+
+describe('groupSlotsByLondonDay', () => {
+  it('groups slots into one day per Europe/London calendar date, sorted', () => {
+    const days = groupSlotsByLondonDay([
+      slot('2026-01-02T00:30:00Z', 1, 10),
+      slot('2026-01-01T00:00:00Z', 1, 10),
+      slot('2026-01-01T00:30:00Z', 1, 10),
+    ])
+
+    expect(days.map((d) => d.date)).toEqual(['2026-01-01', '2026-01-02'])
+    expect(days[0].slots.map((s) => s.startsAt)).toEqual(['2026-01-01T00:00:00Z', '2026-01-01T00:30:00Z'])
+  })
+
+  it('buckets a London evening into one day even though its UTC date has already rolled over (BST, UTC+1)', () => {
+    // 2026-06-15T23:30 UTC is 2026-06-16T00:30 London during BST -- this
+    // must land in the 16th's row, not the UTC-dated 15th's.
+    const days = groupSlotsByLondonDay([slot('2026-06-15T23:30:00Z', 1, 10)])
+
+    expect(days.map((d) => d.date)).toEqual(['2026-06-16'])
+  })
+
+  it('returns no days for an empty slot list', () => {
+    expect(groupSlotsByLondonDay([])).toEqual([])
   })
 })

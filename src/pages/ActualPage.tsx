@@ -1,19 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ApiError, api, type ActualPeriodPoint, type ActualPeriodResult } from '../api/client'
+import { ApiError, api, type ActualPeriodResult } from '../api/client'
 import HeatMap from '../components/HeatMap'
-import type { HeatMapDay } from '../components/heatMapMath'
+import { groupSlotsByLondonDay } from '../components/heatMapMath'
 import { formatGbp } from '../format'
 import './ActualPage.css'
 
 type Phase = 'loading' | 'result' | 'not-imported' | 'error'
-
-const dateKeyFormatter = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Europe/London',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-})
 
 const rangeFormatter = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'Europe/London',
@@ -21,36 +14,6 @@ const rangeFormatter = new Intl.DateTimeFormat('en-GB', {
   month: 'short',
   year: 'numeric',
 })
-
-function londonDateKey(iso: string): string {
-  return dateKeyFormatter.format(new Date(iso))
-}
-
-/** OA-70's heat map groups by calendar day -- this buckets the flat
- * half-hourly point list from /actual-period into one HeatMapDay per
- * Europe/London calendar date, since a UTC day boundary would split a
- * London evening across two rows. */
-function groupPointsByLondonDay(points: ActualPeriodPoint[]): HeatMapDay[] {
-  const byDate = new Map<string, HeatMapDay['slots']>()
-  for (const p of points) {
-    const key = londonDateKey(p.startsAt)
-    const slots = byDate.get(key) ?? []
-    slots.push({
-      startsAt: p.startsAt,
-      kwh: p.kwh,
-      unitRateIncVatPence: p.unitRateIncVatPence,
-      costPence: p.costPence,
-    })
-    byDate.set(key, slots)
-  }
-
-  return [...byDate.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, slots]) => ({
-      date,
-      slots: [...slots].sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()),
-    }))
-}
 
 function describeError(err: unknown): string {
   if (err instanceof ApiError && err.status === 502) {
@@ -151,7 +114,7 @@ function ActualPage() {
           </div>
 
           {result.points && result.points.length > 0 && (
-            <HeatMap days={groupPointsByLondonDay(result.points)} title="Daily usage and cost" />
+            <HeatMap days={groupSlotsByLondonDay(result.points)} title="Daily usage and cost" />
           )}
         </div>
       )}
