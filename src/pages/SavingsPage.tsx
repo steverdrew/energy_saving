@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ApiError, api, type SavingsResult, type TariffState } from '../api/client'
+import { ApiError, api, type SavingsResult } from '../api/client'
 import { DEFAULT_APPLIANCE_PROFILES, type ApplianceType } from '../domain/applianceProfile'
 import { formatGbp, formatSavingsEquivalent } from '../format'
 import { useOctopusConnection } from '../octopus/OctopusConnectionContext'
@@ -9,16 +9,6 @@ import './SavingsPage.css'
 type Phase = 'loading' | 'not-connected' | 'not-imported' | 'result' | 'error'
 
 const APPLIANCE_TYPES = Object.keys(DEFAULT_APPLIANCE_PROFILES) as ApplianceType[]
-
-// OA-45: plain-English label for "You're on X" -- omitted entirely when
-// the tariff kind can't be determined, rather than guessing.
-const TARIFF_KIND_LABEL: Record<TariffState['kind'], string | null> = {
-  agile: 'Octopus Agile',
-  go: 'Octopus Go',
-  intelligent_go: 'Intelligent Octopus Go',
-  standard: 'a standard variable or fixed tariff',
-  unknown: null,
-}
 
 // OA-41: the running total is its own, independent state -- it reflects
 // confirmed actions from Cheapest Times, not whether an Octopus account is
@@ -144,8 +134,11 @@ function SavingsPage() {
 
   const saving = result.estimatedSavingPence
   const cheaperTariff = saving > 0 ? 'agile' : saving < 0 ? 'current' : 'same'
-  const alreadyOnAgile = result.tariffState.kind === 'agile'
-  const tariffLabel = TARIFF_KIND_LABEL[result.tariffState.kind]
+  const alreadyOnAgile = result.tariffState.family === 'agile'
+  // OA-69: displayName comes straight from the server's one canonical
+  // classifier -- never re-derived here from family/raw, so there's no
+  // second place this mapping can drift from the backend's.
+  const tariffLabel = result.tariffState.displayName
 
   return (
     <section className="savings-page">

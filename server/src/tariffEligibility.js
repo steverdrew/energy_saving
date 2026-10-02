@@ -1,10 +1,12 @@
+import { TARIFF_FAMILY } from './tariffClassification.js'
+
 /**
- * OA-24: eligibility metadata for tariffs this app can show as a
- * comparison. Kept sourceable/configurable here rather than scattered
- * through routes/UI, per the ticket's own requirement -- even though
- * today there's only one entry, because the alternative (eligibility
- * logic inlined where the comparison happens) is exactly what the ticket
- * says not to do.
+ * OA-24/OA-69: eligibility metadata for tariffs this app can show as a
+ * comparison, keyed by the canonical tariff family (tariffClassification.js)
+ * rather than re-parsing a raw tariff code -- OA-69's rule is that no
+ * individual module independently infers tariff identity from a code
+ * string; this one just maps an already-classified family to an
+ * eligibility state.
  *
  * Today we only ever compare the customer's current tariff against
  * Agile (OA-22's explicit scope), and Agile has no eligibility
@@ -14,19 +16,12 @@
  * compatible charger, battery) has somewhere to declare it rather than
  * silently being treated as eligible by omission.
  */
-const ELIGIBILITY_BY_PRODUCT_PREFIX = [
-  { prefix: 'AGILE', status: 'eligible', requirement: null },
-  { prefix: 'INTELLI', status: 'scenario_only', requirement: 'Requires a compatible EV or charger.' },
-  { prefix: 'GO', status: 'scenario_only', requirement: 'Requires an EV.' },
-]
+const ELIGIBILITY_BY_FAMILY = {
+  [TARIFF_FAMILY.AGILE]: { status: 'eligible', requirement: null },
+  [TARIFF_FAMILY.INTELLIGENT_GO]: { status: 'scenario_only', requirement: 'Requires a compatible EV or charger.' },
+  [TARIFF_FAMILY.GO]: { status: 'scenario_only', requirement: 'Requires an EV.' },
+}
 
-export function eligibilityForTariffCode(tariffCode) {
-  if (typeof tariffCode !== 'string') {
-    return { status: 'cannot_determine', requirement: null }
-  }
-  const match = ELIGIBILITY_BY_PRODUCT_PREFIX.find((entry) => tariffCode.includes(entry.prefix))
-  if (!match) {
-    return { status: 'cannot_determine', requirement: null }
-  }
-  return { status: match.status, requirement: match.requirement }
+export function eligibilityForFamily(family) {
+  return ELIGIBILITY_BY_FAMILY[family] ?? { status: 'cannot_determine', requirement: null }
 }

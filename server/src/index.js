@@ -9,6 +9,7 @@ import {
   fetchActiveAgileTariffCode,
   fetchElectricityConsumption,
   fetchOctopusAccount,
+  fetchProductDetails,
   fetchTariffUnitRates,
 } from './octopusClient.js'
 import { createFirestoreOctopusImportStore } from './octopusImportStore.js'
@@ -37,6 +38,7 @@ export function createApp() {
       fetchElectricityConsumption,
       fetchTariffUnitRates,
       fetchActiveAgileTariffCode,
+      fetchProductDetails,
       store: createFirestoreOctopusStore(),
       importStore: createFirestoreOctopusImportStore(),
       ledgerStore: createFirestoreSavingsLedgerStore(),
