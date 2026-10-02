@@ -3,6 +3,7 @@ import './App.css'
 import { useAuth } from './auth/AuthContext'
 import ProtectedRoute from './auth/ProtectedRoute'
 import AccountPage from './pages/AccountPage'
+import ConnectOctopusPage from './pages/ConnectOctopusPage'
 import DebugPage from './pages/DebugPage'
 import ExplainerPage from './pages/ExplainerPage'
 import LandingPage from './pages/LandingPage'
@@ -45,6 +46,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <AccountPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/connect-octopus"
+            element={
+              <ProtectedRoute>
+                <ConnectOctopusPage />
               </ProtectedRoute>
             }
           />

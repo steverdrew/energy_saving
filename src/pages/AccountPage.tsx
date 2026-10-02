@@ -21,7 +21,7 @@ function AccountPage() {
         <div className="account-page__card">
           <h2>Find my saving</h2>
           <p>Connect your Octopus Energy account to see where you could save.</p>
-          <Link to="/savings" className="account-page__cta">
+          <Link to="/connect-octopus" className="account-page__cta">
             Get started
           </Link>
         </div>

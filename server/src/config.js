@@ -1,4 +1,4 @@
-const REQUIRED = ['CLIENT_ORIGIN', 'DATABASE_PATH']
+const REQUIRED = ['CLIENT_ORIGIN', 'DATABASE_PATH', 'ENCRYPTION_KEY']
 
 export function loadConfig(env = process.env) {
   const missing = REQUIRED.filter((key) => !env[key])

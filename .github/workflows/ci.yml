@@ -56,6 +56,9 @@ jobs:
           CLIENT_ORIGIN: http://localhost:5173
           DATABASE_PATH: data/ci.db
           PORT: 4000
+          # Not a real secret -- only encrypts throwaway data in this
+          # ephemeral CI health check. Any valid 32-byte base64 value works.
+          ENCRYPTION_KEY: MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
         run: |
           npm start &
           server_pid=$!
