@@ -280,3 +280,36 @@ test('GET /savings-result surfaces an Octopus failure fetching Agile rates as 50
   const res = await request(failingApp).get('/api/octopus/savings-result').set('Authorization', 'Bearer user-n')
   assert.equal(res.status, 502)
 })
+
+test('GET /cheapest-window requires a positive durationMinutes', async () => {
+  const res = await request(app)
+    .get('/api/octopus/cheapest-window?durationMinutes=0')
+    .set('Authorization', 'Bearer user-o')
+  assert.equal(res.status, 400)
+})
+
+test('GET /cheapest-window requires a connected account', async () => {
+  const res = await request(app)
+    .get('/api/octopus/cheapest-window?durationMinutes=60')
+    .set('Authorization', 'Bearer user-p')
+  assert.equal(res.status, 400)
+})
+
+test('GET /cheapest-window returns the cheapest Agile window for the requested duration', async () => {
+  await request(app)
+    .post('/api/octopus/connect')
+    .set('Authorization', 'Bearer user-q')
+    .send({ accountNumber: 'A-12345678', apiKey: 'good-key' })
+
+  const res = await request(app)
+    .get('/api/octopus/cheapest-window?durationMinutes=30')
+    .set('Authorization', 'Bearer user-q')
+
+  assert.equal(res.status, 200)
+  assert.equal(res.body.found, true)
+  assert.equal(res.body.agileTariffCode, 'E-1R-AGILE-24-10-01-A')
+  // fixture agile rates: 10p at 00:00, 40p at 00:30 -- cheapest 30-minute slot is 00:00.
+  assert.equal(res.body.startsAt, '2026-09-01T00:00:00Z')
+  assert.equal(res.body.averageUnitRateIncVatPence, 10)
+  assert.equal(res.body.slotsUsed, 1)
+})

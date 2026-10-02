@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { findCheapestWindow } from '../cheapestWindow.js'
 import { decrypt, encrypt } from '../crypto.js'
 import {
   OctopusAuthError,
@@ -14,6 +15,18 @@ const ACCOUNT_NUMBER_RE = /^A-[A-Za-z0-9]{8}$/
 // keeps each request fast and each Firestore doc well under its 1MiB
 // limit. Revisit the window once real imported data has been reviewed.
 const IMPORT_WINDOW_DAYS = 30
+
+// OA-9: how far ahead to look for a cheap Agile window. Agile publishes
+// today's prices, plus tomorrow's from ~4pm UK time -- 48h covers both
+// without over-fetching.
+const CHEAPEST_WINDOW_LOOKAHEAD_HOURS = 48
+
+function roundDownToHalfHour(date) {
+  const rounded = new Date(date)
+  rounded.setUTCSeconds(0, 0)
+  rounded.setUTCMinutes(rounded.getUTCMinutes() - (rounded.getUTCMinutes() % 30))
+  return rounded
+}
 
 export function redactAccountNumber(accountNumber) {
   return `A-****${accountNumber.slice(-4)}`
@@ -221,6 +234,47 @@ export function createOctopusRouter({
       unitRateOnly: true,
       agileTariffCode,
     })
+  })
+
+  router.get('/cheapest-window', requireFirebaseAuth, async (req, res) => {
+    const durationMinutes = Number(req.query.durationMinutes)
+    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+      return res.status(400).json({ error: 'durationMinutes must be a positive number.' })
+    }
+
+    const connection = await store.get(req.firebaseUid)
+    if (!connection) {
+      return res.status(400).json({ error: 'Connect your Octopus account first.' })
+    }
+
+    const regionLetter = regionLetterFromTariffCode(connection.meterContext?.tariffCode ?? '')
+    if (!regionLetter) {
+      return res
+        .status(400)
+        .json({ error: "We don't have enough meter information yet. Reconnect your account." })
+    }
+
+    const periodFrom = roundDownToHalfHour(new Date())
+    const periodTo = new Date(periodFrom.getTime() + CHEAPEST_WINDOW_LOOKAHEAD_HOURS * 60 * 60 * 1000)
+
+    let agileTariffCode
+    let rates
+    try {
+      agileTariffCode = await fetchActiveAgileTariffCode(regionLetter)
+      rates = await fetchTariffUnitRates(agileTariffCode, {
+        periodFrom: periodFrom.toISOString(),
+        periodTo: periodTo.toISOString(),
+      })
+    } catch {
+      return res.status(502).json({ error: 'Could not reach Octopus right now. Please try again.' })
+    }
+
+    const window = findCheapestWindow(rates, durationMinutes)
+    if (!window) {
+      return res.json({ found: false })
+    }
+
+    res.json({ found: true, agileTariffCode, ...window })
   })
 
   return router

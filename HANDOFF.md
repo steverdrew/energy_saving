@@ -1,17 +1,20 @@
 # HANDOFF
 
-_Last updated: 2026-10-02 (OA-59, OA-58, OA-6, OA-21, OA-22, OA-8 implemented this session)_
+_Last updated: 2026-10-02 (OA-59, OA-58, OA-6, OA-21, OA-22, OA-8, OA-9/OA-30/OA-31 implemented this session)_
 
 ## Current task
 
 None in progress. OA-21's methodology was reviewed and **signed off by
 Steve** (2026-10-02, see `docs/SAVINGS_METHODOLOGY.md` Decisions). With
-that gate cleared, OA-22's comparison maths is now wired into a real
+that gate cleared, OA-22's comparison maths is wired into a real
 `GET /api/octopus/savings-result` endpoint, and OA-8's result screen
-(`src/pages/SavingsPage.tsx`) is built and shows a real £ estimate.
-OA-59, OA-58, OA-6, OA-21, OA-22, OA-8 are all implemented, tested, and
-pushed to `claude/dazzling-ritchie-nofudq`. Nothing is
-deployed/verified live on beta yet.
+(`src/pages/SavingsPage.tsx`) shows a real £ estimate. OA-9/OA-30/OA-31
+(cheapest Agile window + appliance profiles + manual guidance) is also
+built: `GET /api/octopus/cheapest-window` plus
+`src/pages/CheapestWindowPage.tsx`. OA-59, OA-58, OA-6, OA-21, OA-22,
+OA-8, OA-9, OA-30, OA-31 are all implemented, tested, and pushed to
+`claude/dazzling-ritchie-nofudq`. Nothing is deployed/verified live on
+beta yet.
 
 ## State
 
@@ -38,6 +41,22 @@ deployed/verified live on beta yet.
   - [x] Flow visible and testable on the stable beta URL
   - [ ] Not yet manually exercised (but covered by passing server tests):
     invalid-credentials error path, disconnect, cross-user isolation
+- **OA-9/OA-30/OA-31**: forward-looking cheapest-window guidance is
+  live, distinct from OA-22's backward-looking comparison.
+  `GET /api/octopus/cheapest-window?durationMinutes=N` looks up the
+  live Agile tariff for the user's region, fetches its published rates
+  for the next 48h (today, plus tomorrow once Octopus publishes it
+  around 4pm UK time), and runs `findCheapestWindow`
+  (`server/src/cheapestWindow.js`) to find the cheapest contiguous
+  run of half-hour slots — returns `{found: false}` if no window long
+  enough exists yet (e.g. tomorrow's prices not published). OA-30's
+  appliance profile model already existed as pure domain data
+  (`src/domain/applianceProfile.ts`, from a prior session) but wasn't
+  used anywhere; `CheapestWindowPage` (OA-31) is its first consumer —
+  an appliance picker that calls the endpoint with that appliance's
+  typical cycle duration and shows "run your X between A and B",
+  flagging estimated durations and any safety note (e.g. "don't leave
+  a tumble dryer unattended") from the profile.
 - **OA-21/OA-22/OA-8**: "See my savings" now returns a real result
   instead of the old `501` stub. `GET /api/octopus/savings-result`
   reads the imported consumption + current-tariff rates
@@ -94,12 +113,13 @@ deployed/verified live on beta yet.
    (fails closed), but worth confirming before wider beta use.
 2. Manually spot-check the full chain live on beta once deployed:
    connect → import → "See my savings" shows a real, sane £ figure
-   with the caveat visible; Account page reflects real connection
-   state after a refresh; `/` redirects when signed in.
-3. Pick up the next roadmap items: OA-9/OA-30/OA-31 (cheapest windows,
-   appliance profiles, manual guidance), OA-40/OA-43 (recommend an
-   action with £ value), OA-41 (running saved-so-far total) — all
-   build on OA-8 now existing.
+   with the caveat visible; Cheapest Times shows a real upcoming
+   window for at least one appliance; Account page reflects real
+   connection state after a refresh; `/` redirects when signed in.
+3. Pick up the next roadmap items: OA-40 (recommend the first action
+   with £ value) and OA-43 ("run X at Y, save £Z" explain copy) — both
+   build on OA-8 (the £ result) and OA-9/OA-31 (the cheapest window)
+   now both existing; then OA-41 (running saved-so-far total).
 4. Update README.md's "Server deployment (Cloud Run)" checklist to match
    the real working IAM configuration (listed below) — currently stale,
    purely a documentation cleanup, no urgency.
@@ -158,6 +178,20 @@ deployed/verified live on beta yet.
   cheaper (`estimatedSavingPence > 0`) — projecting an annualised
   *negative* saving read oddly, so when the current tariff is already
   cheaper, the headline alone carries the message, no annualised line.
+- OA-9/OA-31: cheapest-window search takes `durationMinutes` as a
+  request param from the frontend (which owns the appliance catalog)
+  rather than duplicating appliance durations server-side — the server
+  stays generic to "any duration", not appliance-aware. Lookahead
+  fixed at 48h, matching Agile's today+tomorrow publication pattern.
+  `{found: false}` (not an error) when no long-enough contiguous
+  window exists yet, e.g. before tomorrow's prices are out.
+- OA-30: the appliance profile domain model
+  (`src/domain/applianceProfile.ts`) already existed from an earlier
+  session, fully tested, but had no consumer anywhere in the app until
+  `CheapestWindowPage` (OA-31) this session. Left its generic-default
+  values as-is — not real research, just reasonable UK household
+  averages, and the model already flags them as estimates via
+  `isEstimate`/`DataSource`.
 
 ## Constraints and preferences
 

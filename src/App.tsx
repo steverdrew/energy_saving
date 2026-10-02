@@ -4,6 +4,7 @@ import { useAuth } from './auth/AuthContext'
 import ProtectedRoute from './auth/ProtectedRoute'
 import { OctopusConnectionProvider } from './octopus/OctopusConnectionContext'
 import AccountPage from './pages/AccountPage'
+import CheapestWindowPage from './pages/CheapestWindowPage'
 import ConnectOctopusPage from './pages/ConnectOctopusPage'
 import DebugPage from './pages/DebugPage'
 import ExplainerPage from './pages/ExplainerPage'
@@ -39,6 +40,7 @@ function App() {
             {loading ? null : user ? (
               <>
                 <NavLink to="/savings">My Savings</NavLink>
+                <NavLink to="/cheapest-window">Cheapest Times</NavLink>
                 <NavLink to="/account">Account</NavLink>
                 <button type="button" className="app-header__signout" onClick={() => logout()}>
                   Sign out
@@ -76,6 +78,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <SavingsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/cheapest-window"
+              element={
+                <ProtectedRoute>
+                  <CheapestWindowPage />
                 </ProtectedRoute>
               }
             />

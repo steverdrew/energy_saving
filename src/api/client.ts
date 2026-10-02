@@ -81,6 +81,20 @@ export interface SavingsResult {
   agileTariffCode: string
 }
 
+// OA-9: a forward-looking cheapest contiguous Agile window for a given
+// appliance cycle duration -- distinct from SavingsResult, which looks
+// backward at already-imported history.
+export type CheapestWindowResult =
+  | { found: false }
+  | {
+      found: true
+      agileTariffCode: string
+      startsAt: string
+      endsAt: string
+      averageUnitRateIncVatPence: number
+      slotsUsed: number
+    }
+
 export const api = {
   octopus: {
     connect: async (input: { apiKey: string; accountNumber: string }) =>
@@ -107,5 +121,10 @@ export const api = {
       request<OctopusImportStatus>('/api/octopus/import-status', { headers: await authHeaders() }),
     savingsResult: async () =>
       request<SavingsResult>('/api/octopus/savings-result', { headers: await authHeaders() }),
+    cheapestWindow: async (durationMinutes: number) =>
+      request<CheapestWindowResult>(
+        `/api/octopus/cheapest-window?durationMinutes=${encodeURIComponent(durationMinutes)}`,
+        { headers: await authHeaders() },
+      ),
   },
 }
