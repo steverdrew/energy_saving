@@ -1,4 +1,4 @@
-# Octopus Agent (energy_saving)
+# Shift & Save (energy_saving)
 
 A PWA that helps Octopus Energy customers find savings on their tariff.
 
@@ -195,6 +195,23 @@ With the same Firebase test account:
    not bounced to `/login`.
 6. Sign out — confirm `/savings` is no longer reachable and the nav
    item disappears again.
+
+### Beta verification (OA-54: Shift & Save landing page)
+
+1. Visit `https://shiftandsaveapp.web.app/` — confirm the header brand
+   reads "Shift & Save" (not "Octopus Agent"), the hero reads "Take
+   control of when you use energy — and what it costs you.", and the
+   main CTA reads "See what I could save".
+2. Confirm the 3-step flow reads "1. Connect", "2. See your saving",
+   "3. Make it easy", and that no step implies the app will
+   automatically switch tariff or control any device — the copy should
+   read as "we show you", not "we do it for you".
+3. Confirm the trust section includes "Your usage stays private. We
+   never sell your data."
+4. Confirm the footer link reads "What is Octopus Agile?" and goes to
+   `/how-smart-tariffs-work`.
+5. Click "See what I could save" — confirm it goes to `/login`, same as
+   before.
 
 ## Conventions and constraints
 

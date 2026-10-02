@@ -14,9 +14,10 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Octopus Agent',
-        short_name: 'Octopus Agent',
-        description: 'Find and act on energy savings on your Octopus Energy tariff',
+        name: 'Shift & Save',
+        short_name: 'Shift & Save',
+        description:
+          'Shift & Save: see what a dynamic tariff could save you on Octopus Energy, and make it easy to switch.',
         theme_color: '#1a1a2e',
         background_color: '#1a1a2e',
         display: 'standalone',
