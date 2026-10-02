@@ -167,27 +167,23 @@ everything through OA-57 is done. Next would be device-control
 
 ## Next step
 
-1. **fetchActiveAgileTariffCode (`server/src/octopusClient.js`) has
-   never been run against the real Octopus API** — this sandbox has no
-   network access to `api.octopus.energy` (outbound is proxied and
-   that host isn't allow-listed). It's built from the documented
-   `/v1/products/` shape and unit-tested with a mocked `fetch`, but
-   Steve should sanity-check it against a real response (e.g. hit
-   `https://api.octopus.energy/v1/products/?page_size=100` directly)
-   before relying on it. This is the single highest-risk unverified
-   assumption in OA-8's result — if the real product list shape
-   differs, `/savings-result` will 502 rather than show a wrong number
-   (fails closed), but worth confirming before wider beta use.
-2. Manually spot-check the full chain live on beta once deployed:
-   connect → import → "See my savings" shows a real, sane £ figure
-   with the caveat visible; Cheapest Times shows a real upcoming
-   window *and* a real per-cycle £ saving for at least one appliance
-   once usage is imported; confirming "Yes" on it updates the saved-
-   so-far total on My Savings; the "Was this useful?" and "Tell us
-   what you have" flows submit successfully; Account page reflects
-   real connection state after a refresh; `/` redirects when signed
-   in.
-3. Everything on the original roadmap through OA-57 is now built.
+1. ~~fetchActiveAgileTariffCode never run against the real Octopus
+   API~~ — **confirmed working by Steve against the real API**
+   (2026-10-02). The unverified-assumption risk flagged below is
+   cleared.
+2. PR #14 (OA-59 through OA-57, 9 commits) **merged to `main`**
+   (`995bdea`), triggering `deploy-server.yml` and `deploy-beta.yml`.
+   Manually spot-check the full chain live on beta once that deploy
+   finishes: connect → import → "See my savings" shows a real, sane £
+   figure with the caveat visible; Cheapest Times shows a real
+   upcoming window *and* a real per-cycle £ saving for at least one
+   appliance once usage is imported; confirming "Yes" on it updates
+   the saved-so-far total on My Savings; the "Was this useful?" and
+   "Tell us what you have" flows submit successfully; Account page
+   reflects real connection state after a refresh; `/` redirects when
+   signed in.
+3. Everything on the original roadmap through OA-57 is now built and
+   merged to `main`.
    Remaining tickets (OA-12/OA-15, device control) are explicitly
    **not** to be started without Steve's go-ahead — raise with him
    before picking anything further.
