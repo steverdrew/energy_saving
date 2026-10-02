@@ -2,19 +2,45 @@
 
 _Last updated: 2026-10-02 (core loop via PR #14; backlog audit +
 polish tier via PR #15; deeper feature tier via PR #16/#17; beta
-mop-up cluster OA-63/64/68/69/66/67 merged via PR #18, all Done in
-Jira; OA-65 not started)_
+mop-up cluster OA-63/64/68/69/66/67 merged via PR #18; revised build
+order OA-70/71/72/74 merged via PR #19/#20/#21/#22, all Done in Jira;
+OA-73 delivered as docs/SHIFTING_METHODOLOGY.md, awaiting Steve's
+sign-off; OA-65 not started)_
 
 ## Current task
 
-Steve identified a mop-up cluster of real beta bugs, separated from
-the next product surface, with an explicit build order: **OA-63 →
-OA-64 → OA-68 → OA-69 → OA-66 → OA-67, then OA-65**. All six mop-up
-tickets are merged (`main` @ `1aa273e`, PR #18) and Done in Jira.
-OA-65 (Today/Tomorrow schedule + heat map) is a genuinely new, large
-product surface and hasn't been started; per Steve's own framing it
-should only follow a clean, trusted tariff/import foundation, which this
-batch is building.
+Steve revised the build order after the mop-up cluster: **OA-69 (done)
+→ OA-70 → OA-71 → OA-72 → OA-74 → OA-73 → [new implementation ticket]
+→ appliances/household setup → OA-65**, replacing the old "My Savings
++ Cheapest Times" product surface with Actual → Compare → (eventually)
+Optimised → Plan. OA-70 through OA-74 are all merged and Done:
+
+- **OA-70**: shared 30-day heat map component (`src/components/HeatMap.tsx`
+  + `heatMapMath.ts`), tariff-agnostic, dataviz-skill-validated sequential
+  blue ramp for rate, bar-height for usage. PR #19.
+- **OA-71**: `/api/octopus/actual-period` + `/actual` page — real tariff(s)/
+  usage/cost for the imported window, correctly split across a mid-period
+  tariff switch (`server/src/actualPeriod.js`). PR #20.
+- **OA-72**: `/api/octopus/like-for-like` + `/compare` page — generic
+  "I'm on X, what would this have cost on Y?", not Agile-only. PR #21.
+- **OA-74**: retired the standalone Cheapest Times page and My Savings'
+  generic appliance "shifting opportunity" selector; My Savings now
+  embeds `ActualPage`/`ComparePage` directly; `/cheapest-window` redirects
+  to `/savings` rather than 404ing; backend capability (the route itself,
+  `findCheapestWindow`/`averageRate`, `/savings-result`) untouched. PR #22.
+- **OA-73**: delivered as `docs/SHIFTING_METHODOLOGY.md` — the shifting
+  model, constraints, evidence hierarchy and fixtures, explicitly no
+  code. Per the ticket, needs Steve's sign-off before any implementation
+  ticket is opened against it (same pattern as `SAVINGS_METHODOLOGY.md`).
+
+Not yet started: a new implementation ticket for Optimised (to be
+created once OA-73 is signed off), appliances/household setup, and
+OA-65 (Today/Tomorrow schedule + heat map, now explicitly last in the
+sequence).
+
+(Earlier: Steve identified a mop-up cluster of real beta bugs with
+build order **OA-63 → OA-64 → OA-68 → OA-69 → OA-66 → OA-67** — all
+merged via PR #18 and Done in Jira before the above.)
 
 ## State
 
@@ -500,6 +526,41 @@ batch is building.
 
 ## Decisions
 
+- OA-70: used the dataviz skill's pre-validated default sequential blue
+  ramp for the heat map's rate colour scale, rather than deriving and
+  validating a new ramp matching the app's purple `--accent` brand
+  colour — the blue ramp is already proven accessible (CVD/contrast),
+  and inventing+validating a custom ramp was out of scope for this
+  pass. Revisit if brand consistency becomes a priority later; it's a
+  palette-constant swap plus a re-run of `validate_palette.js`, not a
+  structural change.
+- OA-70: dual-magnitude encoding (rate = one sequential hue via cell
+  background; usage = bar height, never a second hue) chosen to satisfy
+  both the product requirement (background=rate, foreground=usage) and
+  the dataviz skill's "never two magnitudes on one channel" rule
+  simultaneously, rather than treating them as competing constraints.
+- OA-71/OA-72: `/like-for-like`'s comparison tariff can only be
+  auto-resolved for the Agile family (`comparisonFamily=agile`, reusing
+  OA-22's region lookup) — any other comparison tariff must be supplied
+  as an explicit, already region-qualified Octopus tariff code, rather
+  than guessing other families' "currently on sale" product-code
+  conventions, which `tariffClassification.js` itself documents as
+  unconfirmed for anything but Agile. `/compare`'s UI reflects this: one
+  Agile button plus a free-text tariff-code field, not a dropdown of
+  every family.
+- OA-74: left `/actual` and `/compare` as their own standalone nav
+  items/routes alongside My Savings now embedding the same two
+  components, rather than collapsing them into My Savings only — they
+  remain useful as direct, shareable deep links, and the ticket only
+  asked for Cheapest Times' retirement and My Savings' content, not a
+  nav redesign of OA-71/72's own entries. Revisit if three nav items
+  showing overlapping content starts to read as cluttered.
+- OA-74: `applianceProfile.ts` (and its test) is now unused by any page
+  (both its consumers — CheapestWindowPage and My Savings' shifting
+  selector — were retired) but deliberately kept rather than deleted:
+  it's named in Steve's roadmap as the basis for the upcoming
+  "appliances/household setup" step and OA-73's evidence hierarchy
+  already builds on its `DataSource` tiers.
 - OA-69: resolved OA-68 by building the canonical model OA-69 asked
   for directly, rather than patching the narrower bug first and
   rebuilding it properly second — the two tickets are the same piece
