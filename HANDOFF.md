@@ -8,9 +8,64 @@ OA-75 and OA-76 built, gap-closed against their actual Jira acceptance
 criteria, and transitioned to Done; OA-81 (household appliance setup)
 created by Steve directly in Jira and built this session; all three
 merged to `main` via PR #26 and deployed to prod (Deploy server +
-Deploy beta both green); OA-65 not started)_
+Deploy beta both green); OA-82 (public landing page prerendering)
+built this session and merged/deployed to prod; OA-65 not started)_
 
 ## Current task (latest)
+
+**OA-82** ("Make public landing page externally readable without app
+execution") — build-time prerendering of the root URL so external
+tools (crawlers, link previews, review agents, `curl`) see real
+content without running the React app:
+
+- `src/entry-server.tsx`: a build-time-only entry point (never shipped
+  to the browser — it's not imported from `main.tsx`/`App.tsx`) that
+  renders the real `LandingPage`/`LandingDemo`/`HeatMap` components
+  (wrapped in a `MemoryRouter` and a minimal signed-out header, since
+  `AuthContext` initialises Firebase and isn't needed — the route this
+  stands in for is only ever shown signed-out, per `App.tsx`'s
+  `HomeRoute`) to a static HTML string via `renderToStaticMarkup`. This
+  reuses the actual landing components/copy rather than hand-maintaining
+  a separate marketing page, per the ticket's explicit constraint.
+- `scripts/prerender.mjs`: runs after `vite build` (wired into
+  `npm run build`). Uses Vite's programmatic `build()` API to compile
+  `entry-server.tsx` to a throwaway Node SSR bundle (`.prerender-ssr/`,
+  gitignored, deleted after use), imports it, calls `renderLandingPage()`,
+  and bakes the resulting HTML into `dist/index.html`'s `<div id="root">`
+  — plus adds canonical URL, Open Graph and Twitter-card meta tags.
+  `createRoot().render()` in `main.tsx` is unchanged and still fully
+  replaces this content on hydration, so the interactive app is
+  untouched when JS does run.
+- No change to other routes — only the root/landing document gets
+  prerendered, per the ticket's scope (public marketing surface, not
+  authenticated app routes).
+- Verified: `npm run build` produces `dist/index.html` containing the
+  real heading/copy/CTA text and metadata (checked by reading the
+  built file directly, and via `vite preview` + `curl`, i.e. no JS
+  execution); build/lint/test/check-bundle all pass. Did **not** verify
+  in an actual browser (no Playwright browser available in this
+  session for the installed `@playwright/test` version) — the
+  mount-and-replace behaviour is standard `createRoot` semantics, not
+  new logic, so this is a low-risk gap rather than an open question.
+
+### Decisions
+
+- Prerendered only the root/landing document, not a general SSG/SSR
+  setup for the whole app — nothing else in the ticket's acceptance
+  criteria needed it, and the rest of the app is authenticated.
+- Used `renderToStaticMarkup` (not `hydrateRoot` on the client) because
+  `main.tsx` already does a plain `createRoot().render()` replace; this
+  keeps the client code and bundle untouched and avoids SSR/CSR markup-
+  mismatch warnings, at the cost of a (currently invisible, sub-paint)
+  content replace rather than true hydration.
+- Built the SSR entry via Vite's programmatic API with `configFile:
+  false` inside `scripts/prerender.mjs`, rather than a separate
+  `vite.config.ssr.ts` or a second CLI invocation — keeps it to one
+  file, and esbuild picks up the `jsx: "react-jsx"` setting from
+  `tsconfig.app.json` directly so `@vitejs/plugin-react` isn't needed
+  for this build.
+
+## Previous task
 
 **OA-81** ("Build household appliance setup for flexible-load modelling")
 built this session, between OA-76 and OA-65 in the build order:
