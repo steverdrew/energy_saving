@@ -1,12 +1,25 @@
 import Database from 'better-sqlite3'
 import { fileURLToPath } from 'node:url'
+import { mkdirSync } from 'node:fs'
 import path from 'node:path'
+import { loadConfig } from './config.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const dbPath = process.env.DATABASE_PATH ?? path.join(__dirname, '..', 'data', 'app.db')
+const { databasePath } = loadConfig()
+const dbPath =
+  databasePath === ':memory:' || path.isAbsolute(databasePath)
+    ? databasePath
+    : path.join(__dirname, '..', databasePath)
+
+if (dbPath !== ':memory:') {
+  mkdirSync(path.dirname(dbPath), { recursive: true })
+}
 
 export const db = new Database(dbPath)
-db.pragma('journal_mode = WAL')
+// WAL needs a real file; an in-memory database (used by tests) stays in the default journal mode.
+if (dbPath !== ':memory:') {
+  db.pragma('journal_mode = WAL')
+}
 db.pragma('foreign_keys = ON')
 
 db.exec(`
