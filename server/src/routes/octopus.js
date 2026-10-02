@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { buildActualPeriod, tariffSegmentsForPeriod } from '../actualPeriod.js'
 import { averageRate, findCheapestWindow } from '../cheapestWindow.js'
 import { decrypt, encrypt } from '../crypto.js'
+import { detectFlexibleLoadEvents } from '../flexibleLoadEvents.js'
 import {
   OctopusAuthError,
   OctopusRequestError,
@@ -10,6 +11,12 @@ import {
   summarizeOctopusAccount,
 } from '../octopusClient.js'
 import { compareCurrentTariffToAgile } from '../savingsComparison.js'
+import {
+  applyMovesToSeries,
+  maxHalfHourlyKwh,
+  scheduleFlexibleLoadEvents,
+  summarizeSeries,
+} from '../shiftingOptimiser.js'
 import { classifyTariff, TARIFF_FAMILY } from '../tariffClassification.js'
 import { eligibilityForFamily } from '../tariffEligibility.js'
 import { determineTariffState } from '../tariffState.js'
@@ -459,6 +466,130 @@ export function createOctopusRouter({
         points: comparison.points,
       },
       differencePence: round2(actual.totalCostPence - comparison.totalCostPence),
+    })
+  })
+
+  // OA-76: "Optimised" -- the same comparison tariff Like-for-like already
+  // repriced the imported window to, with any identified flexible-load
+  // events shifted into cheaper windows (server/src/shiftingOptimiser.js),
+  // per docs/SHIFTING_METHODOLOGY.md (OA-73/OA-75). Mirrors /like-for-like's
+  // own request/response shape rather than refactoring it, so the already-
+  // tested route is never put at risk by a shared-helper change.
+  router.get('/optimised-period', requireFirebaseAuth, async (req, res) => {
+    const result = await loadActualReconstruction(req.firebaseUid)
+    if (result.error) {
+      return res.status(result.error.status).json(result.error.body)
+    }
+    const { record, importStatus, actual } = result
+
+    if (importStatus === 'no_data') {
+      return res.json({ periodFrom: undefined, periodTo: undefined, importStatus, comparisonAvailable: false })
+    }
+
+    const { comparisonTariffCode: rawComparisonTariffCode, comparisonFamily } = req.query
+    let comparisonTariffCode = typeof rawComparisonTariffCode === 'string' ? rawComparisonTariffCode.trim() : ''
+
+    if (comparisonFamily === 'agile') {
+      try {
+        comparisonTariffCode = await fetchActiveAgileTariffCode(regionLetterFromTariffCode(record.tariffCode))
+      } catch {
+        return res.status(502).json({ error: 'Could not reach Octopus right now. Please try again.' })
+      }
+    }
+
+    if (!comparisonTariffCode) {
+      return res.status(400).json({ error: 'comparisonTariffCode or comparisonFamily=agile is required.' })
+    }
+
+    const comparisonClassification = await classifyTariff(comparisonTariffCode, { fetchProductDetails })
+    if (comparisonClassification.comparisonMethod !== 'exact') {
+      return res.json({
+        periodFrom: record.periodFrom,
+        periodTo: record.periodTo,
+        importStatus,
+        comparisonAvailable: false,
+        comparisonMethod: comparisonClassification.comparisonMethod,
+        comparisonTariffCode,
+        comparisonDisplayName: comparisonClassification.displayName,
+      })
+    }
+
+    let comparisonRates
+    try {
+      comparisonRates = await fetchTariffUnitRates(comparisonTariffCode, {
+        periodFrom: record.periodFrom,
+        periodTo: record.periodTo,
+      })
+    } catch {
+      return res.status(502).json({ error: 'Could not reach Octopus right now. Please try again.' })
+    }
+
+    const comparison = buildActualPeriod({
+      consumption: record.consumption,
+      ratesBySegment: [{ tariffCode: comparisonTariffCode, rates: comparisonRates }],
+      periodFrom: record.periodFrom,
+      periodTo: record.periodTo,
+    })
+
+    // Optimised shifts load on top of the SAME tariff Like-for-like already
+    // repriced to -- "same tariff, shifting flexible load" (Y -> Z), never
+    // the customer's actual tariff -- see "Output and attribution".
+    const events = await detectFlexibleLoadEvents(req.firebaseUid)
+    const observedMaxHalfHourlyKwh = maxHalfHourlyKwh(comparison.points)
+    const moves = scheduleFlexibleLoadEvents({ points: comparison.points, events, observedMaxHalfHourlyKwh })
+
+    let optimisedPoints
+    try {
+      optimisedPoints = applyMovesToSeries(comparison.points, moves)
+    } catch {
+      // "If the totals don't match... the result must not be shown" -- a
+      // 500 here means a real bug in the optimiser, never a fabricated
+      // figure shown to the customer.
+      return res.status(500).json({ error: 'Could not build a reliable Optimised result for this period.' })
+    }
+    const optimisedSummary = summarizeSeries(optimisedPoints)
+    const movedEvents = moves.filter((m) => m.moved)
+
+    res.json({
+      periodFrom: record.periodFrom,
+      periodTo: record.periodTo,
+      importStatus,
+      unitRateOnly: true,
+      comparisonAvailable: true,
+      comparisonMethod: comparisonClassification.comparisonMethod,
+      actual: {
+        totalKwh: actual.totalKwh,
+        totalCostPence: actual.totalCostPence,
+        complete: actual.complete,
+      },
+      comparison: {
+        tariffCode: comparisonTariffCode,
+        displayName: comparisonClassification.displayName,
+        totalKwh: comparison.totalKwh,
+        totalCostPence: comparison.totalCostPence,
+        complete: comparison.complete,
+        points: comparison.points,
+      },
+      optimised: {
+        totalKwh: optimisedSummary.totalKwh,
+        totalCostPence: optimisedSummary.totalCostPence,
+        points: optimisedPoints,
+        moves: movedEvents.map((m) => ({
+          applianceType: m.event.applianceType,
+          evidenceTier: m.event.evidenceTier,
+          originSlots: m.originSlots,
+          destinationSlots: m.destinationSlots,
+          beforeCostPence: m.beforeCostPence,
+          afterCostPence: m.afterCostPence,
+        })),
+        eventsConsidered: events.length,
+        // "Every Optimised figure must carry the confidence tier(s)
+        // actually used to produce it" -- [] when nothing moved, never a
+        // fabricated tier for a £0 result.
+        confidenceTiers: [...new Set(movedEvents.map((m) => m.event.evidenceTier))].sort(),
+      },
+      tariffChoiceOpportunityPence: round2(actual.totalCostPence - comparison.totalCostPence),
+      timingOpportunityPence: round2(comparison.totalCostPence - optimisedSummary.totalCostPence),
     })
   })
 

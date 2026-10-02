@@ -13,6 +13,7 @@ import DebugPage from './pages/DebugPage'
 import ExplainerPage from './pages/ExplainerPage'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
+import OptimisedPage from './pages/OptimisedPage'
 import SavingsPage from './pages/SavingsPage'
 
 // The marketing landing page is aimed at signed-out visitors (its only CTA
@@ -44,6 +45,7 @@ function App() {
               <>
                 <NavLink to="/actual">Actual</NavLink>
                 <NavLink to="/compare">Compare</NavLink>
+                <NavLink to="/optimised">Optimised</NavLink>
                 <NavLink to="/savings">My Savings</NavLink>
                 <NavLink to="/account">Account</NavLink>
                 <button type="button" className="app-header__signout" onClick={() => logout()}>
@@ -91,6 +93,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ComparePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/optimised"
+              element={
+                <ProtectedRoute>
+                  <OptimisedPage />
                 </ProtectedRoute>
               }
             />

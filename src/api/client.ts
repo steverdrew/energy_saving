@@ -320,6 +320,51 @@ export interface LikeForLikeResult {
   differencePence?: number
 }
 
+// OA-76: "Optimised" -- the same comparison tariff Like-for-like already
+// repriced the window to, with any identified flexible-load events shifted
+// into cheaper windows (docs/SHIFTING_METHODOLOGY.md, OA-73/OA-75).
+// evidenceTier mirrors the methodology doc's numbering (2 = user-supplied
+// appliance info, 3 = per-event user confirmation, 4 = generic default;
+// 1 and 5 aren't used by the first implementation). moves/eventsConsidered/
+// confidenceTiers are always empty/0/[] until household appliance data
+// exists (see server/src/flexibleLoadEvents.js) -- a genuine £0 timing
+// opportunity, never a guessed one.
+export interface OptimisedMove {
+  applianceType: string
+  evidenceTier: 2 | 3 | 4
+  originSlots: string[]
+  destinationSlots: string[]
+  beforeCostPence: number
+  afterCostPence: number
+}
+
+export interface OptimisedSide {
+  totalKwh: number
+  totalCostPence: number
+  points: ActualPeriodPoint[]
+  moves: OptimisedMove[]
+  eventsConsidered: number
+  confidenceTiers: (2 | 3 | 4)[]
+}
+
+export interface OptimisedPeriodResult {
+  periodFrom?: string
+  periodTo?: string
+  importStatus: ActualPeriodImportStatus
+  unitRateOnly?: true
+  comparisonAvailable: boolean
+  comparisonMethod?: 'exact' | 'bounded_estimate' | 'unavailable'
+  comparisonTariffCode?: string
+  comparisonDisplayName?: string | null
+  actual?: { totalKwh: number; totalCostPence: number; complete: boolean }
+  comparison?: LikeForLikeSide
+  optimised?: OptimisedSide
+  // X - Y: switching tariff, same behaviour. Y - Z: same tariff, shifting
+  // flexible load. Always shown together -- see "Output and attribution".
+  tariffChoiceOpportunityPence?: number
+  timingOpportunityPence?: number
+}
+
 export const api = {
   octopus: {
     connect: async (input: { apiKey: string; accountNumber: string }) =>
@@ -377,6 +422,12 @@ export const api = {
       if (comparison.comparisonFamily) params.set('comparisonFamily', comparison.comparisonFamily)
       if (comparison.comparisonTariffCode) params.set('comparisonTariffCode', comparison.comparisonTariffCode)
       return request<LikeForLikeResult>(`/api/octopus/like-for-like?${params}`, { headers: await authHeaders() })
+    },
+    optimisedPeriod: async (comparison: { comparisonTariffCode?: string; comparisonFamily?: 'agile' }) => {
+      const params = new URLSearchParams()
+      if (comparison.comparisonFamily) params.set('comparisonFamily', comparison.comparisonFamily)
+      if (comparison.comparisonTariffCode) params.set('comparisonTariffCode', comparison.comparisonTariffCode)
+      return request<OptimisedPeriodResult>(`/api/octopus/optimised-period?${params}`, { headers: await authHeaders() })
     },
   },
   compatibility: {

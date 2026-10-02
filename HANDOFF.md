@@ -4,16 +4,44 @@ _Last updated: 2026-10-02 (core loop via PR #14; backlog audit +
 polish tier via PR #15; deeper feature tier via PR #16/#17; beta
 mop-up cluster OA-63/64/68/69/66/67 merged via PR #18; revised build
 order OA-70/71/72/74 merged via PR #19/#20/#21/#22, all Done in Jira;
-OA-73 delivered as docs/SHIFTING_METHODOLOGY.md, awaiting Steve's
-sign-off; OA-65 not started)_
+OA-75 (methodology versioning, removes the sign-off gate) and OA-76
+(Optimised implementation) both added to Jira and OA-76 built this
+session; OA-65 not started)_
 
 ## Current task
 
-Steve revised the build order after the mop-up cluster: **OA-69 (done)
-→ OA-70 → OA-71 → OA-72 → OA-74 → OA-73 → [new implementation ticket]
-→ appliances/household setup → OA-65**, replacing the old "My Savings
-+ Cheapest Times" product surface with Actual → Compare → (eventually)
-Optimised → Plan. OA-70 through OA-74 are all merged and Done:
+Steve revised the build order after the mop-up cluster, then again
+after OA-73: **OA-69 (done) → OA-70 → OA-71 → OA-72 → OA-74 → OA-73 →
+OA-75 → OA-76 → appliances/household setup → OA-65**, replacing the
+old "My Savings + Cheapest Times" product surface with Actual →
+Compare → Optimised → Plan. OA-70 through OA-76 are all merged and
+Done:
+
+- **OA-75**: `docs/SHIFTING_METHODOLOGY.md` is now an explicitly
+  versioned working model (a "Version history" section, dated entries)
+  rather than a one-time Steve-sign-off gate — removes the blocker
+  OA-73 had left in place. No code change; doc-only.
+- **OA-76**: "Optimised" built per the methodology doc's model exactly:
+  `server/src/shiftingOptimiser.js` (pure scheduling engine — atomic
+  contiguous moves for dishwasher/washing machine/tumble dryer,
+  splittable cheapest-slots moves for the dehumidifier, evidence-tier
+  ordered placement, a household-max-half-hourly-kWh concurrency cap,
+  energy-preservation assertion that throws rather than show a wrong
+  total), `server/src/flexibleLoadEvents.js` (the event source —
+  deliberately always `[]` today, see Decisions),
+  `GET /api/octopus/optimised-period` (new route in
+  `server/src/routes/octopus.js`, mirrors `/like-for-like`'s
+  request/response shape rather than refactoring it), and
+  `src/pages/OptimisedPage.tsx` (new `/optimised` route/nav item,
+  third `HeatMap` series via `groupSlotsByLondonDay`, both the
+  tariff-choice and timing opportunity figures shown together per
+  "Output and attribution"). All four of the doc's deterministic
+  fixtures are implemented as tests
+  (`server/test/shiftingOptimiser.test.js`), plus a route test
+  confirming Optimised degrades cleanly to Like-for-like's own figures
+  (£0 timing opportunity) with no events supplied
+  (`server/test/optimisedPeriodRoute.test.js`). 130 server tests pass,
+  29 web tests pass, build/lint/bundle-check all clean.
 
 - **OA-70**: shared 30-day heat map component (`src/components/HeatMap.tsx`
   + `heatMapMath.ts`), tariff-agnostic, dataviz-skill-validated sequential
@@ -29,13 +57,14 @@ Optimised → Plan. OA-70 through OA-74 are all merged and Done:
   to `/savings` rather than 404ing; backend capability (the route itself,
   `findCheapestWindow`/`averageRate`, `/savings-result`) untouched. PR #22.
 - **OA-73**: delivered as `docs/SHIFTING_METHODOLOGY.md` — the shifting
-  model, constraints, evidence hierarchy and fixtures, explicitly no
-  code. Per the ticket, needs Steve's sign-off before any implementation
-  ticket is opened against it (same pattern as `SAVINGS_METHODOLOGY.md`).
+  model, constraints, evidence hierarchy and fixtures. Originally gated
+  on a one-time Steve sign-off before any implementation ticket could be
+  opened; OA-75 removed that gate (see above), and OA-76 is now built
+  directly against it.
 
-Not yet started: a new implementation ticket for Optimised (to be
-created once OA-73 is signed off), appliances/household setup, and
-OA-65 (Today/Tomorrow schedule + heat map, now explicitly last in the
+Not yet started: appliances/household setup (needed before Optimised's
+`eventsConsidered` becomes non-zero for a real user) and OA-65
+(Today/Tomorrow schedule + heat map, now explicitly last in the
 sequence).
 
 (Earlier: Steve identified a mop-up cluster of real beta bugs with
@@ -526,6 +555,53 @@ merged via PR #18 and Done in Jira before the above.)
 
 ## Decisions
 
+- OA-76: `detectFlexibleLoadEvents` (`server/src/flexibleLoadEvents.js`)
+  always returns `[]` — there's no appliance/household declaration store
+  in this app yet (that's its own, later ticket), and tier 5 (inferring a
+  flexible-shaped bump from consumption alone, no appliance declared) is
+  explicitly ruled out for the first implementation by the methodology
+  doc itself. This means Optimised is fully built and tested but always
+  equals Like-for-like (£0 timing opportunity) for a real user today —
+  the honest outcome the doc calls for, not a bug. Swapping in a real
+  lookup once household data exists needs no change to the scheduling
+  engine or route.
+- OA-76: Optimised reprices against the same comparison tariff
+  Like-for-like already resolved (`comparisonFamily=agile` or an
+  explicit tariff code), never the customer's actual tariff — "Output
+  and attribution" in the methodology doc is explicit that the timing
+  opportunity (Y→Z) is "same tariff, shifting flexible load", distinct
+  from the tariff-choice opportunity (X→Y).
+- OA-76: `/optimised-period` duplicates `/like-for-like`'s
+  request/response-building logic (comparison tariff resolution,
+  `comparisonMethod !== 'exact'` handling, rate fetch) rather than
+  extracting a shared helper — `/like-for-like` already has a passing
+  test suite pinned to its exact response shape, and refactoring it
+  purely to share code with a new route risked that for no real benefit
+  at this app's size. Revisit if a third consumer of the same logic
+  shows up.
+- OA-76: the concurrency cap (`maxHalfHourlyKwh`) is checked against each
+  destination slot's actual whole-house kWh plus already-committed
+  flexible load, not flexible load alone — a stricter reading than the
+  doc's literal wording ("across all moved appliances combined") but
+  never a worse one: it can only prevent a move the looser reading would
+  have allowed, never approve one the doc wouldn't. Chosen because the
+  looser reading could let modelled flexible load overlap base load
+  (lighting, fridge, etc.) past what the household has ever actually
+  drawn in a half-hour, which is the exact implausibility the cap exists
+  to rule out.
+- OA-76: for the splittable dehumidifier, "a maximum power/rate
+  constraint" (the doc's phrase, written with EV/battery charging in
+  mind) is enforced via the same household concurrency cap rather than a
+  separate per-appliance power rating — no generic default power rating
+  exists for a dehumidifier in `applianceProfile.ts`, and inventing one
+  would be exactly the kind of unvalidated default the doc's evidence
+  hierarchy warns against. Revisit if a real dehumidifier power rating
+  becomes available as tier 2/4 evidence.
+- OA-75: no formal "signed off by Steve, <date>" line was added to
+  `SHIFTING_METHODOLOGY.md` (unlike `SAVINGS_METHODOLOGY.md`'s pattern)
+  — the ticket's own point is to replace that one-time gate with a
+  "Version history" section recording dated changes instead, so adding
+  a sign-off line would reintroduce the pattern being removed.
 - OA-70: used the dataviz skill's pre-validated default sequential blue
   ramp for the heat map's rate colour scale, rather than deriving and
   validating a new ramp matching the app's purple `--accent` brand
