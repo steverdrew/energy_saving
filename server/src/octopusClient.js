@@ -54,6 +54,11 @@ export function productCodeFromTariffCode(tariffCode) {
   return tariffCode.split('-').slice(2, -1).join('-')
 }
 
+/** The single-letter GSP region code is always the last segment. */
+export function regionLetterFromTariffCode(tariffCode) {
+  return tariffCode.split('-').at(-1)
+}
+
 /**
  * Validates an Octopus account number + API key by fetching the account
  * from Octopus's own API, and returns the raw account payload. Throws
@@ -150,4 +155,34 @@ export async function fetchTariffUnitRates(tariffCode, { periodFrom, periodTo })
     validTo: r.valid_to,
     unitRateIncVatPence: r.value_inc_vat,
   }))
+}
+
+/**
+ * OA-22 MVP: finds the Octopus Agile product currently on sale and builds
+ * its tariff code for the given GSP region letter. Octopus retires and
+ * replaces Agile's underlying product every few months (e.g.
+ * `AGILE-24-10-01`), so the code can't be hardcoded or derived from the
+ * user's own (non-Agile) tariff code -- it has to be looked up each time.
+ * Tariff rates are public product data -- no API key needed.
+ */
+export async function fetchActiveAgileTariffCode(regionLetter) {
+  const now = Date.now()
+  const products = await fetchAllPages(`${OCTOPUS_API_BASE}/products/?page_size=100`, {})
+
+  const activeAgileProducts = products.filter((p) => {
+    if (typeof p.code !== 'string' || !p.code.startsWith('AGILE-')) return false
+    if (p.available_from && new Date(p.available_from).getTime() > now) return false
+    if (p.available_to && new Date(p.available_to).getTime() <= now) return false
+    return true
+  })
+
+  if (activeAgileProducts.length === 0) {
+    throw new OctopusRequestError('No active Octopus Agile product found.')
+  }
+
+  activeAgileProducts.sort(
+    (a, b) => new Date(b.available_from ?? 0).getTime() - new Date(a.available_from ?? 0).getTime(),
+  )
+
+  return `E-1R-${activeAgileProducts[0].code}-${regionLetter}`
 }

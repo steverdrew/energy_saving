@@ -4,12 +4,12 @@ _Last updated: 2026-10-02 (OA-59, OA-58, OA-6 implemented this session)_
 
 ## Current task
 
-None in progress. OA-59 (stale connection state), OA-58 (authenticated
-home state) and OA-6 (import tariff + consumption history) are
-implemented, tested, and pushed to `claude/dazzling-ritchie-nofudq`.
-Not yet deployed/verified live on beta by Steve. Next work per Steve's
-stated roadmap order is OA-21 (savings methodology/trust copy) and
-OA-22 (compare current tariff vs Agile using the now-imported history).
+None in progress. OA-59, OA-58, OA-6, and the codeable part of OA-22
+(current-tariff-vs-Agile comparison maths) are implemented, tested,
+and pushed to `claude/dazzling-ritchie-nofudq`. OA-21 has a drafted
+methodology/trust copy (`docs/SAVINGS_METHODOLOGY.md`) awaiting Steve's
+sign-off — it's a sign-off gate, not something I can mark done myself.
+Nothing is deployed/verified live on beta yet.
 
 ## State
 
@@ -68,18 +68,28 @@ OA-22 (compare current tariff vs Agile using the now-imported history).
 
 ## Next step
 
-1. Steve to review real imported data (point counts, actual rate/usage
-   shape) on beta before OA-22's comparison maths gets built against
-   it — this was the explicit gate before building the comparison.
-2. OA-21 (savings methodology/trust copy) and OA-22 (current tariff vs
-   Agile comparison) are next per Steve's stated order; OA-22 can now
-   read real history from the `octopusImports` Firestore doc instead of
-   needing fixtures.
-3. Manually spot-check OA-59/OA-58/OA-6 live on beta once deployed:
+1. **Steve: read and respond to `docs/SAVINGS_METHODOLOGY.md`** —
+   three open questions at the bottom (standing charge exclusion,
+   30-day window, trust copy wording). Nothing £-facing ships until
+   this is agreed; see "No £ savings claims until OA-21 passes" below.
+2. Once OA-21 is agreed, wire `server/src/savingsComparison.js` +
+   `fetchActiveAgileTariffCode` into an actual endpoint (reading from
+   the `octopusImports` Firestore doc OA-6 writes) and build OA-8's
+   result screen against it. Both pieces exist and are tested, just
+   not connected to any route yet — intentionally, per the gate above.
+3. **fetchActiveAgileTariffCode (`server/src/octopusClient.js`) has
+   never been run against the real Octopus API** — this sandbox has no
+   network access to `api.octopus.energy` (outbound is proxied and
+   that host isn't allow-listed). It's built from the documented
+   `/v1/products/` shape and unit-tested with a mocked `fetch`, but
+   Steve should sanity-check it against a real response (e.g. hit
+   `https://api.octopus.energy/v1/products/?page_size=100` directly)
+   before relying on it.
+4. Manually spot-check OA-59/OA-58/OA-6 live on beta once deployed:
    Account page reflects real connection state after a refresh; `/`
    redirects when signed in; Import button works with a real account
    and real Octopus history comes back sane.
-4. Update README.md's "Server deployment (Cloud Run)" checklist to match
+5. Update README.md's "Server deployment (Cloud Run)" checklist to match
    the real working IAM configuration (listed below) — currently stale,
    purely a documentation cleanup, no urgency.
 
@@ -121,6 +131,13 @@ OA-22 (compare current tariff vs Agile using the now-imported history).
 - OA-6: the Cloud Run runtime service account already has "Cloud
   Datastore User", which covers the new `octopusImports` collection too
   — no IAM change needed for this feature.
+- OA-22: scoped to current-tariff-vs-Agile only (Steve's explicit
+  instruction — not every Octopus tariff). Unit rates only, no standing
+  charge, over whatever window OA-6 imported — see
+  `docs/SAVINGS_METHODOLOGY.md` for the full scope statement and why.
+- OA-21: drafted the methodology/trust copy myself rather than waiting,
+  since it's cheap to draft and expensive to block on — but did not
+  mark it agreed/passed. That call is Steve's, not mine.
 
 ## Constraints and preferences
 
