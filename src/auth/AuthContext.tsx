@@ -6,18 +6,9 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { api, type AuthUser, type SignupInput } from '../api/client'
 
-export interface AuthUser {
-  id: string
-  email: string
-}
-
-interface SignupInput {
-  email: string
-  password: string
-  acceptedTerms: boolean
-  acceptedPrivacy: boolean
-}
+export type { AuthUser }
 
 interface AuthContextValue {
   user: AuthUser | null
@@ -30,61 +21,34 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
-async function parseJsonOrThrow(res: Response) {
-  const body = await res.json().catch(() => null)
-  if (!res.ok) {
-    throw new Error(body?.error ?? 'Something went wrong')
-  }
-  return body
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/auth/me', { credentials: 'include' })
-      .then((res) => (res.ok ? res.json() : null))
+    api.auth
+      .me()
       .then((body) => setUser(body?.user ?? null))
       .finally(() => setLoading(false))
   }, [])
 
   const signup = useCallback(async (input: SignupInput) => {
-    const res = await fetch('/api/auth/signup', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    })
-    const body = await parseJsonOrThrow(res)
-    setUser(body.user)
+    const body = await api.auth.signup(input)
+    setUser(body?.user ?? null)
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    })
-    const body = await parseJsonOrThrow(res)
-    setUser(body.user)
+    const body = await api.auth.login(email, password)
+    setUser(body?.user ?? null)
   }, [])
 
   const logout = useCallback(async () => {
-    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+    await api.auth.logout()
     setUser(null)
   }, [])
 
   const deleteAccount = useCallback(async () => {
-    const res = await fetch('/api/auth/account', {
-      method: 'DELETE',
-      credentials: 'include',
-    })
-    if (!res.ok) {
-      const body = await res.json().catch(() => null)
-      throw new Error(body?.error ?? 'Could not delete account')
-    }
+    await api.auth.deleteAccount()
     setUser(null)
   }, [])
 
