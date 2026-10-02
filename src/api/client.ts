@@ -81,6 +81,19 @@ export interface SavingsResult {
   agileTariffCode: string
 }
 
+// OA-40: only present when energyKwh was passed to cheapestWindow() and
+// the account has imported usage history -- quantifies the £ saving of
+// running the appliance in the cheapest window vs. the current tariff's
+// average rate, for one cycle. unitRateOnly mirrors SavingsResult's flag.
+export interface CheapestWindowRecommendation {
+  energyKwh: number
+  averageCurrentTariffRateIncVatPence: number
+  costAtCheapestPence: number
+  costAtCurrentTariffPence: number
+  savingPence: number
+  unitRateOnly: true
+}
+
 // OA-9: a forward-looking cheapest contiguous Agile window for a given
 // appliance cycle duration -- distinct from SavingsResult, which looks
 // backward at already-imported history.
@@ -93,6 +106,7 @@ export type CheapestWindowResult =
       endsAt: string
       averageUnitRateIncVatPence: number
       slotsUsed: number
+      recommendation: CheapestWindowRecommendation | null
     }
 
 export const api = {
@@ -121,10 +135,12 @@ export const api = {
       request<OctopusImportStatus>('/api/octopus/import-status', { headers: await authHeaders() }),
     savingsResult: async () =>
       request<SavingsResult>('/api/octopus/savings-result', { headers: await authHeaders() }),
-    cheapestWindow: async (durationMinutes: number) =>
-      request<CheapestWindowResult>(
-        `/api/octopus/cheapest-window?durationMinutes=${encodeURIComponent(durationMinutes)}`,
-        { headers: await authHeaders() },
-      ),
+    cheapestWindow: async (durationMinutes: number, energyKwh?: number) => {
+      const params = new URLSearchParams({ durationMinutes: String(durationMinutes) })
+      if (energyKwh != null) params.set('energyKwh', String(energyKwh))
+      return request<CheapestWindowResult>(`/api/octopus/cheapest-window?${params}`, {
+        headers: await authHeaders(),
+      })
+    },
   },
 }

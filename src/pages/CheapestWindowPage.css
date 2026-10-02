@@ -52,3 +52,13 @@
   font-size: 14px;
   opacity: 0.85;
 }
+
+.cheapest-window-page__saving {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.cheapest-window-page__saving p:first-child {
+  font-size: 16px;
+}

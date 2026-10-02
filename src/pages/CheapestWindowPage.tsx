@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ApiError, api, type CheapestWindowResult } from '../api/client'
 import {
   DEFAULT_APPLIANCE_PROFILES,
   isEstimate,
   type ApplianceType,
 } from '../domain/applianceProfile'
+import { formatGbp } from '../format'
 import './CheapestWindowPage.css'
 
 type Phase = 'loading' | 'result' | 'not-found' | 'error'
@@ -45,7 +47,7 @@ function CheapestWindowPage() {
     setPhase('loading')
 
     api.octopus
-      .cheapestWindow(profile.typicalProgrammeDurationMinutes.value)
+      .cheapestWindow(profile.typicalProgrammeDurationMinutes.value, profile.typicalEnergyPerCycleKwh.value)
       .then((res) => {
         if (cancelled || !res) return
         setResult(res)
@@ -107,6 +109,33 @@ function CheapestWindowPage() {
           )}
           {profile.safety.notes && (
             <p className="cheapest-window-page__caution">{profile.safety.notes}</p>
+          )}
+
+          {result.recommendation && result.recommendation.savingPence > 0 && (
+            <div className="cheapest-window-page__saving">
+              <p>
+                Running then instead of on your current tariff's average rate would cost about{' '}
+                <strong>{formatGbp(result.recommendation.costAtCheapestPence)}</strong> instead of{' '}
+                <strong>{formatGbp(result.recommendation.costAtCurrentTariffPence)}</strong> — a saving
+                of about <strong>{formatGbp(result.recommendation.savingPence)}</strong> this cycle.
+              </p>
+              <p className="cheapest-window-page__caveat">
+                Estimate based on unit rates only, for one cycle — not a per-year figure, and doesn't
+                include the standing charge.
+              </p>
+            </div>
+          )}
+          {result.recommendation && result.recommendation.savingPence <= 0 && (
+            <p className="cheapest-window-page__caveat">
+              Based on your current tariff's average rate, this particular window wouldn't actually
+              cost less than what you're already paying.
+            </p>
+          )}
+          {!result.recommendation && (
+            <p className="cheapest-window-page__caveat">
+              <Link to="/connect-octopus">Import your usage history</Link> to see how much running it
+              then could save you.
+            </p>
           )}
         </div>
       )}

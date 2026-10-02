@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { findCheapestWindow } from '../src/cheapestWindow.js'
+import { averageRate, findCheapestWindow } from '../src/cheapestWindow.js'
 
 function slot(validFrom, unitRateIncVatPence) {
   return { validFrom, unitRateIncVatPence }
@@ -72,4 +72,13 @@ test('returns null when no window is long enough', () => {
 test('returns null for empty rates or non-positive duration', () => {
   assert.equal(findCheapestWindow([], 60), null)
   assert.equal(findCheapestWindow([slot('2026-10-02T00:00:00Z', 10)], 0), null)
+})
+
+test('averageRate returns the simple mean unit rate', () => {
+  const rates = [slot('2026-10-02T00:00:00Z', 10), slot('2026-10-02T00:30:00Z', 20)]
+  assert.equal(averageRate(rates), 15)
+})
+
+test('averageRate returns null for an empty series', () => {
+  assert.equal(averageRate([]), null)
 })

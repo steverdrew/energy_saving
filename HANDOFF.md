@@ -1,20 +1,22 @@
 # HANDOFF
 
-_Last updated: 2026-10-02 (OA-59, OA-58, OA-6, OA-21, OA-22, OA-8, OA-9/OA-30/OA-31 implemented this session)_
+_Last updated: 2026-10-02 (OA-59, OA-58, OA-6, OA-21, OA-22, OA-8, OA-9/OA-30/OA-31, OA-40/OA-43 implemented this session)_
 
 ## Current task
 
 None in progress. OA-21's methodology was reviewed and **signed off by
 Steve** (2026-10-02, see `docs/SAVINGS_METHODOLOGY.md` Decisions). With
-that gate cleared, OA-22's comparison maths is wired into a real
-`GET /api/octopus/savings-result` endpoint, and OA-8's result screen
-(`src/pages/SavingsPage.tsx`) shows a real £ estimate. OA-9/OA-30/OA-31
-(cheapest Agile window + appliance profiles + manual guidance) is also
-built: `GET /api/octopus/cheapest-window` plus
-`src/pages/CheapestWindowPage.tsx`. OA-59, OA-58, OA-6, OA-21, OA-22,
-OA-8, OA-9, OA-30, OA-31 are all implemented, tested, and pushed to
-`claude/dazzling-ritchie-nofudq`. Nothing is deployed/verified live on
-beta yet.
+that gate cleared: OA-22's comparison maths is wired into a real
+`GET /api/octopus/savings-result` endpoint, OA-8's result screen
+(`src/pages/SavingsPage.tsx`) shows a real £ estimate, OA-9/OA-30/OA-31
+(cheapest Agile window + appliance profiles + manual guidance) is built
+(`GET /api/octopus/cheapest-window` + `CheapestWindowPage.tsx`), and
+OA-40/OA-43 (recommend an action with its £ value, "run X at Y save
+£Z" copy) extends that same endpoint and page with a per-cycle £
+comparison against the current tariff. OA-59, OA-58, OA-6, OA-21,
+OA-22, OA-8, OA-9, OA-30, OA-31, OA-40, OA-43 are all implemented,
+tested, and pushed to `claude/dazzling-ritchie-nofudq`. Nothing is
+deployed/verified live on beta yet.
 
 ## State
 
@@ -57,6 +59,22 @@ beta yet.
   typical cycle duration and shows "run your X between A and B",
   flagging estimated durations and any safety note (e.g. "don't leave
   a tumble dryer unattended") from the profile.
+- **OA-40/OA-43**: the same `/cheapest-window` endpoint takes an
+  optional `energyKwh` param (the frontend's own appliance catalog
+  value, same pattern as `durationMinutes` -- server stays generic).
+  When given, and the account has imported usage history, the
+  response's `recommendation` quantifies one cycle's £ cost at the
+  cheapest window vs. the current tariff's average rate
+  (`averageRate` in `server/src/cheapestWindow.js`), flagged
+  `unitRateOnly: true` like `SavingsResult`. No import yet, or
+  `energyKwh` omitted → `recommendation: null`, and the page falls
+  back to just the window (no £ claim). `CheapestWindowPage` renders
+  the OA-43 copy ("running then instead of now would cost about £C
+  instead of £F — a saving of about £S this cycle") only when there's
+  an actual saving, and an honest "wouldn't cost less" line when there
+  isn't — never silence either way. Deliberately per-cycle, not
+  annualised: this is a single-action recommendation, and there's no
+  real basis yet for how often a given cycle actually runs.
 - **OA-21/OA-22/OA-8**: "See my savings" now returns a real result
   instead of the old `501` stub. `GET /api/octopus/savings-result`
   reads the imported consumption + current-tariff rates
@@ -114,12 +132,15 @@ beta yet.
 2. Manually spot-check the full chain live on beta once deployed:
    connect → import → "See my savings" shows a real, sane £ figure
    with the caveat visible; Cheapest Times shows a real upcoming
-   window for at least one appliance; Account page reflects real
-   connection state after a refresh; `/` redirects when signed in.
-3. Pick up the next roadmap items: OA-40 (recommend the first action
-   with £ value) and OA-43 ("run X at Y, save £Z" explain copy) — both
-   build on OA-8 (the £ result) and OA-9/OA-31 (the cheapest window)
-   now both existing; then OA-41 (running saved-so-far total).
+   window *and* a real per-cycle £ saving for at least one appliance
+   once usage is imported; Account page reflects real connection state
+   after a refresh; `/` redirects when signed in.
+3. Pick up the next roadmap item: OA-41 (running saved-so-far total) —
+   needs a decision on what "saved so far" even means given nothing
+   tracks whether a user actually acted on a recommendation yet; worth
+   raising with Steve before building rather than guessing. Then OA-55
+   (Works with / Coming soon) and OA-56/OA-57 (compatibility, real
+   beta feedback).
 4. Update README.md's "Server deployment (Cloud Run)" checklist to match
    the real working IAM configuration (listed below) — currently stale,
    purely a documentation cleanup, no urgency.
@@ -192,6 +213,15 @@ beta yet.
   values as-is — not real research, just reasonable UK household
   averages, and the model already flags them as estimates via
   `isEstimate`/`DataSource`.
+- OA-40: deliberately per-cycle, not annualised like OA-8's result —
+  there's no real basis for how often a user actually runs a given
+  appliance, so annualising it would be inventing a frequency
+  assumption rather than reading one from data. If OA-41 or a later
+  ticket wants an annual figure here, that needs its own explicit
+  frequency input (e.g. "how many times a week"), not a guess.
+- Extracted `src/format.ts` (`formatGbp`) once the exact same pence→£
+  formatter appeared in both `SavingsPage` and `CheapestWindowPage` —
+  real duplication, not speculative, so worth the shared module.
 
 ## Constraints and preferences
 

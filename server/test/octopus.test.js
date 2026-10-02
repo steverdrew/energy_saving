@@ -312,4 +312,52 @@ test('GET /cheapest-window returns the cheapest Agile window for the requested d
   assert.equal(res.body.startsAt, '2026-09-01T00:00:00Z')
   assert.equal(res.body.averageUnitRateIncVatPence, 10)
   assert.equal(res.body.slotsUsed, 1)
+  assert.equal(res.body.recommendation, null)
+})
+
+test('GET /cheapest-window rejects a non-positive energyKwh', async () => {
+  await request(app)
+    .post('/api/octopus/connect')
+    .set('Authorization', 'Bearer user-r')
+    .send({ accountNumber: 'A-12345678', apiKey: 'good-key' })
+
+  const res = await request(app)
+    .get('/api/octopus/cheapest-window?durationMinutes=30&energyKwh=0')
+    .set('Authorization', 'Bearer user-r')
+  assert.equal(res.status, 400)
+})
+
+test('GET /cheapest-window omits the recommendation when energyKwh is given but nothing is imported yet', async () => {
+  await request(app)
+    .post('/api/octopus/connect')
+    .set('Authorization', 'Bearer user-s')
+    .send({ accountNumber: 'A-12345678', apiKey: 'good-key' })
+
+  const res = await request(app)
+    .get('/api/octopus/cheapest-window?durationMinutes=30&energyKwh=1')
+    .set('Authorization', 'Bearer user-s')
+  assert.equal(res.status, 200)
+  assert.equal(res.body.found, true)
+  assert.equal(res.body.recommendation, null)
+})
+
+test('GET /cheapest-window includes a £ recommendation once usage history is imported', async () => {
+  await request(app)
+    .post('/api/octopus/connect')
+    .set('Authorization', 'Bearer user-t')
+    .send({ accountNumber: 'A-12345678', apiKey: 'good-key' })
+  await request(app).post('/api/octopus/import').set('Authorization', 'Bearer user-t')
+
+  const res = await request(app)
+    .get('/api/octopus/cheapest-window?durationMinutes=30&energyKwh=1')
+    .set('Authorization', 'Bearer user-t')
+
+  assert.equal(res.status, 200)
+  assert.equal(res.body.found, true)
+  // current tariff fixture rates average: (24.1 + 19.8) / 2 = 21.95p.
+  assert.equal(res.body.recommendation.averageCurrentTariffRateIncVatPence, 21.95)
+  assert.equal(res.body.recommendation.costAtCheapestPence, 10)
+  assert.equal(res.body.recommendation.costAtCurrentTariffPence, 21.95)
+  assert.equal(res.body.recommendation.savingPence, 11.95)
+  assert.equal(res.body.recommendation.unitRateOnly, true)
 })

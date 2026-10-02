@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { findCheapestWindow } from '../cheapestWindow.js'
+import { averageRate, findCheapestWindow } from '../cheapestWindow.js'
 import { decrypt, encrypt } from '../crypto.js'
 import {
   OctopusAuthError,
@@ -20,6 +20,10 @@ const IMPORT_WINDOW_DAYS = 30
 // today's prices, plus tomorrow's from ~4pm UK time -- 48h covers both
 // without over-fetching.
 const CHEAPEST_WINDOW_LOOKAHEAD_HOURS = 48
+
+function round2(n) {
+  return Math.round(n * 100) / 100
+}
 
 function roundDownToHalfHour(date) {
   const rounded = new Date(date)
@@ -242,6 +246,18 @@ export function createOctopusRouter({
       return res.status(400).json({ error: 'durationMinutes must be a positive number.' })
     }
 
+    // OA-40: optional -- when given, and the account has imported usage
+    // history, the response also quantifies the saving vs. the current
+    // tariff for one cycle of this appliance. Omit it (or import nothing
+    // yet) and the endpoint still just answers "when is it cheapest".
+    let energyKwh = null
+    if (req.query.energyKwh !== undefined) {
+      energyKwh = Number(req.query.energyKwh)
+      if (!Number.isFinite(energyKwh) || energyKwh <= 0) {
+        return res.status(400).json({ error: 'energyKwh must be a positive number.' })
+      }
+    }
+
     const connection = await store.get(req.firebaseUid)
     if (!connection) {
       return res.status(400).json({ error: 'Connect your Octopus account first.' })
@@ -274,7 +290,25 @@ export function createOctopusRouter({
       return res.json({ found: false })
     }
 
-    res.json({ found: true, agileTariffCode, ...window })
+    let recommendation = null
+    if (energyKwh !== null) {
+      const importRecord = await importStore.get(req.firebaseUid)
+      const averageCurrentTariffRateIncVatPence = averageRate(importRecord?.rates)
+      if (averageCurrentTariffRateIncVatPence != null) {
+        const costAtCheapestPence = round2(energyKwh * window.averageUnitRateIncVatPence)
+        const costAtCurrentTariffPence = round2(energyKwh * averageCurrentTariffRateIncVatPence)
+        recommendation = {
+          energyKwh,
+          averageCurrentTariffRateIncVatPence,
+          costAtCheapestPence,
+          costAtCurrentTariffPence,
+          savingPence: round2(costAtCurrentTariffPence - costAtCheapestPence),
+          unitRateOnly: true,
+        }
+      }
+    }
+
+    res.json({ found: true, agileTariffCode, ...window, recommendation })
   })
 
   return router

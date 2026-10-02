@@ -66,3 +66,15 @@ export function findCheapestWindow(rates, durationMinutes) {
 
   return best
 }
+
+/**
+ * OA-40: the simple mean unit rate across a series -- used as a "typical
+ * cost on your current tariff" baseline when recommending a cheaper Agile
+ * window. For a flat (non-Agile) tariff this equals the single flat rate;
+ * for a time-varying one it's an honest average, not a point-in-time price.
+ */
+export function averageRate(rates) {
+  if (!Array.isArray(rates) || rates.length === 0) return null
+  const total = rates.reduce((sum, r) => sum + r.unitRateIncVatPence, 0)
+  return round2(total / rates.length)
+}

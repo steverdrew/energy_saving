@@ -1,14 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError, api, type SavingsResult } from '../api/client'
+import { formatGbp } from '../format'
 import { useOctopusConnection } from '../octopus/OctopusConnectionContext'
 import './SavingsPage.css'
 
 type Phase = 'loading' | 'not-connected' | 'not-imported' | 'result' | 'error'
-
-function formatGbp(pence: number): string {
-  return `£${(Math.abs(pence) / 100).toFixed(2)}`
-}
 
 function describeResultError(err: unknown): string {
   if (err instanceof ApiError && err.status === 502) {
