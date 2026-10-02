@@ -4,6 +4,7 @@ import {
   formatSlotTime,
   groupSlotsByLondonDay,
   maxUsage,
+  rateCategoryIndex,
   rateColorStepIndex,
   rateRange,
   RATE_COLOR_STEPS_LIGHT,
@@ -42,6 +43,37 @@ describe('rateColorStepIndex', () => {
   it('clamps rates outside the observed range', () => {
     expect(rateColorStepIndex(5, 10, 30)).toBe(0)
     expect(rateColorStepIndex(35, 10, 30)).toBe(RATE_COLOR_STEPS_LIGHT.length - 1)
+  })
+})
+
+describe('rateCategoryIndex', () => {
+  it('maps the lowest third of the range to cheap (0)', () => {
+    expect(rateCategoryIndex(10, 10, 40)).toBe(0)
+    expect(rateCategoryIndex(19, 10, 40)).toBe(0)
+  })
+
+  it('maps the middle third of the range to standard (1)', () => {
+    expect(rateCategoryIndex(20, 10, 40)).toBe(1)
+    expect(rateCategoryIndex(29, 10, 40)).toBe(1)
+  })
+
+  it('maps the top third of the range to peak (2)', () => {
+    expect(rateCategoryIndex(30, 10, 40)).toBe(2)
+    expect(rateCategoryIndex(40, 10, 40)).toBe(2)
+  })
+
+  it('returns the standard band for a flat tariff where min equals max', () => {
+    expect(rateCategoryIndex(15, 15, 15)).toBe(1)
+  })
+
+  it('returns null for an unknown or non-finite rate', () => {
+    expect(rateCategoryIndex(null, 10, 40)).toBe(null)
+    expect(rateCategoryIndex(Number.NaN, 10, 40)).toBe(null)
+  })
+
+  it('clamps rates outside the observed range', () => {
+    expect(rateCategoryIndex(0, 10, 40)).toBe(0)
+    expect(rateCategoryIndex(100, 10, 40)).toBe(2)
   })
 })
 

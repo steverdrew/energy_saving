@@ -74,10 +74,11 @@ describe('LandingDemo', () => {
 
   it('gives the heat map a text/DOM equivalent of its visual data, not canvas-only state', () => {
     renderDemo()
-    // Every half-hour cell is a real <button> with a descriptive aria-label
-    // (time, usage, rate, cost) -- see HeatMap.tsx -- so the grid's meaning
-    // is readable without interpreting pixels.
-    expect(screen.getAllByRole('button', { name: /kWh.*p\/kWh.*£/ }).length).toBe(48)
+    // Every half-hour cell, across every example day (OA-85's multi-day
+    // landscape), is a real <button> with a descriptive aria-label (time,
+    // usage, rate, cost) -- see HeatMap.tsx -- so the grid's meaning is
+    // readable without interpreting pixels. 4 example days x 48 slots.
+    expect(screen.getAllByRole('button', { name: /kWh.*p\/kWh.*£/ }).length).toBe(4 * 48)
   })
 
   it('exposes the CTA as a real link, not a click-only element', () => {

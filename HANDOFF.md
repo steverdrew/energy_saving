@@ -9,12 +9,79 @@ criteria, and transitioned to Done; OA-81 (household appliance setup)
 created by Steve directly in Jira and built this session; all three
 merged to `main` via PR #26 and deployed to prod (Deploy server +
 Deploy beta both green); OA-82 (public landing page prerendering, also
-expanded mid-session into automation-friendliness -- see below) and
-OA-83 (recomposed landing-page comparison, in two passes -- see below)
-both built this session and merged/deployed to prod; OA-65 not
-started)_
+expanded mid-session into automation-friendliness -- see below), OA-83
+(recomposed landing-page comparison, in two passes -- see below) and
+OA-85 (restored the original graph mechanism on top of OA-83's tighter
+layout -- see below) all built this session and merged/deployed to
+prod; OA-84 (verify/harden for external browser automation) created by
+Steve but not yet started -- largely expected to already be satisfied
+by OA-82's work, pending its own audit pass; OA-65 not started)_
 
 ## Current task (latest)
+
+**OA-85** ("Keep tighter comparison layout but restore original
+heat-map mechanism") -- Steve's follow-up to OA-83: keep the second
+pass's tighter composition (narrative-left/visual-right, no pill
+chrome, compact control) but restore the *original mockup's* graph
+mechanism, which OA-83's compression pass had drifted away from:
+
+- **Colour = tariff price band, opacity = usage** (not OA-70's single-
+  hue sequential ramp + bar-height, which is the right default for the
+  authenticated Actual/Compare/Optimised charts but was never the
+  landing page's own visual language). Added a `variant?: 'sequential'
+  | 'tariff'` prop to the shared `HeatMap` component (default
+  `'sequential'`, unchanged) rather than changing its default rendering
+  -- Actual/Compare/Optimised keep today's chart exactly as-is; only
+  `LandingDemo` opts into `variant="tariff"`. New `rateCategoryIndex`
+  helper in `heatMapMath.ts` buckets a rate into cheap/standard/peak
+  (tertile split of the data's own min/max, same normalisation
+  approach as the existing `rateColorStepIndex`) instead of a 9-step
+  ramp; CSS maps those three buckets to green/purple/standard-purple/
+  red (`--heat-map-cat-0/1/2`, light + dark). Usage drives cell
+  `opacity` (`0.3 + usageRatio*0.7`) instead of the bar-height overlay,
+  which is hidden entirely in this variant.
+- **Multi-day time landscape**: `landingDemoFixture.ts` now builds a
+  `days: HeatMapDay[]` (4 consecutive illustrative days, deliberately
+  identical in shape -- still example data, not a real meter, so a
+  repeated pattern is the honest way to show "this happens every day"
+  without implying day-to-day variance there's no data for) alongside
+  the existing single `day` (kept as the last entry, so the headline
+  kWh/£ stat is unchanged). `LandingDemo` passes `fixture[step].days`
+  to `HeatMap` instead of a single-day array.
+- Removed OA-83's 12-column single-row-wrap CSS hack in
+  `LandingDemo.css` (it existed specifically to compress one wide
+  48-cell row into a block) now that there's a genuine multi-row grid;
+  replaced with compact row-height/label sizing for the 4-row card.
+- **State behaviour** (Baseline usage === Compare usage exactly;
+  Compare tariff colours === Optimise tariff colours, only flexible-use
+  opacity moves) falls out of the existing fixture invariants (already
+  covered by `landingDemoFixture.test.ts`) -- no new logic needed, just
+  the new rendering mechanism consuming the same data.
+- **Animation**: `transition: background-color .8s, opacity .8s` on
+  `.heat-map--tariff .heat-map__cell`, scoped to the tariff variant only
+  (not the shared default) and guarded by `prefers-reduced-motion`, per
+  "restrained ~0.8s feel... DOM/CSS Grid, not canvas."
+- **Demoted analytical/debug chrome**: "Show as table" toggle and the
+  "select a period for details" detail line are visually shrunk/muted
+  under `.heat-map--tariff` (smaller font, reduced opacity, link-style
+  toggle) rather than removed -- they stay reachable/accessible per
+  OA-84's upcoming requirements, just no longer competing with the
+  story visually.
+- Verified: `npm run build`/`lint`/`test` (48 tests, up from 41, incl.
+  new `rateCategoryIndex` unit tests and a fixture test asserting the
+  4-day landscape)/`check-bundle` all pass; confirmed via the built
+  `dist/index.html` that the prerendered baseline state renders
+  `heat-map--tariff` with 192 (`4 x 48`) cells. Live-browser visual
+  verification was attempted (headless Chromium against `vite
+  preview`'s static output) but produced an unreadable blank capture
+  even for a plain `https://example.com` control screenshot in this
+  sandbox -- a tooling/network issue in this container, not evidence of
+  a rendering bug in the app (the served HTML/CSS was confirmed correct
+  by direct inspection). Consistent with OA-82 update's documented
+  finding that real browser automation/visual capture is not reliably
+  available from this sandbox.
+
+## Previous task
 
 **OA-82, update** ("Make public landing page externally readable and
 automation-friendly") -- Steve expanded this ticket after the first
