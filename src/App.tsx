@@ -10,7 +10,7 @@ import LoginPage from './pages/LoginPage'
 import SavingsPage from './pages/SavingsPage'
 
 function App() {
-  const { user, logout } = useAuth()
+  const { user, loading, logout } = useAuth()
 
   return (
     <div className="app-shell">
@@ -23,7 +23,7 @@ function App() {
             Home
           </NavLink>
           <NavLink to="/savings">My Savings</NavLink>
-          {user ? (
+          {loading ? null : user ? (
             <>
               <NavLink to="/account">Account</NavLink>
               <button type="button" className="app-header__signout" onClick={() => logout()}>

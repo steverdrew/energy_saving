@@ -8,7 +8,8 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 
   if (loading) return null
   if (!user) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />
+    const from = encodeURIComponent(location.pathname)
+    return <Navigate to={`/login?from=${from}`} replace />
   }
   return <>{children}</>
 }

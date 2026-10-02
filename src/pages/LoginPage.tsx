@@ -1,22 +1,31 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import './LoginPage.css'
 
+function destinationFrom(raw: string | null): string {
+  // Only ever redirect within the app — never follow an external URL from
+  // the ?from= query param.
+  if (raw && raw.startsWith('/') && !raw.startsWith('//')) return raw
+  return '/account'
+}
+
 function LoginPage() {
-  const { user, login } = useAuth()
+  const { user, loading, login } = useAuth()
   const navigate = useNavigate()
-  const location = useLocation()
+  const [searchParams] = useSearchParams()
+  const destination = destinationFrom(searchParams.get('from'))
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  if (user) {
-    const from = (location.state as { from?: string } | null)?.from ?? '/account'
-    return <Navigate to={from} replace />
-  }
+  // Don't render the login form (or redirect) until Firebase has reported
+  // the current auth state, so an already-signed-in visitor never sees a
+  // flash of the login screen first.
+  if (loading) return null
+  if (user) return <Navigate to={destination} replace />
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -24,8 +33,7 @@ function LoginPage() {
     setSubmitting(true)
     try {
       await login(email, password)
-      const from = (location.state as { from?: string } | null)?.from ?? '/account'
-      navigate(from, { replace: true })
+      navigate(destination, { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {

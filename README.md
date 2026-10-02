@@ -151,6 +151,22 @@ anywhere in this repo, Jira, or CI). To verify on the deployed beta:
 6. Try an incorrect password — confirm a clear, non-technical error
    message appears (not a raw Firebase error code).
 
+### Beta verification (OA-51: login → account → refresh → logout)
+
+With the same Firebase test account:
+
+1. Visit `https://shiftandsaveapp.web.app/login` while signed out, sign
+   in — confirm you land on `/account` (not a dead end), showing your
+   email, a "Find my saving" card, and a "Your savings" placeholder card.
+2. Refresh `/account` — confirm you stay signed in and on `/account`
+   (no bounce to `/login`, no flash of the login page first).
+3. Visit `/login` directly while already signed in — confirm it
+   redirects you straight to `/account` rather than showing the form.
+4. Sign out from `/account` — confirm you return to a signed-out state.
+5. Visit `/account` directly while signed out — confirm you're sent to
+   `/login`, and that signing in from there lands you back on `/account`
+   (not just the default landing page).
+
 ## Conventions and constraints
 
 See `CLAUDE.md`. Current project state, decisions and next steps are in
