@@ -1,0 +1,42 @@
+name: Deploy beta
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Build and deploy to Firebase Hosting (beta)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      # Everything above must pass before we touch Hosting: a failed
+      # build/test here stops the job and the last working beta deploy
+      # stays live untouched.
+      - name: Deploy to Firebase Hosting beta site
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BETA }}
+          projectId: shiftandsaveapp
+          channelId: live

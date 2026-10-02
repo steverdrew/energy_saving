@@ -1,86 +1,86 @@
 # HANDOFF
 
-_Last updated: 2026-10-02 06:40 UTC_
+_Last updated: 2026-10-02 (merge of OA-47 + OA-49)_
 
 ## Current task
 
-OA-47 — make the existing app cloud-ready: CI, server tests, repo docs,
-env config, Octopus API boundary stubs, typed API client, bundle check.
+Merging OA-47 (cloud-ready repo: CI, server tests, docs, env config,
+Octopus stubs, typed API client, bundle check) and OA-49 (continuous beta
+deployment to Firebase Hosting) into `main`.
 
 ## State
 
-Done, committed, pushed, PR open:
+- **OA-47**: merged to `main` (PR steverdrew/energy_saving#1). CI
+  (`.github/workflows/ci.yml`) green on both jobs before merge.
+- **OA-49**: this branch (`claude/oa-49-beta-deploy`, PR
+  steverdrew/energy_saving#2) is being merged into `main` after OA-47.
+  Merging OA-47 first created a real conflict (both touched
+  `README.md`/`HANDOFF.md`) — resolved by hand in this merge commit:
+  kept OA-47's README structure and appended OA-49's "Beta deployment"
+  section; this HANDOFF.md replaces both branches' versions.
 
-- PR: https://github.com/steverdrew/energy_saving/pull/1 (branch
-  `claude/friendly-franklin-f3he6k` → `main`).
-- Docs: `README.md` rewritten, `CLAUDE.md` added, this file.
-- Env config: `.env.example` (root) + `server/.env.example`;
-  `server/src/config.js` makes the server throw on startup if
-  `CLIENT_ORIGIN` or `DATABASE_PATH` is missing. `server/package.json`
-  `dev`/`start` use `node --env-file-if-exists=.env` so following the
-  README from a fresh clone actually picks up `server/.env` (this was
-  missing and broken until fixed — see Gotchas).
-- CI: `.github/workflows/ci.yml` — web job (lint, build, `check-bundle`,
-  test) and server job (test, start + `/api/health` curl check).
-- Server tests: `server/test/*.test.js` using Node's built-in
-  `node --test` + `supertest` — health, signup/login/me (incl. wrong
-  password, missing consent), and the three Octopus stub routes.
-- Octopus stubs: `server/src/routes/octopus.js` —
-  `POST /connect`, `GET /import-status`, `GET /savings-result`, all
-  behind `requireAuth`, all `501 { "error": "Not implemented" }`.
-- Typed API client: `src/api/client.ts` is the only module that calls the
-  server from the web app; `src/auth/AuthContext.tsx` uses it.
-- Bundle check: `scripts/check-bundle.mjs` (`npm run check-bundle`) scans
-  `dist/` for server env variable names; wired into CI after the build.
-- `vite.config.ts` has a `test` field (Vitest config) which needs
-  `/// <reference types="vitest/config" />` to typecheck — added.
-
-Verified by following README exactly from a **fresh clone**: server
-`npm run dev`/`npm start` now load `server/.env` and pass the health
-check; web `npm run dev` proxies `/api/health` through to it; `npm run
-lint`, `npm run build`, `npm run check-bundle`, `npm test` (web, 6 tests)
-and `server/`'s `npm test` (13 tests) all pass.
+Once this merge lands on `main`, `.github/workflows/deploy-beta.yml`
+fires for real — that's OA-49's required first deployment.
 
 ## Next step
 
-Watch PR #1 for CI results and review comments; this branch's work is
-otherwise complete. (Separately, OA-49 beta-deploy work is in progress on
-branch `claude/oa-49-beta-deploy`, stashed mid-task — not part of this
-branch.)
+After this merge commit is pushed: watch the `deploy-beta` GitHub Actions
+run on `main`. Confirm `https://shiftandsaveapp.web.app` is live and
+`/debug` shows this merge commit's SHA. If it fails, check the
+`FIREBASE_SERVICE_ACCOUNT_BETA` secret is present and the Hosting site
+resolves as expected (see OA-49 Gotchas below).
 
 ## Open items
 
-None blocking on this ticket. PR #1 awaiting CI/review.
+- `deploy-beta.yml` doesn't run `npm run check-bundle` even though that
+  script now exists on `main` (from OA-47). Worth adding back as a
+  pre-deploy gate in a follow-up — not done in this merge to keep the
+  conflict resolution minimal.
+- Firebase Hosting's default site URL (`https://shiftandsaveapp.web.app`)
+  is assumed, not yet confirmed against a real deploy.
 
 ## Key references
 
-- Ticket: OA-47 (Jira, Octopus Agile project). PR: steverdrew/energy_saving#1.
-- `server/src/config.js` — required env vars.
+- Tickets: OA-47, OA-3 (epic) / OA-49, Jira Octopus Agile project.
+- PRs: steverdrew/energy_saving#1 (merged), #2 (OA-49).
+- `server/src/config.js` — required server env vars.
 - `src/api/client.ts` — web↔server boundary.
-- `.github/workflows/ci.yml` — CI jobs.
-- `scripts/check-bundle.mjs` — secret-leak guard.
+- `.github/workflows/ci.yml` — lint/build/test CI.
+- `.github/workflows/deploy-beta.yml` — beta deploy on push to `main`.
+- `scripts/check-bundle.mjs` — secret-leak guard (not yet wired into
+  deploy-beta.yml, see Open items).
+- `firebase.json`, `.firebaserc` — Hosting config (project
+  `shiftandsaveapp`).
+- `src/pages/DebugPage.tsx` (`/debug`) — build/commit identification.
 
 ## Decisions
 
-- **Test runner (server):** Node 22's built-in `node --test` +
-  `supertest` (new devDependency) instead of adding Jest/Vitest —
-  smallest addition.
-- **Env loading:** no `dotenv` dependency; `server/package.json` scripts
-  use Node 22's `--env-file-if-exists=.env` so a local `server/.env` is
-  picked up automatically without failing when it's absent (e.g. in CI,
-  where real env vars are set directly).
-- **DATABASE_PATH:** required, not defaulted, so missing config fails
-  loudly. Tests use `:memory:`; `server/src/db.js` special-cases that
-  value and creates the parent directory for real file paths (needed on
-  a fresh clone where `server/data/` doesn't exist).
-- **COOKIE_SECRET:** not added — session IDs are already 256-bit random
-  tokens looked up server-side; cookie-parser is used unsigned, so a
-  signing secret isn't needed.
-- **Bundle check scope:** matches server env variable *names*
-  (`CLIENT_ORIGIN`, `DATABASE_PATH`, `PORT`) in built `dist/` files.
-  Covers the ticket's failure mode; not a general secret scanner.
-- **No TypeScript conversion for the server, no library swaps** — out of
-  scope per the ticket, not attempted.
+From OA-47:
+- Node 22's built-in `node --test` + `supertest` for server tests, not a
+  new framework.
+- No `dotenv`; server scripts use `--env-file-if-exists=.env`.
+- `DATABASE_PATH` required, not defaulted; `:memory:` special-cased in
+  `server/src/db.js` (must not be path-joined); parent dir created on
+  demand for real paths.
+- No `COOKIE_SECRET` — session IDs are already random tokens looked up
+  server-side.
+- Bundle check matches server env var *names* in built `dist/` files;
+  not a general secret scanner.
+- No server TypeScript conversion, no library swaps — out of scope.
+
+From OA-49:
+- **Scope: Hosting only.** The app's auth/data layer (Express +
+  better-sqlite3) is not Firebase; this deploys the static build only.
+  `/api/*` against the beta URL won't reach a real backend until a
+  separate ticket addresses that.
+- Firebase project ID is `shiftandsaveapp` (confirmed by Steve; note the
+  project *number*, `761386319734`, is a different identifier and not
+  usable here).
+- Deploys straight to Hosting's live channel on push to `main` (not a PR
+  preview channel) — matches "a merged ticket automatically produces a
+  fresh beta deployment."
+- Build-time version injection via Vite `define`, not a runtime fetch —
+  no backend is deployed to beta to serve that from.
 
 ## Constraints and preferences
 
@@ -88,21 +88,25 @@ None blocking on this ticket. PR #1 awaiting CI/review.
 - Never log credentials or full account numbers.
 - Currency GBP; times stored/handled UTC, displayed Europe/London.
 - SQLite db files stay out of git.
+- Keep production deployment separate, manual, and gated.
 - Keep sessions short; if context grows large, update this file and
-  continue in a fresh session rather than guessing from compacted
-  context.
+  continue in a fresh session.
 
 ## Gotchas
 
-- `DATABASE_PATH=:memory:` must never be path-joined (it's a SQLite
-  special value, not a real path) — see the special-case in
-  `server/src/db.js`.
-- WAL journal mode is skipped for `:memory:` — it isn't supported for
-  in-memory SQLite and caused `SQLITE_BUSY` under the test runner.
-- Root `vite.config.ts` test `include` is scoped to `src/**/*.test.{ts,tsx}`
-  so Vitest doesn't also try (and fail) to run the server's
-  `node:test`-style files.
-- `server/package.json`'s `dev`/`start` must use
-  `--env-file-if-exists=.env` (not plain `node ...`), or `server/.env`
-  is silently ignored and the server throws "Missing required
-  environment variable(s)" even after following the README exactly.
+- `DATABASE_PATH=:memory:` must never be path-joined — see the
+  special-case in `server/src/db.js`.
+- WAL journal mode is skipped for `:memory:` (unsupported, caused
+  `SQLITE_BUSY` under the test runner).
+- Root `vite.config.ts` test `include` is scoped to
+  `src/**/*.test.{ts,tsx}` so Vitest doesn't also try to run the
+  server's `node:test`-style files.
+- `server/package.json`'s `dev`/`start` need
+  `--env-file-if-exists=.env`, or `server/.env` is silently ignored.
+- `vite.config.ts`'s Vitest `test` field needs
+  `/// <reference types="vitest/config" />` to typecheck with `tsc -b`.
+- Firebase project **number** vs project **ID** are different
+  identifiers — tooling here needs the ID (`shiftandsaveapp`).
+- Firebase Hosting's SPA rewrite (`**` → `/index.html`) means any
+  `/api/*` path against the beta Hosting URL returns `index.html`, not a
+  real API response — expected, no backend is deployed to beta.
