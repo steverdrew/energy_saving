@@ -116,6 +116,41 @@ npx firebase-tools deploy --only hosting --project shiftandsaveapp
 (Requires `firebase login` or `GOOGLE_APPLICATION_CREDENTIALS` pointing
 at a service account key with Firebase Hosting deploy permissions.)
 
+## Authentication (beta)
+
+The web app signs in with **Firebase Authentication** (email + password),
+scoped to the `shiftandsaveapp` Firebase project — the same project used
+for Beta Hosting. `/login` is the sign-in screen; `/account` and other
+protected routes redirect there when signed out. Session state persists
+across refresh (Firebase's default browser persistence) and `useAuth()` /
+`<ProtectedRoute>` (`src/auth/`) are how pages read and gate on it.
+
+- The server's own auth routes (`server/src/auth.js`,
+  `/api/auth/*`) are **not** used by the web app anymore — Firebase Auth
+  replaced them for the web app as of OA-50. They remain in `server/` but
+  are unreferenced by the client.
+- Firebase's web SDK config (`src/firebase.ts`) is public client
+  configuration, not a secret — it's protected by Firebase's own Security
+  Rules, not by hiding it. Safe to read in the repo or the built bundle.
+- Public self-service signup, password reset, social login and MFA are
+  out of scope for this beta (see OA-50).
+
+### Beta verification (OA-50)
+
+Steve has a dedicated test account in **Firebase Console → Authentication
+→ Users** for the `shiftandsaveapp` project (the password is not stored
+anywhere in this repo, Jira, or CI). To verify on the deployed beta:
+
+1. Visit `https://shiftandsaveapp.web.app/account` while signed out —
+   confirm it redirects to `/login` (protected route check).
+2. Sign in with the Firebase test account's email/password.
+3. Confirm it lands on `/account` and shows the signed-in email.
+4. Refresh the page — confirm you're still signed in (session persistence).
+5. Click "Sign out" — confirm it returns you to a signed-out state and
+   `/account` redirects to `/login` again.
+6. Try an incorrect password — confirm a clear, non-technical error
+   message appears (not a raw Firebase error code).
+
 ## Conventions and constraints
 
 See `CLAUDE.md`. Current project state, decisions and next steps are in

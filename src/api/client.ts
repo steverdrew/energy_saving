@@ -1,17 +1,9 @@
 // The only module in the web app allowed to call the server. No provider
 // credentials or secrets belong here — see the bundle check script.
-export interface AuthUser {
-  id: string
-  email: string
-}
-
-export interface SignupInput {
-  email: string
-  password: string
-  acceptedTerms: boolean
-  acceptedPrivacy: boolean
-}
-
+//
+// Authentication is handled by Firebase Auth (see src/auth/AuthContext.tsx),
+// not this client — the server's own auth routes (server/src/auth.js) are
+// unused by the web app as of OA-50.
 export class ApiError extends Error {
   status: number
 
@@ -38,21 +30,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
 }
 
 export const api = {
-  auth: {
-    me: () => request<{ user: AuthUser }>('/api/auth/me').catch(() => null),
-    signup: (input: SignupInput) =>
-      request<{ user: AuthUser }>('/api/auth/signup', {
-        method: 'POST',
-        body: JSON.stringify(input),
-      }),
-    login: (email: string, password: string) =>
-      request<{ user: AuthUser }>('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      }),
-    logout: () => request<null>('/api/auth/logout', { method: 'POST' }),
-    deleteAccount: () => request<null>('/api/auth/account', { method: 'DELETE' }),
-  },
   octopus: {
     connect: (input: { apiKey: string; accountNumber: string }) =>
       request<never>('/api/octopus/connect', {
