@@ -24,9 +24,16 @@
  * - "Preserving total energy while moving timing": applyMovesToSeries
  *   never changes a series' total kWh, and throws rather than return a
  *   silently wrong total if that ever stops being true.
+ *
+ * OA-75: every move carries `methodologyVersion` (see
+ * shiftingMethodologyDefaults.js) so a result is always traceable to the
+ * exact methodology version and tunable defaults used to produce it.
  */
+import { METHODOLOGY_DEFAULTS, METHODOLOGY_VERSION } from './shiftingMethodologyDefaults.js'
 
-const SLOT_MINUTES = 30
+export { METHODOLOGY_VERSION }
+
+const SLOT_MINUTES = METHODOLOGY_DEFAULTS.slotMinutes
 
 function addMinutes(iso, minutes) {
   return new Date(new Date(iso).getTime() + minutes * 60 * 1000).toISOString().replace('.000Z', 'Z')
@@ -73,26 +80,52 @@ function averageRate(points) {
  * "Default window is the same calendar day the load actually ran... A load
  * with requiresAwakeHome may only move within hours the household is
  * plausibly awake... default assumption is 07:00-23:00 local time."
+ *
+ * OA-75's default list is explicit that a load "may not move earlier
+ * unless an explicit valid window permits it" -- so an event may supply
+ * its own `validWindowStartsAt`/`validWindowEndsAt` (e.g. a user-supplied
+ * finish-by time, or an explicit override of the awake-home default) to
+ * replace this computed default window entirely, rather than only ever
+ * narrowing it.
  */
 function validWindowPoints(sortedPoints, event) {
+  if (event.validWindowStartsAt && event.validWindowEndsAt) {
+    const startMs = new Date(event.validWindowStartsAt).getTime()
+    const endMs = new Date(event.validWindowEndsAt).getTime()
+    return sortedPoints.filter((p) => {
+      const t = new Date(p.startsAt).getTime()
+      return t >= startMs && t < endMs
+    })
+  }
+
   const eventDateKey = londonDateKey(event.actualStartsAt)
   return sortedPoints.filter((p) => {
     if (londonDateKey(p.startsAt) !== eventDateKey) return false
     if (event.requiresAwakeHome) {
       const hour = londonHour(p.startsAt)
-      if (hour < 7 || hour >= 23) return false
+      if (hour < METHODOLOGY_DEFAULTS.awakeHomeStartHour || hour >= METHODOLOGY_DEFAULTS.awakeHomeEndHour) return false
     }
     return true
   })
 }
 
+/**
+ * The slotsNeeded consecutive half-hours starting at the slot containing
+ * the event's actual start -- derived from duration alone, not a supplied
+ * end timestamp, so a "partial-slot runtime" (a duration that isn't an
+ * exact multiple of 30 minutes, e.g. a 70-minute cycle) still resolves to
+ * a definite, contiguous set of origin slots via the same ceil() rounding
+ * used for the destination window, rather than needing its own rule.
+ */
 function originPoints(sortedPoints, event) {
+  const slotsNeeded = Math.ceil(event.durationMinutes / SLOT_MINUTES)
   const startMs = new Date(event.actualStartsAt).getTime()
-  const endMs = new Date(event.actualEndsAt).getTime()
-  return sortedPoints.filter((p) => {
+  const startIndex = sortedPoints.findIndex((p) => {
     const t = new Date(p.startsAt).getTime()
-    return t >= startMs && t < endMs
+    return t <= startMs && startMs < t + SLOT_MINUTES * 60 * 1000
   })
+  if (startIndex === -1) return []
+  return sortedPoints.slice(startIndex, startIndex + slotsNeeded)
 }
 
 function contiguousWindowCandidates(windowPoints, slotsNeeded) {
@@ -159,9 +192,15 @@ function chooseSplittableSlots(event, windowPoints, committed, cap) {
  * @param {{startsAt: string, kwh: number|null, unitRateIncVatPence: number|null, costPence: number|null}[]} args.points
  * @param {FlexibleLoadEvent[]} args.events
  * @param {number|null} args.observedMaxHalfHourlyKwh
+ * @param {number} [args.minSavingPence] - tunable default, see shiftingMethodologyDefaults.js
  * @returns {MoveResult[]}
  */
-export function scheduleFlexibleLoadEvents({ points, events, observedMaxHalfHourlyKwh = null }) {
+export function scheduleFlexibleLoadEvents({
+  points,
+  events,
+  observedMaxHalfHourlyKwh = null,
+  minSavingPence = METHODOLOGY_DEFAULTS.minSavingPence,
+}) {
   const sortedPoints = [...points].sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
   const committed = new Map()
   // "Loads are moved in evidence-tier order (higher tier first)" -- lower
@@ -175,7 +214,7 @@ export function scheduleFlexibleLoadEvents({ points, events, observedMaxHalfHour
     const origin = originPoints(sortedPoints, event)
 
     if (origin.length !== slotsNeeded || origin.some((p) => p.unitRateIncVatPence === null || p.kwh === null)) {
-      moves.push({ event, moved: false, reason: 'missing_rate_data' })
+      moves.push({ event, moved: false, reason: 'missing_rate_data', methodologyVersion: METHODOLOGY_VERSION })
       continue
     }
 
@@ -185,10 +224,23 @@ export function scheduleFlexibleLoadEvents({ points, events, observedMaxHalfHour
       ? chooseSplittableSlots(event, windowPoints, committed, observedMaxHalfHourlyKwh)
       : chooseContiguousWindow(event, windowPoints, committed, observedMaxHalfHourlyKwh)
 
+    const beforeCostPence = round2(event.energyKwh * actualAvgRate)
+    const afterCostPence = chosen ? round2(event.energyKwh * chosen.avg) : null
+    const savingPence = chosen ? round2(beforeCostPence - afterCostPence) : 0
+
     // "A move only happens when it produces a genuine saving" -- strictly
-    // cheaper, never a tie, never "for form's sake".
-    if (!chosen || !(chosen.avg < actualAvgRate)) {
-      moves.push({ event, moved: false, reason: chosen ? 'no_cheaper_slot' : 'no_capacity' })
+    // cheaper than the actual slots, and clearing the current methodology
+    // version's minimum-saving default (0 by default -- see
+    // shiftingMethodologyDefaults.js -- so a tie never moves "for form's
+    // sake", and a future version could raise the bar without touching
+    // this engine).
+    if (!chosen || !(chosen.avg < actualAvgRate) || savingPence <= minSavingPence) {
+      moves.push({
+        event,
+        moved: false,
+        reason: !chosen ? 'no_capacity' : savingPence <= minSavingPence && chosen.avg < actualAvgRate ? 'below_saving_threshold' : 'no_cheaper_slot',
+        methodologyVersion: METHODOLOGY_VERSION,
+      })
       continue
     }
 
@@ -203,8 +255,10 @@ export function scheduleFlexibleLoadEvents({ points, events, observedMaxHalfHour
       originSlots: origin.map((p) => p.startsAt),
       destinationSlots: chosen.points.map((p) => p.startsAt),
       perSlotKwh,
-      beforeCostPence: round2(event.energyKwh * actualAvgRate),
-      afterCostPence: round2(event.energyKwh * chosen.avg),
+      beforeCostPence,
+      afterCostPence,
+      savingPence,
+      methodologyVersion: METHODOLOGY_VERSION,
     })
   }
 
@@ -267,18 +321,21 @@ export function maxHalfHourlyKwh(points) {
  * @property {2|3|4} evidenceTier - per docs/SHIFTING_METHODOLOGY.md's evidence hierarchy (1 and 5 not used yet)
  * @property {boolean} interruptible - false = atomic contiguous block; true = splittable
  * @property {boolean} requiresAwakeHome
- * @property {number} durationMinutes
+ * @property {number} durationMinutes - may be a partial slot, e.g. 70 -- rounds up to 3 half-hours, never down
  * @property {number} energyKwh
- * @property {string} actualStartsAt - ISO
- * @property {string} actualEndsAt - ISO
+ * @property {string} actualStartsAt - ISO; origin slots are derived from this + durationMinutes, not a separate end timestamp
+ * @property {string} [validWindowStartsAt] - ISO; when given with validWindowEndsAt, replaces the computed default window entirely
+ * @property {string} [validWindowEndsAt] - ISO
  *
  * @typedef {object} MoveResult
  * @property {FlexibleLoadEvent} event
  * @property {boolean} moved
- * @property {string} [reason]
+ * @property {string} [reason] - 'missing_rate_data' | 'no_capacity' | 'no_cheaper_slot' | 'below_saving_threshold'
  * @property {string[]} [originSlots]
  * @property {string[]} [destinationSlots]
  * @property {number} [perSlotKwh]
  * @property {number} [beforeCostPence]
  * @property {number} [afterCostPence]
+ * @property {number} [savingPence]
+ * @property {string} methodologyVersion
  */

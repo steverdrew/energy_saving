@@ -5,7 +5,9 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   applyMovesToSeries,
+  londonDateKey,
   maxHalfHourlyKwh,
+  METHODOLOGY_VERSION,
   scheduleFlexibleLoadEvents,
   summarizeSeries,
 } from '../src/shiftingOptimiser.js'
@@ -214,6 +216,240 @@ test('dehumidifier (splittable) spreads across the cheapest individual half-hour
     [...moves[0].destinationSlots].sort(),
     [points[10].startsAt, points[30].startsAt].sort(),
   )
+})
+
+test('OA-75: every move and non-move carries the methodology version used', () => {
+  const points = buildDayPoints({
+    dayStartUtc: DAY_START_UTC,
+    rateForSlot: (i) => (i >= 26 && i < 31 ? 9 : 20),
+    kwhForSlot: () => 0.3,
+  })
+  const event = {
+    id: 'dw-version',
+    applianceType: 'dishwasher',
+    evidenceTier: 4,
+    interruptible: false,
+    requiresAwakeHome: false,
+    durationMinutes: 150,
+    energyKwh: 1.1,
+    actualStartsAt: points[36].startsAt,
+  }
+  const [move] = scheduleFlexibleLoadEvents({ points, events: [event], observedMaxHalfHourlyKwh: null })
+  assert.equal(move.moved, true)
+  assert.equal(move.methodologyVersion, METHODOLOGY_VERSION)
+  assert.equal(typeof move.savingPence, 'number')
+  assert.ok(move.savingPence > 0)
+})
+
+test('partial-slot runtime: a 70-minute cycle rounds up to 3 half-hours, never down, and still preserves energy', () => {
+  const points = buildDayPoints({
+    dayStartUtc: DAY_START_UTC,
+    rateForSlot: (i) => (i >= 26 && i < 29 ? 5 : 20),
+    kwhForSlot: () => 0.2,
+  })
+  const event = {
+    id: 'dh-partial',
+    applianceType: 'dehumidifier',
+    evidenceTier: 4,
+    interruptible: false,
+    requiresAwakeHome: false,
+    durationMinutes: 70, // not a multiple of 30 -- must round up to 3 slots, not 2
+    energyKwh: 0.6,
+    actualStartsAt: points[36].startsAt,
+  }
+  const [move] = scheduleFlexibleLoadEvents({ points, events: [event], observedMaxHalfHourlyKwh: null })
+  assert.equal(move.moved, true)
+  assert.equal(move.destinationSlots.length, 3)
+  assert.equal(move.originSlots.length, 3)
+
+  const after = applyMovesToSeries(points, [move])
+  assert.equal(summarizeSeries(points).totalKwh, summarizeSeries(after).totalKwh)
+})
+
+test('explicit wider valid window lets a load move earlier than the awake-home default would allow', () => {
+  const points = buildDayPoints({
+    dayStartUtc: DAY_START_UTC,
+    // Cheapest window is 04:00-06:00 (slots 8-11), entirely before the
+    // 07:00 awake-home default -- only reachable via an explicit window.
+    rateForSlot: (i) => (i >= 8 && i < 12 ? 5 : 20),
+    kwhForSlot: () => 0.2,
+  })
+  const withoutOverride = {
+    id: 'wm-default-window',
+    applianceType: 'washing_machine',
+    evidenceTier: 2,
+    interruptible: false,
+    requiresAwakeHome: true,
+    durationMinutes: 100,
+    energyKwh: 0.95,
+    actualStartsAt: points[40].startsAt, // 20:00 London
+  }
+  const [defaultMove] = scheduleFlexibleLoadEvents({
+    points,
+    events: [withoutOverride],
+    observedMaxHalfHourlyKwh: null,
+  })
+  // Without an override, the cheap 05:00 window is out of reach -- stays
+  // within the day's expensive 20p band, so no move beats the actual rate.
+  assert.equal(defaultMove.moved, false)
+
+  const withOverride = {
+    ...withoutOverride,
+    id: 'wm-explicit-window',
+    // An explicit, user-supplied valid window permits the earlier move --
+    // "a load may not move earlier unless an explicit valid window
+    // permits it" (OA-75).
+    validWindowStartsAt: points[0].startsAt,
+    validWindowEndsAt: iso(new Date(points[points.length - 1].startsAt).getTime() + SLOT_MS),
+  }
+  const [overrideMove] = scheduleFlexibleLoadEvents({
+    points,
+    events: [withOverride],
+    observedMaxHalfHourlyKwh: null,
+  })
+  assert.equal(overrideMove.moved, true)
+  assert.deepEqual(overrideMove.destinationSlots, points.slice(8, 12).map((p) => p.startsAt))
+})
+
+test('below-threshold: a custom minSavingPence rejects a move that would still have been strictly cheaper', () => {
+  const points = buildDayPoints({
+    dayStartUtc: DAY_START_UTC,
+    // Only a 1p/kWh improvement available -- a real but tiny saving.
+    rateForSlot: (i) => (i >= 26 && i < 31 ? 19 : 20),
+    kwhForSlot: () => 0.3,
+  })
+  const event = {
+    id: 'dw-tiny-saving',
+    applianceType: 'dishwasher',
+    evidenceTier: 4,
+    interruptible: false,
+    requiresAwakeHome: false,
+    durationMinutes: 150,
+    energyKwh: 1.1,
+    actualStartsAt: points[36].startsAt,
+  }
+
+  const [defaultMove] = scheduleFlexibleLoadEvents({ points, events: [event], observedMaxHalfHourlyKwh: null })
+  assert.equal(defaultMove.moved, true) // v1's default threshold is 0 -- any genuine saving moves
+
+  const [thresholdMove] = scheduleFlexibleLoadEvents({
+    points,
+    events: [event],
+    observedMaxHalfHourlyKwh: null,
+    minSavingPence: 5, // a future methodology version's higher bar, passed explicitly
+  })
+  assert.equal(thresholdMove.moved, false)
+  assert.equal(thresholdMove.reason, 'below_saving_threshold')
+})
+
+test('tariff-agnostic: the same event schedules correctly against two structurally different tariff shapes', () => {
+  const event = (points) => ({
+    id: 'dw-agnostic',
+    applianceType: 'dishwasher',
+    evidenceTier: 4,
+    interruptible: false,
+    requiresAwakeHome: false,
+    durationMinutes: 150,
+    energyKwh: 1.1,
+    actualStartsAt: points[36].startsAt,
+  })
+
+  // Shape A: flat tariff all day -- no family-specific logic, just equal
+  // rates, so nothing should move.
+  const flatPoints = buildDayPoints({ dayStartUtc: DAY_START_UTC, rateForSlot: () => 20, kwhForSlot: () => 0.3 })
+  const [flatMove] = scheduleFlexibleLoadEvents({ points: flatPoints, events: [event(flatPoints)], observedMaxHalfHourlyKwh: null })
+  assert.equal(flatMove.moved, false)
+
+  // Shape B: dual-rate (Economy-7-style) -- a single off-peak block, no
+  // half-hourly granularity -- the engine treats it exactly the same way,
+  // because it only ever consumes generic {startsAt, unitRateIncVatPence}
+  // points, never a tariff family.
+  const dualRatePoints = buildDayPoints({
+    dayStartUtc: DAY_START_UTC,
+    rateForSlot: (i) => (i < 14 ? 12 : 28), // off-peak 00:00-07:00, peak otherwise
+    kwhForSlot: () => 0.3,
+  })
+  const [dualRateMove] = scheduleFlexibleLoadEvents({
+    points: dualRatePoints,
+    events: [event(dualRatePoints)],
+    observedMaxHalfHourlyKwh: null,
+  })
+  assert.equal(dualRateMove.moved, true)
+  assert.deepEqual(dualRateMove.destinationSlots, dualRatePoints.slice(0, 5).map((p) => p.startsAt))
+})
+
+// OA-76: UK clock-change days -- the engine never special-cases these; it
+// derives everything from the real UTC timestamps the half-hourly import
+// already provides, via the same Europe/London Intl formatting
+// heatMapMath.ts's groupSlotsByLondonDay uses, so a short/long local day
+// just means fewer/more real points for that London date, never a gap or
+// a miscount.
+function buildRealLondonDayPoints({ targetDateKey, rateForSlot, kwhForSlot }) {
+  const points = []
+  const anchorMs = new Date(`${targetDateKey}T00:00:00Z`).getTime() - 6 * 60 * 60 * 1000
+  for (let i = 0; i < 4 * 48; i++) {
+    const startsAt = iso(anchorMs + i * SLOT_MS)
+    if (londonDateKey(startsAt) === targetDateKey) points.push(startsAt)
+  }
+  return points.map((startsAt, i) => {
+    const unitRateIncVatPence = rateForSlot(i)
+    const kwh = kwhForSlot(i)
+    return {
+      startsAt,
+      kwh,
+      unitRateIncVatPence,
+      costPence: Math.round(kwh * unitRateIncVatPence * 100) / 100,
+      tariffCode: 'E-1R-TEST-24-01-01-C',
+    }
+  })
+}
+
+test('UK DST spring-forward day (23 hours / 46 half-hour slots) schedules correctly', () => {
+  const points = buildRealLondonDayPoints({
+    targetDateKey: '2025-03-30', // UK clocks went forward this day
+    rateForSlot: (i) => (i >= 20 && i < 24 ? 5 : 20),
+    kwhForSlot: () => 0.2,
+  })
+  assert.equal(points.length, 46)
+
+  const event = {
+    id: 'dh-spring',
+    applianceType: 'dehumidifier',
+    evidenceTier: 4,
+    interruptible: true,
+    requiresAwakeHome: false,
+    durationMinutes: 120,
+    energyKwh: 0.8,
+    actualStartsAt: points[36].startsAt,
+  }
+  const [move] = scheduleFlexibleLoadEvents({ points, events: [event], observedMaxHalfHourlyKwh: null })
+  assert.equal(move.moved, true)
+  const after = applyMovesToSeries(points, [move])
+  assert.equal(summarizeSeries(points).totalKwh, summarizeSeries(after).totalKwh)
+})
+
+test('UK DST autumn-fallback day (25 hours / 50 half-hour slots) schedules correctly', () => {
+  const points = buildRealLondonDayPoints({
+    targetDateKey: '2025-10-26', // UK clocks went back this day
+    rateForSlot: (i) => (i >= 20 && i < 24 ? 5 : 20),
+    kwhForSlot: () => 0.2,
+  })
+  assert.equal(points.length, 50)
+
+  const event = {
+    id: 'dh-autumn',
+    applianceType: 'dehumidifier',
+    evidenceTier: 4,
+    interruptible: true,
+    requiresAwakeHome: false,
+    durationMinutes: 120,
+    energyKwh: 0.8,
+    actualStartsAt: points[40].startsAt,
+  }
+  const [move] = scheduleFlexibleLoadEvents({ points, events: [event], observedMaxHalfHourlyKwh: null })
+  assert.equal(move.moved, true)
+  const after = applyMovesToSeries(points, [move])
+  assert.equal(summarizeSeries(points).totalKwh, summarizeSeries(after).totalKwh)
 })
 
 test('energy preservation check throws rather than return a silently wrong total', () => {

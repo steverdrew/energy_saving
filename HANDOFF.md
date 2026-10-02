@@ -42,6 +42,27 @@ Done:
   (£0 timing opportunity) with no events supplied
   (`server/test/optimisedPeriodRoute.test.js`). 130 server tests pass,
   29 web tests pass, build/lint/bundle-check all clean.
+  - **Follow-up pass (same day)**: compared the actual OA-76/OA-75 Jira
+    tickets (found in Jira, not Linear — see Decisions) against what was
+    built, and closed every gap in their written acceptance criteria:
+    added `server/src/shiftingMethodologyDefaults.js` (centralised,
+    explicitly tunable `METHODOLOGY_VERSION`/awake-home hours/minimum-
+    saving threshold — OA-75's "centralised defaults" and "methodology
+    version on every result" requirements), an explicit per-event
+    `validWindowStartsAt`/`validWindowEndsAt` override (OA-75's "may not
+    move earlier unless an explicit valid window permits it"), and
+    reworked origin-slot derivation to come from `durationMinutes` alone
+    (handles a "partial-slot runtime" like a 70-minute cycle correctly,
+    rather than needing a separately-supplied end timestamp). Added the
+    fixtures Jira explicitly listed that weren't yet covered: methodology-
+    version provenance, partial-slot runtime, an explicit-wider-window
+    case, a below-threshold case (custom `minSavingPence`), a tariff-
+    agnostic test across two structurally different rate shapes (flat vs.
+    dual-rate), and real UK DST fixtures for both the 46-slot
+    (2025-03-30, spring forward) and 50-slot (2025-10-26, autumn
+    fallback) London calendar days. 137 server tests pass, 29 web tests
+    pass, build/lint/bundle-check all clean. OA-76 transitioned to Done
+    in Jira.
 
 - **OA-70**: shared 30-day heat map component (`src/components/HeatMap.tsx`
   + `heatMapMath.ts`), tariff-agnostic, dataviz-skill-validated sequential
@@ -555,6 +576,14 @@ merged via PR #18 and Done in Jira before the above.)
 
 ## Decisions
 
+- Tickets referenced in this file (OA-xx) live in **Jira**
+  (`altitudeconsulting.atlassian.net`, project key `OA`), not Linear —
+  the connected Linear workspace in this environment is an unrelated
+  app's backlog (`ALT-*`, a task planner, nothing to do with energy
+  saving). Worth remembering next session rather than re-discovering.
+- OA-81 ("Build household appliance setup for flexible-load modelling")
+  created by Steve directly in Jira, sitting between OA-76 and OA-65 in
+  the build order — not yet started as of this entry.
 - OA-76: `detectFlexibleLoadEvents` (`server/src/flexibleLoadEvents.js`)
   always returns `[]` — there's no appliance/household declaration store
   in this app yet (that's its own, later ticket), and tier 5 (inferring a

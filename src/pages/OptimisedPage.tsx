@@ -137,6 +137,7 @@ function OptimisedPage() {
           )}
 
           <p className="optimised-page__caveat">Unit rates only — doesn't include either tariff's standing charge.</p>
+          <p className="optimised-page__caveat">Shifting model version: {result.optimised.methodologyVersion}</p>
 
           <div className="optimised-page__opportunities">
             <div className="optimised-page__opportunity">
@@ -172,7 +173,7 @@ function OptimisedPage() {
                 {result.optimised.moves.map((move, i) => (
                   <li key={i}>
                     {APPLIANCE_LABELS[move.applianceType] ?? move.applianceType}:{' '}
-                    {formatGbp(move.beforeCostPence)} → {formatGbp(move.afterCostPence)} (
+                    {formatGbp(move.beforeCostPence)} → {formatGbp(move.afterCostPence)} (saved {formatGbp(move.savingPence)},{' '}
                     {CONFIDENCE_TIER_LABELS[move.evidenceTier] ?? 'estimated'})
                   </li>
                 ))}

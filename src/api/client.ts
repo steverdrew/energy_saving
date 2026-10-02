@@ -336,12 +336,17 @@ export interface OptimisedMove {
   destinationSlots: string[]
   beforeCostPence: number
   afterCostPence: number
+  savingPence: number
 }
 
 export interface OptimisedSide {
   totalKwh: number
   totalCostPence: number
   points: ActualPeriodPoint[]
+  // OA-75: the exact methodology version these figures were produced
+  // under -- a later version changing a tunable default never silently
+  // reinterprets an already-shown result.
+  methodologyVersion: string
   moves: OptimisedMove[]
   eventsConsidered: number
   confidenceTiers: (2 | 3 | 4)[]

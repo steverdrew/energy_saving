@@ -14,6 +14,7 @@ import { compareCurrentTariffToAgile } from '../savingsComparison.js'
 import {
   applyMovesToSeries,
   maxHalfHourlyKwh,
+  METHODOLOGY_VERSION,
   scheduleFlexibleLoadEvents,
   summarizeSeries,
 } from '../shiftingOptimiser.js'
@@ -574,6 +575,11 @@ export function createOctopusRouter({
         totalKwh: optimisedSummary.totalKwh,
         totalCostPence: optimisedSummary.totalCostPence,
         points: optimisedPoints,
+        // OA-75: every result is traceable to the exact methodology
+        // version (and its tunable defaults) used to produce it -- a
+        // later version changing a default never silently reinterprets
+        // an already-shown result.
+        methodologyVersion: METHODOLOGY_VERSION,
         moves: movedEvents.map((m) => ({
           applianceType: m.event.applianceType,
           evidenceTier: m.event.evidenceTier,
@@ -581,6 +587,7 @@ export function createOctopusRouter({
           destinationSlots: m.destinationSlots,
           beforeCostPence: m.beforeCostPence,
           afterCostPence: m.afterCostPence,
+          savingPence: m.savingPence,
         })),
         eventsConsidered: events.length,
         // "Every Optimised figure must carry the confidence tier(s)

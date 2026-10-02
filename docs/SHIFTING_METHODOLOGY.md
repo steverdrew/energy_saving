@@ -15,13 +15,21 @@ this implementation's test fixtures verbatim
 
 ## Version history
 
-- **v1 (OA-76)**: first implementation — atomic wet appliances (dishwasher,
-  washing machine, tumble dryer) and the splittable dehumidifier only, per
-  "EV/battery/smart-heating treatment" below. Event source always returns
-  `[]` until the appliance/household setup ticket exists, so Optimised
-  today always equals Like-for-like (£0 timing opportunity) in production
-  — honest per the product principle, not a placeholder to be embarrassed
-  about.
+- **v1 (`oa73-v1`, OA-76)**: first implementation — atomic wet appliances
+  (dishwasher, washing machine, tumble dryer) and the splittable
+  dehumidifier only, per "EV/battery/smart-heating treatment" below. Event
+  source always returns `[]` until the appliance/household setup ticket
+  (OA-81) exists, so Optimised today always equals Like-for-like (£0
+  timing opportunity) in production — honest per the product principle,
+  not a placeholder to be embarrassed about. Tunable defaults (awake-home
+  hours, the minimum-saving threshold) live in
+  `server/src/shiftingMethodologyDefaults.js`, centralised rather than
+  inlined at each call site; every optimisation result and every move
+  carries `methodologyVersion` so a future version changing a default is
+  always distinguishable from a result produced under this one. An
+  explicit `validWindowStartsAt`/`validWindowEndsAt` on an event overrides
+  the computed default window entirely (the one way a load may move
+  earlier than its default window allows).
 
 ## Where this sits
 
