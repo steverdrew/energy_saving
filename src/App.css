@@ -91,3 +91,51 @@
   padding: 32px 20px;
   box-sizing: border-box;
 }
+
+/* OA-79: dark navy / purple visual system for the logged-out landing
+   route -- scoped via [data-landing] so it never leaks into the
+   authenticated app's light theme. Overriding the shared tokens here
+   means every nested component (nav, cards, the heat map's own
+   var(--border)/var(--bg) usage) picks the dark palette automatically
+   through normal CSS custom-property cascade, with no per-component
+   dark-mode logic needed. */
+.app-shell[data-landing] {
+  --bg: #0a0a16;
+  --text: #b6b2c9;
+  --text-h: #f6f4ff;
+  --border: rgba(255, 255, 255, 0.12);
+  --accent: #a855f7;
+  --accent-bg: rgba(168, 85, 247, 0.18);
+  --accent-border: rgba(168, 85, 247, 0.55);
+  position: relative;
+  background: var(--bg);
+  /* Most text relies on inheriting `color`, not re-evaluating var(--text)
+     itself -- without setting color explicitly here, descendants would
+     keep the light theme's already-computed value from html/body despite
+     the --text override above (custom properties cascade for var()
+     lookups, but an inherited `color` does not re-resolve on its own). */
+  color: var(--text);
+}
+
+.app-shell[data-landing]::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(640px 420px at 18% -8%, rgba(168, 85, 247, 0.28), transparent 60%),
+    radial-gradient(520px 360px at 86% 6%, rgba(99, 70, 220, 0.22), transparent 65%);
+}
+
+.app-shell[data-landing] .app-header {
+  background: rgba(10, 10, 22, 0.65);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-shell[data-landing] .app-main {
+  position: relative;
+  z-index: 1;
+}

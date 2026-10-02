@@ -1,10 +1,14 @@
+/* OA-79: dark navy / purple glass visual system for the logged-out
+   landing page. Colour tokens themselves come from [data-landing] in
+   App.css -- this file only shapes layout, cards and motion. */
+
 .landing-hero {
   text-align: center;
-  padding: 24px 0 48px;
+  padding: 56px 0 48px;
 }
 
 .landing-hero h1 {
-  margin: 32px auto 12px;
+  margin: 32px auto 16px;
   max-width: 720px;
 }
 
@@ -12,6 +16,7 @@
   font-size: 20px;
   margin: 0 auto 32px;
   max-width: 640px;
+  color: var(--text);
 }
 
 .landing-hero__cta {
@@ -20,31 +25,29 @@
   font-size: 18px;
   font-weight: 600;
   text-decoration: none;
-  color: var(--bg);
+  color: #fff;
   background: var(--accent);
-  border-radius: 8px;
+  border-radius: 999px;
+  box-shadow: 0 8px 28px rgba(168, 85, 247, 0.4);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-.landing-trust {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 24px;
-  padding: 24px 0 32px;
-  border-top: 1px solid var(--border);
-  text-align: center;
+.landing-hero__cta:hover {
+  box-shadow: 0 10px 34px rgba(168, 85, 247, 0.55);
+  transform: translateY(-1px);
 }
 
-.landing-trust__item {
-  max-width: 260px;
-  font-size: 15px;
-}
-
-.landing-about {
-  max-width: 560px;
-  margin: 0 auto;
-  padding: 24px 0;
-  border-top: 1px solid var(--border);
+/* Glass card treatment shared by the informational sections below the
+   demo -- subtle border, soft elevated surface, rounded corners. */
+.landing-card {
+  max-width: 640px;
+  margin: 24px auto 0;
+  padding: 28px 32px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   text-align: center;
 }
 
@@ -56,12 +59,12 @@
 .landing-about p {
   margin-top: 8px;
   font-size: 15px;
-  opacity: 0.9;
+  color: var(--text);
 }
 
 .landing-about__independence {
   margin-top: 16px;
-  opacity: 1;
+  color: var(--text-h);
 }
 
 .landing-compat {
@@ -70,23 +73,21 @@
   justify-content: center;
   align-items: baseline;
   gap: 24px;
-  padding: 16px 0 24px;
-  border-top: 1px solid var(--border);
-  text-align: center;
   font-size: 14px;
-  opacity: 0.85;
+  color: var(--text);
 }
 
 .landing-compat__group h2 {
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  opacity: 0.75;
+  color: var(--text);
   margin-bottom: 4px;
 }
 
 .landing-compat__group p {
   margin: 0;
+  color: var(--text-h);
 }
 
 .landing-compat__cta {
@@ -94,8 +95,57 @@
   margin: 0;
 }
 
+.landing-compat__cta a {
+  color: var(--accent);
+}
+
+/* Dark footer treatment -- a touch darker than the page body, separated
+   by a hairline border rather than another floating card. */
+.landing-footer {
+  margin-top: 48px;
+  padding: 32px 20px 40px;
+  background: rgba(0, 0, 0, 0.18);
+  border-top: 1px solid var(--border);
+}
+
+.landing-trust {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 24px;
+  text-align: center;
+}
+
+.landing-trust__item {
+  max-width: 260px;
+  font-size: 14px;
+  color: var(--text);
+}
+
 .landing-explainer-link {
   text-align: center;
   font-size: 15px;
-  padding: 0 0 32px;
+  margin-top: 20px;
+}
+
+.landing-explainer-link a {
+  color: var(--accent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .landing-hero__cta,
+  .landing-card {
+    animation: landing-fade-up 0.5s ease both;
+  }
+}
+
+@keyframes landing-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
