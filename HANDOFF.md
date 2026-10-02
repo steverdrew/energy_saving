@@ -8,19 +8,15 @@ session, OA-44 deliberately untouched)_
 ## Current task
 
 None in progress. Order worked this session, per Steve: (1) core loop
-— merged (`main` @ `995bdea`). (2) Backlog audit — done. (3) Polish
-tier (OA-60/61/62) — merged (`main` @ `1b0bb2b`). (4) Deeper feature
-tier: **OA-45** (starting tariff state), **OA-25** (comparison
-confidence for Intelligent Go-style limitations), **OA-24** (tariff
-eligibility), **OA-23 + OA-7** (a real, separate "shifting
-opportunity" figure alongside tariff-fit), and **OA-32** (follow-
-through meter-consistency) are all implemented and tested this
-session — see State below. **OA-44 deliberately not started** — its
-own ticket says "Not part of the focused MVP... build only after the
-MVP proves customers act on savings guidance," so it's left alone
-rather than inferred into scope by "crack on". Not yet pushed/merged
-— still on `claude/dazzling-ritchie-nofudq`; build/lint/bundle-
-check/tests all pass locally (91 server, 6 frontend).
+— merged (`main` @ `995bdea`, PR #14). (2) Backlog audit — done. (3)
+Polish tier (OA-60/61/62) — merged (`main` @ `1b0bb2b`, PR #15). (4)
+Deeper feature tier: **OA-45, OA-25, OA-24, OA-23, OA-7, OA-32** all
+implemented, tested, merged (`main` @ `6f45343`, PR #16), moved to
+Done in Jira. **OA-44 deliberately not started** — its own ticket
+says "Not part of the focused MVP... build only after the MVP proves
+customers act on savings guidance." **OA-46** (real-world savings
+equivalents) is the one deeper-feature ticket still open — small,
+independent of the rest.
 
 ## State
 
