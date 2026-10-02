@@ -1,7 +1,8 @@
 # Explicit Dockerfile instead of relying on Cloud Run's auto-detected
 # Buildpacks -- better-sqlite3 is a native module that needs a real
 # compiler toolchain, and buildpacks' build failures gave no usable error
-# output when this was deployed via `gcloud run deploy --source`.
+# output when this was deployed via `gcloud run deploy --source`. (Ruled
+# out as the root cause of the opaque build failure -- see HANDOFF.md.)
 FROM node:22-slim
 
 WORKDIR /app
