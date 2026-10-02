@@ -1,0 +1,139 @@
+.optimised-page {
+  max-width: 900px;
+}
+
+.optimised-page__intro {
+  margin-top: 8px;
+  opacity: 0.75;
+  font-size: 14px;
+  max-width: 640px;
+}
+
+.optimised-page__controls {
+  margin-top: 16px;
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.optimised-page__controls > button {
+  padding: 10px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.optimised-page__custom {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.optimised-page__custom label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.optimised-page__custom input {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 14px;
+  min-width: 220px;
+}
+
+.optimised-page__custom button {
+  padding: 9px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.optimised-page__error {
+  margin-top: 16px;
+  color: #e05252;
+}
+
+.optimised-page__caveat {
+  margin-top: 12px;
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.optimised-page__result {
+  margin-top: 20px;
+}
+
+.optimised-page__period {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.optimised-page__opportunities {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .optimised-page__opportunities {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.optimised-page__opportunity {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.optimised-page__opportunity h3 {
+  font-size: 13px;
+  margin: 0 0 4px;
+  opacity: 0.75;
+}
+
+.optimised-page__opportunity strong {
+  font-size: 18px;
+}
+
+.optimised-page__moves {
+  margin-top: 16px;
+  font-size: 13px;
+}
+
+.optimised-page__sides {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+@media (min-width: 760px) {
+  .optimised-page__sides {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.optimised-page__side {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.optimised-page__side h2 {
+  font-size: 15px;
+  margin: 0 0 8px;
+}

@@ -6,6 +6,7 @@ import { BrandMark } from './components/Logo'
 import { OctopusConnectionProvider } from './octopus/OctopusConnectionContext'
 import AccountPage from './pages/AccountPage'
 import ActualPage from './pages/ActualPage'
+import ApplianceSetupPage from './pages/ApplianceSetupPage'
 import ComparePage from './pages/ComparePage'
 import CompatibilityFeedbackPage from './pages/CompatibilityFeedbackPage'
 import ConnectOctopusPage from './pages/ConnectOctopusPage'
@@ -13,6 +14,7 @@ import DebugPage from './pages/DebugPage'
 import ExplainerPage from './pages/ExplainerPage'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
+import OptimisedPage from './pages/OptimisedPage'
 import SavingsPage from './pages/SavingsPage'
 
 // The marketing landing page is aimed at signed-out visitors (its only CTA
@@ -49,6 +51,8 @@ function App() {
               <>
                 <NavLink to="/actual">Actual</NavLink>
                 <NavLink to="/compare">Compare</NavLink>
+                <NavLink to="/optimised">Optimised</NavLink>
+                <NavLink to="/appliances">Appliances</NavLink>
                 <NavLink to="/savings">My Savings</NavLink>
                 <NavLink to="/account">Account</NavLink>
                 <button type="button" className="app-header__signout" onClick={() => logout()}>
@@ -96,6 +100,22 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ComparePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/optimised"
+              element={
+                <ProtectedRoute>
+                  <OptimisedPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/appliances"
+              element={
+                <ProtectedRoute>
+                  <ApplianceSetupPage />
                 </ProtectedRoute>
               }
             />

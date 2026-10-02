@@ -5,6 +5,7 @@ import { createFirestoreCompatibilityRequestStore } from './compatibilityRequest
 import { loadConfig } from './config.js'
 import { optionalFirebaseAuth, requireFirebaseAuth } from './firebaseAuth.js'
 import { createFirestoreGuidanceFeedbackStore } from './guidanceFeedbackStore.js'
+import { createFirestoreHouseholdApplianceStore } from './householdApplianceStore.js'
 import {
   fetchActiveAgileTariffCode,
   fetchElectricityConsumption,
@@ -17,6 +18,7 @@ import { createFirestoreOctopusStore } from './octopusStore.js'
 import { authRouter } from './routes/auth.js'
 import { createCompatibilityRequestRouter } from './routes/compatibility.js'
 import { createGuidanceFeedbackRouter } from './routes/guidanceFeedback.js'
+import { createHouseholdApplianceRouter } from './routes/householdAppliances.js'
 import { createOctopusRouter } from './routes/octopus.js'
 import { createFirestoreSavingsLedgerStore } from './savingsLedgerStore.js'
 
@@ -56,6 +58,13 @@ export function createApp() {
     createGuidanceFeedbackRouter({
       requireFirebaseAuth,
       store: createFirestoreGuidanceFeedbackStore(),
+    }),
+  )
+  app.use(
+    '/api/household-appliances',
+    createHouseholdApplianceRouter({
+      requireFirebaseAuth,
+      store: createFirestoreHouseholdApplianceStore(),
     }),
   )
 

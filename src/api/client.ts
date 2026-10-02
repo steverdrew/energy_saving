@@ -320,7 +320,117 @@ export interface LikeForLikeResult {
   differencePence?: number
 }
 
+// OA-76: "Optimised" -- the same comparison tariff Like-for-like already
+// repriced the window to, with any identified flexible-load events shifted
+// into cheaper windows (docs/SHIFTING_METHODOLOGY.md, OA-73/OA-75).
+// evidenceTier mirrors the methodology doc's numbering (2 = user-supplied
+// appliance info, 3 = per-event user confirmation, 4 = generic default;
+// 1 and 5 aren't used by the first implementation). moves/eventsConsidered/
+// confidenceTiers are always empty/0/[] until household appliance data
+// exists (see server/src/flexibleLoadEvents.js) -- a genuine £0 timing
+// opportunity, never a guessed one.
+export interface OptimisedMove {
+  applianceType: string
+  evidenceTier: 2 | 3 | 4
+  originSlots: string[]
+  destinationSlots: string[]
+  beforeCostPence: number
+  afterCostPence: number
+  savingPence: number
+}
+
+export interface OptimisedSide {
+  totalKwh: number
+  totalCostPence: number
+  points: ActualPeriodPoint[]
+  // OA-75: the exact methodology version these figures were produced
+  // under -- a later version changing a tunable default never silently
+  // reinterprets an already-shown result.
+  methodologyVersion: string
+  moves: OptimisedMove[]
+  eventsConsidered: number
+  confidenceTiers: (2 | 3 | 4)[]
+}
+
+export interface OptimisedPeriodResult {
+  periodFrom?: string
+  periodTo?: string
+  importStatus: ActualPeriodImportStatus
+  unitRateOnly?: true
+  comparisonAvailable: boolean
+  comparisonMethod?: 'exact' | 'bounded_estimate' | 'unavailable'
+  comparisonTariffCode?: string
+  comparisonDisplayName?: string | null
+  actual?: { totalKwh: number; totalCostPence: number; complete: boolean }
+  comparison?: LikeForLikeSide
+  optimised?: OptimisedSide
+  // X - Y: switching tariff, same behaviour. Y - Z: same tariff, shifting
+  // flexible load. Always shown together -- see "Output and attribution".
+  tariffChoiceOpportunityPence?: number
+  timingOpportunityPence?: number
+}
+
+// OA-81: household appliance setup -- lets a household declare which of
+// OA-76's supported flexible appliances they use, and optionally confirm
+// real runtime/energy over the generic default. Mirrors
+// src/domain/applianceProfile.ts's DataSource/SourcedValue shapes exactly
+// (OA-30 stays the one canonical appliance-profile model). Per the
+// ticket, declaring an appliance here never identifies a historical
+// event or creates a Step 3 saving by itself -- OA-76's
+// eventsConsidered/moves stay unaffected by anything in this section.
+export type HouseholdApplianceType = 'dishwasher' | 'washing_machine' | 'tumble_dryer' | 'dehumidifier'
+
+export interface HouseholdApplianceRecord {
+  applianceType: HouseholdApplianceType
+  enabled: boolean
+  label: string | null
+  brand: string | null
+  model: string | null
+  durationMinutes: SourcedValue<number>
+  energyKwh: SourcedValue<number>
+  interruptible: SourcedValue<boolean>
+  requiresAwakeHome: SourcedValue<boolean>
+}
+
+export interface SourcedValue<T> {
+  value: T
+  source: 'device_reported' | 'manufacturer_profile' | 'user_confirmed' | 'generic_default'
+}
+
+export interface HouseholdApplianceUpdateInput {
+  durationMinutes?: number
+  energyKwh?: number
+  interruptible?: boolean
+  requiresAwakeHome?: boolean
+  label?: string
+  brand?: string
+  model?: string
+}
+
 export const api = {
+  householdAppliances: {
+    list: async () =>
+      request<{ appliances: HouseholdApplianceRecord[] }>('/api/household-appliances', {
+        headers: await authHeaders(),
+      }),
+    add: async (applianceType: HouseholdApplianceType) =>
+      request<{ appliance: HouseholdApplianceRecord }>('/api/household-appliances', {
+        method: 'POST',
+        body: JSON.stringify({ applianceType }),
+        headers: await authHeaders(),
+      }),
+    update: async (applianceType: HouseholdApplianceType, input: HouseholdApplianceUpdateInput) =>
+      request<{ appliance: HouseholdApplianceRecord }>(`/api/household-appliances/${applianceType}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+        headers: await authHeaders(),
+      }),
+    remove: async (applianceType: HouseholdApplianceType) =>
+      request<null>(`/api/household-appliances/${applianceType}`, {
+        method: 'DELETE',
+        headers: await authHeaders(),
+      }),
+  },
   octopus: {
     connect: async (input: { apiKey: string; accountNumber: string }) =>
       request<OctopusConnection>('/api/octopus/connect', {
@@ -377,6 +487,12 @@ export const api = {
       if (comparison.comparisonFamily) params.set('comparisonFamily', comparison.comparisonFamily)
       if (comparison.comparisonTariffCode) params.set('comparisonTariffCode', comparison.comparisonTariffCode)
       return request<LikeForLikeResult>(`/api/octopus/like-for-like?${params}`, { headers: await authHeaders() })
+    },
+    optimisedPeriod: async (comparison: { comparisonTariffCode?: string; comparisonFamily?: 'agile' }) => {
+      const params = new URLSearchParams()
+      if (comparison.comparisonFamily) params.set('comparisonFamily', comparison.comparisonFamily)
+      if (comparison.comparisonTariffCode) params.set('comparisonTariffCode', comparison.comparisonTariffCode)
+      return request<OptimisedPeriodResult>(`/api/octopus/optimised-period?${params}`, { headers: await authHeaders() })
     },
   },
   compatibility: {

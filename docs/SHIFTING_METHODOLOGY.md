@@ -1,11 +1,35 @@
 # Shifting methodology (OA-73)
 
-**Status: draft model for review — not yet signed off, not yet implemented.**
-This document is OA-73's deliverable: the model, constraints, confidence
-states and fixtures for Step 3 ("Optimised"). Per the ticket, it does
-not ship any customer-facing £ claim — no code in this repo implements
-any of this yet. A separate implementation ticket should be opened once
-this model is agreed (see "Next step" at the end).
+**Status: v1, implemented (OA-76).** Per OA-75, this document is a
+versioned working model, not a one-time sign-off gate — it's expected to
+change as real appliance/household data arrives, and any change should be
+recorded as a new dated entry under "Version history" below rather than a
+single "signed off" line. The model, constraints, confidence states and
+fixtures below are now built in code: `server/src/shiftingOptimiser.js`
+(the scheduling engine), `server/src/flexibleLoadEvents.js` (the event
+source — currently always `[]`, honestly, since no appliance/household
+data exists yet), and `GET /api/octopus/optimised-period` /
+`src/pages/OptimisedPage.tsx` (the route and page). The fixtures below are
+this implementation's test fixtures verbatim
+(`server/test/shiftingOptimiser.test.js`).
+
+## Version history
+
+- **v1 (`oa73-v1`, OA-76)**: first implementation — atomic wet appliances
+  (dishwasher, washing machine, tumble dryer) and the splittable
+  dehumidifier only, per "EV/battery/smart-heating treatment" below. Event
+  source always returns `[]` until the appliance/household setup ticket
+  (OA-81) exists, so Optimised today always equals Like-for-like (£0
+  timing opportunity) in production — honest per the product principle,
+  not a placeholder to be embarrassed about. Tunable defaults (awake-home
+  hours, the minimum-saving threshold) live in
+  `server/src/shiftingMethodologyDefaults.js`, centralised rather than
+  inlined at each call site; every optimisation result and every move
+  carries `methodologyVersion` so a future version changing a default is
+  always distinguishable from a result produced under this one. An
+  explicit `validWindowStartsAt`/`validWindowEndsAt` on an event overrides
+  the computed default window entirely (the one way a load may move
+  earlier than its default window allows).
 
 ## Where this sits
 
@@ -14,9 +38,9 @@ The journey is now:
 1. **Actual** (OA-71) — what happened.
 2. **Like-for-like** (OA-72) — the same consumption, repriced on a
    different tariff ("I'm on X — what would this have cost on Y?").
-3. **Optimised** (this document; implementation not yet started) — the
-   same household energy requirement, but with genuinely flexible
-   consumption shifted into cheaper periods.
+3. **Optimised** (this document; implemented in OA-76) — the same
+   household energy requirement, but with genuinely flexible consumption
+   shifted into cheaper periods.
 
 The product principle governing all of what follows:
 
@@ -286,8 +310,10 @@ and nowhere else).
 
 ## Deterministic test fixtures
 
-These are worked examples for the eventual implementation ticket's
-tests — pure arithmetic, not wired into any code yet.
+These are implemented verbatim as `server/test/shiftingOptimiser.test.js`'s
+fixture tests (fixture 3 is tested qualitatively there — tier ordering and
+the concurrency cap — since this doc doesn't give a full rate series to
+check exact pence against).
 
 ### Fixture 1: a dishwasher cycle moves to a cheaper window, same day
 
@@ -341,15 +367,15 @@ tests — pure arithmetic, not wired into any code yet.
 
 ## Next step
 
-This document is the full deliverable for OA-73: model, constraints,
-evidence hierarchy, and fixtures. Before any implementation ticket is
-opened against it:
+Implemented in OA-76. What's left, in the build order Steve set:
 
-1. Steve reviews and signs off the model (same pattern as
-   `SAVINGS_METHODOLOGY.md`'s sign-off line) — amend this file in
-   place with a "Signed off by Steve, <date>" line once agreed, the
-   same way `SAVINGS_METHODOLOGY.md` records its own sign-off.
-2. Only then should a new ticket be created to build the Optimised
-   endpoint/page and the heat map's third series — per the ticket's
-   own instruction, this is deliberately a separate piece of work, not
-   a continuation to start automatically once this file is merged.
+1. Appliance/household setup — the ticket that lets a household declare
+   the appliances they own (tier 4 evidence) and, later, confirm real
+   runtime/energy (tier 2) or a specific cycle's flexibility (tier 3).
+   Until it exists, `detectFlexibleLoadEvents` stays `[]` and Optimised
+   stays honestly at £0 timing opportunity.
+2. OA-65 (Today/Tomorrow schedule + heat map) — after appliance/household
+   setup, per the current roadmap.
+3. EV/battery/smart-heating remain deferred until tier 1 or 2 evidence
+   exists for them, per "EV/battery/smart-heating treatment" above — not
+   blocked on anything else in this doc.
