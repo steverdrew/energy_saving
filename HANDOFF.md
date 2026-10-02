@@ -1,120 +1,112 @@
 # HANDOFF
 
-_Last updated: 2026-10-02 07:20 UTC_
+_Last updated: 2026-10-02 (merge of OA-47 + OA-49)_
 
 ## Current task
 
-OA-49 — set up continuous beta deployment of the web app to Firebase
-Hosting, triggered on merge to `main`, with a stable beta URL.
+Merging OA-47 (cloud-ready repo: CI, server tests, docs, env config,
+Octopus stubs, typed API client, bundle check) and OA-49 (continuous beta
+deployment to Firebase Hosting) into `main`.
 
 ## State
 
-Implemented and verified locally; not yet committed/pushed/PR'd.
-**The actual first deployment has not happened yet** — that only runs
-when this lands on `main` with the deploy secret in place (see Open
-items), per the ticket's acceptance criteria.
+- **OA-47**: merged to `main` (PR steverdrew/energy_saving#1). CI
+  (`.github/workflows/ci.yml`) green on both jobs before merge.
+- **OA-49**: this branch (`claude/oa-49-beta-deploy`, PR
+  steverdrew/energy_saving#2) is being merged into `main` after OA-47.
+  Merging OA-47 first created a real conflict (both touched
+  `README.md`/`HANDOFF.md`) — resolved by hand in this merge commit:
+  kept OA-47's README structure and appended OA-49's "Beta deployment"
+  section; this HANDOFF.md replaces both branches' versions.
 
-Done:
-
-- `firebase.json` — Hosting config: serves `dist/` with an SPA rewrite.
-- `.firebaserc` — `beta` project alias set to `shiftandsaveapp` (the
-  real Firebase project ID, confirmed by Steve).
-- `vite.config.ts` — injects `__APP_COMMIT_SHA__` (from `GITHUB_SHA` in
-  CI, else `'local'`) and `__APP_BUILD_TIME__` as build-time constants.
-- `src/globals.d.ts` — ambient TS declarations for those two constants.
-- `src/pages/DebugPage.tsx` + route `/debug` in `src/App.tsx` — not
-  linked from nav, shows the running build's commit SHA and build time.
-- `.github/workflows/deploy-beta.yml` — on push to `main`: install, lint,
-  build, test, then deploy `dist/` to Firebase Hosting's live channel via
-  `FirebaseExtended/action-hosting-deploy@v0`, using the
-  `FIREBASE_SERVICE_ACCOUNT_BETA` secret. Build/test failures stop the
-  job before Hosting is touched — last working beta stays live.
-- `README.md` — added a "Beta deployment" section: beta URL, build
-  identification via `/debug`, required secret, how to reproduce a
-  deploy locally.
-
-Verified locally: `npm run lint`, `npm run build`, `npm test` all pass;
-`/debug` route resolves (200) under `npm run dev`; built bundle contains
-the injected build constants.
+Once this merge lands on `main`, `.github/workflows/deploy-beta.yml`
+fires for real — that's OA-49's required first deployment.
 
 ## Next step
 
-1. Confirm with Steve that the `FIREBASE_SERVICE_ACCOUNT_BETA` GitHub
-   Actions secret has been added (he said he has the JSON key ready —
-   he should add it via the repo's Settings → Secrets, never paste it
-   here).
-2. Commit, push this branch, open the PR against `main`.
-3. Once merged, watch the `deploy-beta` Actions run — that's the ticket's
-   required first real deployment. Confirm the beta URL
-   (`https://shiftandsaveapp.web.app`) is live and `/debug` shows the
-   merge commit's SHA.
-4. Update README with the confirmed-live beta URL if it differs from the
-   assumed default Hosting URL.
+After this merge commit is pushed: watch the `deploy-beta` GitHub Actions
+run on `main`. Confirm `https://shiftandsaveapp.web.app` is live and
+`/debug` shows this merge commit's SHA. If it fails, check the
+`FIREBASE_SERVICE_ACCOUNT_BETA` secret is present and the Hosting site
+resolves as expected (see OA-49 Gotchas below).
 
 ## Open items
 
-- Deploy secret `FIREBASE_SERVICE_ACCOUNT_BETA` not yet confirmed as
-  added to the repo (can't check from here; GitHub secrets are
-  write-only). If missing, the deploy step in CI will fail clearly
-  (build/lint/test still run and report independently) — not a silent
-  failure, but still needs Steve to add it before merge is useful.
-- Firebase Hosting's **default site ID assumption**: `firebase.json` has
-  no explicit `site`, so it deploys to the project's default Hosting
-  site, assumed reachable at `https://shiftandsaveapp.web.app`. Not
-  verified against a real deploy yet — confirm once the first deploy
-  runs.
-- `deploy-beta.yml` does **not** run `npm run check-bundle` — that script
-  only exists on the OA-47 branch (`claude/friendly-franklin-f3he6k`,
-  PR #1), not yet on `main`. Add it back to this workflow once OA-47
-  merges.
+- `deploy-beta.yml` doesn't run `npm run check-bundle` even though that
+  script now exists on `main` (from OA-47). Worth adding back as a
+  pre-deploy gate in a follow-up — not done in this merge to keep the
+  conflict resolution minimal.
+- Firebase Hosting's default site URL (`https://shiftandsaveapp.web.app`)
+  is assumed, not yet confirmed against a real deploy.
 
 ## Key references
 
-- Ticket: OA-3 (epic) / OA-49 (story), Jira Octopus Agile project.
-- `firebase.json`, `.firebaserc` — Hosting config.
-- `vite.config.ts`, `src/globals.d.ts` — build-time version constants.
-- `src/pages/DebugPage.tsx` — `/debug` route.
-- `.github/workflows/deploy-beta.yml` — CI deploy job.
-- Related: OA-47 is on a separate branch/PR
-  (`claude/friendly-franklin-f3he6k`, steverdrew/energy_saving#1), not
-  merged yet; this branch is independent of it (branched off `main`).
+- Tickets: OA-47, OA-3 (epic) / OA-49, Jira Octopus Agile project.
+- PRs: steverdrew/energy_saving#1 (merged), #2 (OA-49).
+- `server/src/config.js` — required server env vars.
+- `src/api/client.ts` — web↔server boundary.
+- `.github/workflows/ci.yml` — lint/build/test CI.
+- `.github/workflows/deploy-beta.yml` — beta deploy on push to `main`.
+- `scripts/check-bundle.mjs` — secret-leak guard (not yet wired into
+  deploy-beta.yml, see Open items).
+- `firebase.json`, `.firebaserc` — Hosting config (project
+  `shiftandsaveapp`).
+- `src/pages/DebugPage.tsx` (`/debug`) — build/commit identification.
 
 ## Decisions
 
-- **Scope: Hosting only.** Per Steve: this ticket deploys the static
-  React/PWA build to Firebase Hosting. The Express + better-sqlite3
-  backend is not deployed or wired into Firebase Auth/Firestore as part
-  of this ticket, even though the ticket text mentions
-  "Firebase Auth/Firestore/API integration works in beta." API calls
-  from the beta URL will not reach a real backend — there isn't one
-  deployed. Flag this if a future ticket expects `/api/*` to work
-  against the beta URL.
-- **Branched off `main`, not off the OA-47 branch** — OA-49 doesn't
-  depend on OA-47's changes, and OA-47's PR isn't merged yet.
-- **Live channel, not a preview channel.** `channelId: live` deploys
-  straight to the default Hosting URL on every push to `main`, matching
-  "a merged ticket automatically produces a fresh beta deployment."
-  PR preview channels (a different, common use of this same GitHub
-  Action) are out of scope here.
-- **Build-time version injection via Vite `define`**, not a runtime
-  fetch — no backend is deployed to beta to serve that from.
-- **No production workflow added** — production stays manual/gated per
-  the ticket; only `deploy-beta.yml` exists.
+From OA-47:
+- Node 22's built-in `node --test` + `supertest` for server tests, not a
+  new framework.
+- No `dotenv`; server scripts use `--env-file-if-exists=.env`.
+- `DATABASE_PATH` required, not defaulted; `:memory:` special-cased in
+  `server/src/db.js` (must not be path-joined); parent dir created on
+  demand for real paths.
+- No `COOKIE_SECRET` — session IDs are already random tokens looked up
+  server-side.
+- Bundle check matches server env var *names* in built `dist/` files;
+  not a general secret scanner.
+- No server TypeScript conversion, no library swaps — out of scope.
+
+From OA-49:
+- **Scope: Hosting only.** The app's auth/data layer (Express +
+  better-sqlite3) is not Firebase; this deploys the static build only.
+  `/api/*` against the beta URL won't reach a real backend until a
+  separate ticket addresses that.
+- Firebase project ID is `shiftandsaveapp` (confirmed by Steve; note the
+  project *number*, `761386319734`, is a different identifier and not
+  usable here).
+- Deploys straight to Hosting's live channel on push to `main` (not a PR
+  preview channel) — matches "a merged ticket automatically produces a
+  fresh beta deployment."
+- Build-time version injection via Vite `define`, not a runtime fetch —
+  no backend is deployed to beta to serve that from.
 
 ## Constraints and preferences
 
-- No production secrets in the client or beta config.
+- No secrets/credentials in browser code, bundle, or repo.
+- Never log credentials or full account numbers.
+- Currency GBP; times stored/handled UTC, displayed Europe/London.
+- SQLite db files stay out of git.
 - Keep production deployment separate, manual, and gated.
-- Failed builds/tests must not replace the last working beta deploy.
 - Keep sessions short; if context grows large, update this file and
   continue in a fresh session.
 
 ## Gotchas
 
-- Firebase project **number** (e.g. `761386319734`) and project **ID**
-  (e.g. `shiftandsaveapp`) are different identifiers — tooling here needs
-  the ID. Confirmed with Steve; `shiftandsaveapp` is now in `.firebaserc`
-  and the workflow's `projectId`.
+- `DATABASE_PATH=:memory:` must never be path-joined — see the
+  special-case in `server/src/db.js`.
+- WAL journal mode is skipped for `:memory:` (unsupported, caused
+  `SQLITE_BUSY` under the test runner).
+- Root `vite.config.ts` test `include` is scoped to
+  `src/**/*.test.{ts,tsx}` so Vitest doesn't also try to run the
+  server's `node:test`-style files.
+- `server/package.json`'s `dev`/`start` need
+  `--env-file-if-exists=.env`, or `server/.env` is silently ignored.
+- `vite.config.ts`'s Vitest `test` field needs
+  `/// <reference types="vitest/config" />` to typecheck with `tsc -b`.
+- Firebase project **number** vs project **ID** are different
+  identifiers — tooling here needs the ID (`shiftandsaveapp`).
 - Firebase Hosting's SPA rewrite (`**` → `/index.html`) means any
-  `/api/*` path requested against the beta Hosting URL just returns
-  `index.html`, not a real API response — expected (see Decisions).
+  `/api/*` path against the beta Hosting URL returns `index.html`, not a
+  real API response — expected, no backend is deployed to beta.

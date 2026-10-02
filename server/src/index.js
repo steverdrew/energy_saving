@@ -1,20 +1,30 @@
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
 import express from 'express'
+import { loadConfig } from './config.js'
 import { authRouter } from './routes/auth.js'
+import { octopusRouter } from './routes/octopus.js'
 
-const app = express()
-const PORT = process.env.PORT ?? 4000
-const ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173'
+const config = loadConfig()
 
-app.use(cors({ origin: ORIGIN, credentials: true }))
-app.use(express.json())
-app.use(cookieParser())
+export function createApp() {
+  const app = express()
 
-app.use('/api/auth', authRouter)
+  app.use(cors({ origin: config.clientOrigin, credentials: true }))
+  app.use(express.json())
+  app.use(cookieParser())
 
-app.get('/api/health', (_req, res) => res.json({ ok: true }))
+  app.use('/api/auth', authRouter)
+  app.use('/api/octopus', octopusRouter)
 
-app.listen(PORT, () => {
-  console.log(`energy-saving-server listening on http://localhost:${PORT}`)
-})
+  app.get('/api/health', (_req, res) => res.json({ ok: true }))
+
+  return app
+}
+
+if (process.env.NODE_ENV !== 'test') {
+  const app = createApp()
+  app.listen(config.port, () => {
+    console.log(`energy-saving-server listening on http://localhost:${config.port}`)
+  })
+}
