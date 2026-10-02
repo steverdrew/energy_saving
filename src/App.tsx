@@ -1,4 +1,4 @@
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import './App.css'
 import { useAuth } from './auth/AuthContext'
 import ProtectedRoute from './auth/ProtectedRoute'
@@ -28,10 +28,15 @@ function HomeRoute() {
 
 function App() {
   const { user, loading, logout } = useAuth()
+  const location = useLocation()
+  // OA-79: the dark/purple visual system is scoped to the logged-out
+  // landing route only -- the authenticated app keeps its existing light
+  // theme, so this never fights the rest of the product's design.
+  const isLandingRoute = !loading && !user && location.pathname === '/'
 
   return (
     <OctopusConnectionProvider>
-      <div className="app-shell">
+      <div className="app-shell" data-landing={isLandingRoute || undefined}>
         <header className="app-header">
           <NavLink to="/" className="app-header__brand">
             <BrandMark />
