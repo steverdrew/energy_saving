@@ -61,3 +61,9 @@
   max-width: 260px;
   font-size: 15px;
 }
+
+.landing-explainer-link {
+  text-align: center;
+  font-size: 15px;
+  padding: 0 0 32px;
+}

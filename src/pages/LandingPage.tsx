@@ -53,6 +53,11 @@ function LandingPage() {
           </p>
         ))}
       </section>
+
+      <p className="landing-explainer-link">
+        New to Agile, Go or Intelligent Go?{' '}
+        <Link to="/how-smart-tariffs-work">See how smart tariffs work</Link>.
+      </p>
     </>
   )
 }

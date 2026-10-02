@@ -1,0 +1,48 @@
+.explainer {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.explainer h1 {
+  margin-bottom: 8px;
+}
+
+.explainer__intro {
+  font-size: 18px;
+  margin-bottom: 32px;
+}
+
+.explainer section {
+  margin-bottom: 28px;
+}
+
+.explainer h2 {
+  font-size: 19px;
+  margin-bottom: 6px;
+}
+
+.explainer dl {
+  margin: 0;
+}
+
+.explainer dt {
+  font-weight: 600;
+  color: var(--text-h);
+  margin-top: 12px;
+}
+
+.explainer dd {
+  margin: 4px 0 0;
+}
+
+.explainer__cta {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 14px 28px;
+  font-size: 18px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--bg);
+  background: var(--accent);
+  border-radius: 8px;
+}

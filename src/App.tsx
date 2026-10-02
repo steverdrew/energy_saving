@@ -1,6 +1,7 @@
 import { NavLink, Route, Routes } from 'react-router-dom'
 import './App.css'
 import AccountPage from './pages/AccountPage'
+import ExplainerPage from './pages/ExplainerPage'
 import LandingPage from './pages/LandingPage'
 import SavingsPage from './pages/SavingsPage'
 import SignupPage from './pages/SignupPage'
@@ -26,6 +27,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/account" element={<AccountPage />} />
+          <Route path="/how-smart-tariffs-work" element={<ExplainerPage />} />
           <Route path="/savings" element={<SavingsPage />} />
         </Routes>
       </main>
