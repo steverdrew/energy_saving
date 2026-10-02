@@ -34,7 +34,7 @@ function SignupPage() {
   }
 
   return (
-    <section>
+    <section className="auth-page">
       <h1>{mode === 'signup' ? 'Create your account' : 'Sign in'}</h1>
       <form className="auth-form" onSubmit={handleSubmit}>
         <label>
