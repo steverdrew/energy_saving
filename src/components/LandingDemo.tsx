@@ -38,10 +38,16 @@ function describeTimingPotential(pence: number): string {
  * content (via `key`) to replay a restrained fade/slide transition --
  * skipped entirely under prefers-reduced-motion (see LandingDemo.css).
  *
- * OA-83: the story panel leads with the number (kWh/£), not a sentence --
- * a small context pill above it and a short supporting line below, per
- * the ticket's "dominant figure" hierarchy. Reuses the same fixture/copy
- * as before, just reordered/restyled; no new claims are made.
+ * OA-83 (second pass): the story panel leads with the number (kWh/£),
+ * not a sentence -- a short context line above it and a brief
+ * supporting line below, per the ticket's "dominant figure" hierarchy.
+ * No standalone section heading, no pill/card chrome around that
+ * context line or the Optimise step's figures -- the ticket's own
+ * review of the first pass asked for fewer generic "another
+ * pill/another card" containers, letting the segmented control and the
+ * numbers themselves carry the section rather than a labelled box.
+ * Reuses the same fixture/copy as before, just reordered/restyled; no
+ * new claims are made.
  */
 function LandingDemo() {
   const [step, setStep] = useState<DemoStepId>('baseline')
@@ -67,7 +73,6 @@ function LandingDemo() {
 
   return (
     <section className="landing-demo" aria-label="Interactive example: how Shift & Save works">
-      <h2 className="landing-demo__heading">Interactive tariff comparison</h2>
       <p className="landing-demo__eyebrow">Example household — illustrative data, not your own</p>
 
       <div className="landing-demo__tabs" role="tablist" aria-label="Demo steps">
@@ -103,55 +108,53 @@ function LandingDemo() {
         <div className="landing-demo__story">
           {step === 'baseline' && (
             <>
-              <p className="landing-demo__pill">Example tariff: {fixture.baseline.tariffName}</p>
-              <p className="landing-demo__label">This example day:</p>
+              <p className="landing-demo__context">Example tariff: {fixture.baseline.tariffName}</p>
               <p className="landing-demo__stat">
                 <span className="landing-demo__stat-value">{fixture.baseline.totalKwh.toFixed(1)} kWh</span>
-                <span className="landing-demo__stat-sep" aria-hidden="true">
-                  ·
+                <span className="landing-demo__stat-value">
+                  <span aria-hidden="true">· </span>
+                  {formatGbp(fixture.baseline.totalCostPence)}
                 </span>
-                <span className="landing-demo__stat-value">{formatGbp(fixture.baseline.totalCostPence)}</span>
               </p>
               <p className="landing-demo__caption">
-                This is the baseline. We map exactly when energy gets used, half hour by half hour.
+                This is the baseline — exactly when energy gets used, half hour by half hour.
               </p>
             </>
           )}
 
           {step === 'compare' && (
             <>
-              <p className="landing-demo__pill">Compare with: {fixture.compare.tariffName}</p>
-              <p className="landing-demo__label landing-demo__label--accent">Same usage. Same times.</p>
+              <p className="landing-demo__context landing-demo__context--accent">
+                Same usage. Same times. Compare with {fixture.compare.tariffName}.
+              </p>
               <p className="landing-demo__stat">
                 <span className="landing-demo__stat-value">{formatGbp(fixture.compare.totalCostPence)}</span>
                 <span className="landing-demo__stat-diff">
                   {describeDifference(fixture.tariffSwitchSavingPence, 'more', 'less')}
                 </span>
               </p>
-              <p className="landing-demo__caption">
-                Only the tariff changes — same example household, same half-hourly usage.
-              </p>
+              <p className="landing-demo__caption">Only the tariff changes — usage is identical to Baseline.</p>
               <p className="landing-demo__caveat">
-                This is one example comparison, not a guarantee — which tariff costs less depends on your own usage
-                pattern.
+                One example comparison, not a guarantee — which tariff costs less depends on your own usage pattern.
               </p>
             </>
           )}
 
           {step === 'optimise' && (
             <>
-              <p className="landing-demo__question">
-                What if flexible use — like a dishwasher — moved out of the expensive window?
+              <p className="landing-demo__context">
+                {fixture.compare.tariffName}, same usage — flexible load moved out of the expensive window.
               </p>
-              <div className="landing-demo__callout">
-                <p className="landing-demo__label">{fixture.compare.tariffName} + smarter timing</p>
-                <p className="landing-demo__stat">
-                  <span className="landing-demo__stat-value">{formatGbp(fixture.optimise.totalCostPence)}</span>
-                  <span className="landing-demo__stat-diff landing-demo__stat-diff--positive">
-                    {describeTimingPotential(fixture.timingSavingPence)}
-                  </span>
-                </p>
-              </div>
+              <p className="landing-demo__stat">
+                <span className="landing-demo__stat-value">{formatGbp(fixture.optimise.totalCostPence)}</span>
+                <span className="landing-demo__stat-diff landing-demo__stat-diff--positive">
+                  {describeTimingPotential(fixture.timingSavingPence)}
+                </span>
+              </p>
+              <p className="landing-demo__caption">
+                Same tariff as Compare, same total energy — only the timing of flexible use (like a dishwasher)
+                changes.
+              </p>
               <p className="landing-demo__caveat">
                 Illustrative example only. We&apos;re not saying your home has this appliance, or that you could
                 achieve this saving.
