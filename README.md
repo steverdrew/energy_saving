@@ -272,10 +272,14 @@ alone.
    any used for local dev or CI). The deploy workflow mounts it into
    Cloud Run as an env var via `--set-secrets`; it's never stored in
    GitHub Actions itself.
-5. **Grant the Cloud Run service's runtime service account** (the
-   default compute service account, unless you configure a dedicated
-   one) the `Cloud Datastore User` role, so it can read/write Firestore,
-   and `Secret Manager Secret Accessor` on the `ENCRYPTION_KEY` secret.
+5. **Create a dedicated runtime service account**
+   (`energy-saving-server-runtime@shiftandsaveapp.iam.gserviceaccount.com`)
+   with the `Cloud Datastore User` role (Firestore read/write) and
+   `Secret Manager Secret Accessor` on the `ENCRYPTION_KEY` secret. No
+   key needed — Cloud Run uses it natively via `deploy-server.yml`'s
+   `service_account` input. (The project's default compute service
+   account isn't used here, and may not even exist yet if Compute
+   Engine itself has never been used in this project.)
 6. **First deploy only**: the Cloud Run service must exist before
    Firebase Hosting's rewrite can reference it. Push to `main` once to
    let `deploy-server.yml` create the `energy-saving-server` Cloud Run

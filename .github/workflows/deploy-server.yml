@@ -46,6 +46,10 @@ jobs:
           service: energy-saving-server
           region: europe-west2
           source: server
+          # Dedicated runtime identity (Cloud Datastore User + Secret
+          # Manager Secret Accessor only) -- narrower than the project's
+          # default compute service account.
+          service_account: energy-saving-server-runtime@shiftandsaveapp.iam.gserviceaccount.com
           env_vars: |
             CLIENT_ORIGIN=https://shiftandsaveapp.web.app
             DATABASE_PATH=data/app.db
