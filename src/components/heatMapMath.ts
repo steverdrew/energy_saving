@@ -141,6 +141,45 @@ export function findAnnotations(days: HeatMapDay[]): HeatMapAnnotation[] {
   return candidates.filter((a): a is HeatMapAnnotation => a !== null)
 }
 
+export interface PeakWindow {
+  startSlot: number
+  endSlot: number
+}
+
+/**
+ * OA-86: the landing-page demo's peak-window overlay -- the longest run of
+ * consecutive "peak" (rateCategoryIndex === 2) slots in a representative
+ * day, used to highlight *where* the expensive window actually falls in
+ * the current illustrative tariff data. Deliberately not a hard-coded
+ * time band (the reference mockup's "16:00-19:00" was fixed to one
+ * example Agile shape) -- a flat tariff has no peak band at all, so this
+ * returns null and the overlay simply doesn't render, rather than a
+ * union/day considered. Ties for longest run keep the first.
+ */
+export function findPeakWindow(day: HeatMapDay | undefined, min: number, max: number): PeakWindow | null {
+  if (!day) return null
+  let bestStart = -1
+  let bestLength = 0
+  let runStart = -1
+  let runLength = 0
+
+  day.slots.forEach((slot, index) => {
+    if (rateCategoryIndex(slot.unitRateIncVatPence, min, max) === 2) {
+      if (runLength === 0) runStart = index
+      runLength++
+      if (runLength > bestLength) {
+        bestLength = runLength
+        bestStart = runStart
+      }
+    } else {
+      runLength = 0
+    }
+  })
+
+  if (bestLength === 0) return null
+  return { startSlot: bestStart, endSlot: bestStart + bestLength - 1 }
+}
+
 export function formatSlotTime(iso: string): string {
   return new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Europe/London',

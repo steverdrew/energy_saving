@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   findAnnotations,
+  findPeakWindow,
   formatSlotTime,
   groupSlotsByLondonDay,
   maxUsage,
@@ -136,6 +137,34 @@ describe('findAnnotations', () => {
   it('omits annotations entirely absent from the data', () => {
     const days: HeatMapDay[] = [{ date: '2026-01-01', slots: [slot('2026-01-01T00:00:00Z', null, null)] }]
     expect(findAnnotations(days)).toEqual([])
+  })
+})
+
+describe('findPeakWindow', () => {
+  it('finds the longest run of peak-band slots', () => {
+    const day: HeatMapDay = {
+      date: '2026-01-01',
+      slots: [
+        slot('2026-01-01T00:00:00Z', 0.1, 10), // cheap
+        slot('2026-01-01T00:30:00Z', 0.1, 40), // peak
+        slot('2026-01-01T01:00:00Z', 0.1, 10), // cheap -- breaks the run
+        slot('2026-01-01T01:30:00Z', 0.1, 35), // peak
+        slot('2026-01-01T02:00:00Z', 0.1, 38), // peak -- longest run: slots 3-4
+      ],
+    }
+    expect(findPeakWindow(day, 10, 40)).toEqual({ startSlot: 3, endSlot: 4 })
+  })
+
+  it('returns null for a flat tariff with no peak band', () => {
+    const day: HeatMapDay = {
+      date: '2026-01-01',
+      slots: [slot('2026-01-01T00:00:00Z', 0.1, 15), slot('2026-01-01T00:30:00Z', 0.1, 15)],
+    }
+    expect(findPeakWindow(day, 15, 15)).toBe(null)
+  })
+
+  it('returns null for an undefined day', () => {
+    expect(findPeakWindow(undefined, 10, 40)).toBe(null)
   })
 })
 

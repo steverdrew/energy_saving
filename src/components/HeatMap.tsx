@@ -2,6 +2,7 @@ import { useId, useMemo, useRef, useState } from 'react'
 import { formatGbp } from '../format'
 import {
   findAnnotations,
+  findPeakWindow,
   formatSlotTime,
   maxUsage,
   rateCategoryIndex,
@@ -67,6 +68,22 @@ function HeatMap({ days, title, variant = 'sequential' }: HeatMapProps) {
   const { min, max } = useMemo(() => rateRange(days), [days])
   const peakUsage = useMemo(() => maxUsage(days), [days])
   const annotations = useMemo(() => findAnnotations(days), [days])
+  const isTariff = variant === 'tariff'
+  // OA-86: derived from this step's own fixture data (the longest run of
+  // peak-band slots in a representative day), never a hard-coded time
+  // band -- a flat tariff (e.g. Baseline) has no peak run, so this is
+  // null and no overlay renders, exactly mirroring the reference
+  // mockup's "peak overlay hidden on Baseline" behaviour without needing
+  // a per-step special case.
+  const peakWindow = useMemo(() => (isTariff ? findPeakWindow(days[0], min, max) : null), [isTariff, days, min, max])
+  const peakWindowLabel = useMemo(() => {
+    if (!peakWindow) return null
+    const startSlot = days[0]?.slots[peakWindow.startSlot]
+    const endSlot = days[0]?.slots[peakWindow.endSlot]
+    if (!startSlot || !endSlot) return null
+    const endsAt = new Date(new Date(endSlot.startsAt).getTime() + 30 * 60_000).toISOString()
+    return `${formatSlotTime(startSlot.startsAt)}–${formatSlotTime(endsAt)}`
+  }, [peakWindow, days])
 
   const annotationFor = (dayIndex: number, slotIndex: number) =>
     annotations.find((a) => a.dayIndex === dayIndex && a.slotIndex === slotIndex)
@@ -103,8 +120,6 @@ function HeatMap({ days, title, variant = 'sequential' }: HeatMapProps) {
     selected !== null ? days[selected.dayIndex]?.slots[selected.slotIndex] ?? null : null
   const selectedDay = selected !== null ? days[selected.dayIndex] : null
 
-  const isTariff = variant === 'tariff'
-
   return (
     <div className={isTariff ? 'heat-map heat-map--tariff' : 'heat-map'}>
       <div className="heat-map__header">
@@ -131,7 +146,9 @@ function HeatMap({ days, title, variant = 'sequential' }: HeatMapProps) {
                     <span className="heat-map__legend-label">{label}</span>
                   </span>
                 ))}
-                <span className="heat-map__legend-note">Shade shows usage</span>
+                <span className="heat-map__legend-note">
+                  Shade shows usage{peakWindowLabel ? ` · Peak ${peakWindowLabel}` : ''}
+                </span>
               </>
             ) : (
               <>
@@ -185,6 +202,13 @@ function HeatMap({ days, title, variant = 'sequential' }: HeatMapProps) {
                         </button>
                       )
                     })}
+                    {peakWindow && (
+                      <span
+                        className="heat-map__peak-overlay"
+                        aria-hidden="true"
+                        style={{ gridColumn: `${peakWindow.startSlot + 1} / ${peakWindow.endSlot + 2}` }}
+                      />
+                    )}
                   </div>
                 </div>
               )

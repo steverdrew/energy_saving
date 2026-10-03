@@ -53,6 +53,19 @@ function describeTimingPotential(pence: number): string {
  * cheap/standard/peak, opacity = usage) and a multi-day fixture, not the
  * authenticated pages' sequential-ramp/bar-height chart -- see
  * HeatMap.tsx's `variant` prop and landingDemoFixture's `days`.
+ *
+ * OA-86: the `key={step}` remount (for the story panel's fade/slide) is
+ * scoped to `.landing-demo__story` only, not the whole grid -- `<HeatMap>`
+ * itself stays mounted across step changes. Each day/slot across
+ * Baseline/Compare/Optimise shares the same `date`/`startsAt` (only the
+ * colour/opacity values differ -- see landingDemoFixture.ts), which are
+ * HeatMap's own React keys, so switching steps updates each cell's
+ * existing DOM node in place rather than replacing it. That's what lets
+ * HeatMap.css's `transition: background-color/opacity` actually
+ * interpolate between states, the same mechanism the OA-86 reference
+ * mockup's own `applyState()` relies on (mutate persistent nodes, let
+ * CSS do the animating) -- remounting fresh cells on every step would
+ * have nothing to transition from.
  */
 function LandingDemo() {
   const [step, setStep] = useState<DemoStepId>('baseline')
@@ -110,12 +123,11 @@ function LandingDemo() {
 
       <div
         className="landing-demo__grid"
-        key={step}
         role="tabpanel"
         id={`landing-demo-panel-${step}`}
         aria-labelledby={`landing-demo-tab-${step}`}
       >
-        <div className="landing-demo__story">
+        <div className="landing-demo__story" key={step}>
           {step === 'baseline' && (
             <>
               <p className="landing-demo__context">Example tariff: {fixture.baseline.tariffName}</p>

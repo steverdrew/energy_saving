@@ -219,6 +219,27 @@
   }
 }
 
+/* OA-86: peak-window overlay, derived from this step's own fixture data
+   (heatMapMath's findPeakWindow) -- not a hard-coded time band. Grid-
+   placed alongside the 48 cell buttons in the same row (see HeatMap.tsx),
+   painted after them so it reads on top, but `pointer-events: none` so
+   it never intercepts a click/tap meant for the cell underneath. Absent
+   entirely for a flat tariff (no peak run), e.g. Baseline. */
+.heat-map--tariff .heat-map__peak-overlay {
+  grid-row: 1;
+  align-self: stretch;
+  pointer-events: none;
+  background: rgba(229, 72, 77, 0.12);
+  border-left: 1px solid rgba(229, 72, 77, 0.5);
+  border-right: 1px solid rgba(229, 72, 77, 0.5);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .heat-map--tariff .heat-map__peak-overlay {
+    transition: opacity 0.8s ease;
+  }
+}
+
 /* "Show as table" and the detail line read as diagnostic-widget chrome
    next to the landing page's own story -- demoted here, not removed:
    they stay reachable/accessible, just visually secondary. */

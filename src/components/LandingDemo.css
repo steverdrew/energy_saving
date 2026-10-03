@@ -292,9 +292,14 @@
 /* OA-80: the transition between states should help explain what
    changed -- a restrained fade/slide, replayed by remounting the panel
    (React `key={step}`) on every step change. Respects reduced motion by
-   simply not defining the animation at all when the preference is set. */
+   simply not defining the animation at all when the preference is set.
+   OA-86: scoped to the story panel only (it alone remounts via
+   `key={step}`, see LandingDemo.tsx) -- `.landing-demo__heatmap-card`
+   stays mounted across step changes so its cells can CSS-transition
+   background-color/opacity in place instead of popping into a freshly
+   rendered end state. */
 @media (prefers-reduced-motion: no-preference) {
-  .landing-demo__grid {
+  .landing-demo__story {
     animation: landing-demo-panel-in 0.32s ease both;
   }
 }

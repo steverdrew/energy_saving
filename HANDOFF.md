@@ -1,8 +1,12 @@
 # HANDOFF
 
-_Last updated: 2026-10-03 (OA-86 audited and closed as already-satisfied
-by OA-85 -- no code change needed; see "Current task" below. Previous
-entry:)_
+_Last updated: 2026-10-03 (OA-86, second pass: Steve supplied the actual
+reference mockup after the first "no code change needed" audit --
+found and fixed two real gaps that audit missed; see "Current task"
+below. Previous entries:)_
+
+_2026-10-03, first pass (superseded below): OA-86 audited and closed as
+already-satisfied by OA-85 -- no code change needed._
 
 _2026-10-02 (core loop via PR #14; backlog audit +
 polish tier via PR #15; deeper feature tier via PR #16/#17; beta
@@ -24,33 +28,90 @@ by OA-82's work, pending its own audit pass; OA-65 not started)_
 ## Current task (latest)
 
 **OA-86** ("Restore original multi-day heat map inside the tighter
-comparison layout") -- filed by Steve as a follow-up implementation
-ticket because OA-85 is already marked Done, with acceptance criteria
-describing the exact multi-day, green/purple/red, usage-as-opacity
-heat map, tighter narrative-left/visual-right layout, demoted
-table/detail chrome, and Baseline/Compare/Optimise state rules.
+comparison layout") -- first pass (see superseded entry above) audited
+the ticket's written acceptance criteria against the existing OA-85 code
+and found them already satisfied, so no code changed. Steve then
+expanded the ticket with an explicit reference implementation
+(`shift_save_landing_page(1).html`, a Tailwind/vanilla-JS mockup) and
+asked specifically whether the *live component preserves the reference's
+exact visual-state mechanism*, not just whether the written bullets
+pass -- a materially different, stricter question. Jira's media-upload
+endpoint wasn't reachable from the ticket-filer's own sandbox, so the
+reference arrived as literal code fragments in a Jira comment first,
+then as the actual `.html` file pasted directly into this session.
 
-Audited the ticket's full spec line-by-line against the code already
-on this branch (HEAD at audit time: `06fa9bb`, OA-85's own merge) before
-writing anything, since the description reads like a literal restatement
-of OA-85's own commit message. Result: **every acceptance criterion is
-already met by the existing `HeatMap` `variant="tariff"` + multi-day
-`landingDemoFixture` work from OA-85** -- confirmed by reading
-`LandingDemo.tsx`, `HeatMap.tsx`, `heatMapMath.ts`,
-`landingDemoFixture.ts`, `HeatMap.css`, and `LandingDemo.css` directly
-(not just trusting OA-85's commit message), then re-running
-verification: `npm test` (48/48 pass), `npm run lint` (clean, only
-pre-existing unrelated warnings), `npm run build` and `check-bundle`
-(both pass), and confirming the prerendered `dist/index.html` contains
-`heat-map--tariff` with exactly 192 (`4 x 48`) cells.
+Diffing the real file against `HeatMap.tsx`/`heatMapMath.ts`/
+`LandingDemo.tsx` line-by-line (not the bullet bullets this time) found
+two real gaps the first pass's acceptance-criteria-only audit missed:
 
-No code change made -- nothing to push. Commented on OA-86 in Jira
-explaining it's already satisfied by OA-85 (merged/deployed to prod per
-the previous entry below) with this verification evidence, and
-transitioned it to Done per the standing rule below. If Steve sees a
-visible gap between this and the actual beta deploy, that's a real new
-finding (not covered by re-reading the merged source) and should become
-its own ticket rather than reopening this one.
+1. **The CSS transition was dead code for step-to-step changes.**
+   `LandingDemo.tsx`'s `.landing-demo__grid` had `key={step}`, which
+   remounts that entire subtree -- heat map included -- on every step
+   switch. React mounts fresh DOM nodes with their final style already
+   applied; there is no previous value for `transition:
+   background-color/opacity` to interpolate from, so despite the CSS
+   existing and being unit-tested for presence, switching steps in a
+   real browser would just snap instantly rather than cross-fade. This
+   is exactly what the reference's `applyState()` avoids: it builds the
+   336 cells *once* and only ever mutates their `style.backgroundColor`/
+   `style.opacity` afterwards, so the browser has something to animate
+   between. Earlier sessions' "transition exists and is guarded by
+   prefers-reduced-motion" verification (OA-85 HANDOFF entry below) was
+   true of the CSS but never checked that it would actually fire --
+   jsdom tests don't render paint/transitions, and the one real-browser
+   verification attempt was abandoned as infeasible in this sandbox (see
+   OA-82 update below), so this slipped through twice.
+   - Fix: moved `key={step}` off `.landing-demo__grid` and onto
+     `.landing-demo__story` alone (LandingDemo.tsx/.css) -- the text
+     panel still remounts and replays its own OA-80 fade/slide on every
+     step, but `<HeatMap>` now stays mounted across all three steps.
+     Each day/slot shares the same `date`/`startsAt` across
+     Baseline/Compare/Optimise (only colour/opacity differ --
+     landingDemoFixture.ts), and those are HeatMap's own React keys, so
+     React updates the *same* cell DOM nodes in place instead of
+     replacing them -- which is what lets the existing CSS transition
+     finally do real work.
+2. **No peak-window overlay.** The reference highlights the actual
+   expensive time band with a translucent, non-interactive band (hidden
+   on Baseline, shown on Compare/Optimise) -- present in the ticket's
+   own "Peak overlay" section, though not literally one of the bulleted
+   acceptance criteria, which is likely why the first pass didn't flag
+   its absence. The reference hard-codes its band position (16:00-19:00)
+   to its own one example Agile shape; the ticket explicitly says not to
+   port that literally and to derive it from the current demo data
+   instead.
+   - Fix: added `findPeakWindow` (`heatMapMath.ts`) -- the longest run
+     of consecutive peak-band (`rateCategoryIndex === 2`) slots in a
+     representative day, returning `null` for a flat tariff (so it's
+     naturally absent on Baseline with zero per-step special-casing,
+     not a toggle). `HeatMap.tsx` renders it as a grid-placed, `aria-
+     hidden`, `pointer-events: none` overlay spanning those columns in
+     each day row (`HeatMap.css`'s `.heat-map__peak-overlay`, tariff-
+     variant only), plus a compact "Peak HH:MM-HH:MM" suffix on the
+     existing (already-demoted) legend note -- no new prominent UI.
+   - New unit tests for `findPeakWindow` in `heatMapMath.test.ts`
+     (longest-run selection, flat-tariff null case, undefined-day case).
+
+Everything else audited in the first pass (layout, state-conservation
+rules, demoted table/detail chrome, 48×4 grid, deterministic fixture,
+no hard-coded Agile band in the *colour* logic -- that part was already
+data-derived) still holds; this pass only added the overlay and fixed
+the transition's actual mechanism.
+
+Verified: `npm test` (51/51, up from 48), `npm run lint` (clean, same
+pre-existing unrelated warnings), `npm run build`/`check-bundle` (pass),
+confirmed via `dist/index.html` that the prerendered Baseline state
+still has 192 (`4x48`) cells and -- correctly -- zero peak-overlay
+elements (flat tariff, no peak band), and an ad hoc spot-check against
+the real `buildLandingDemoFixture()` output confirming `findPeakWindow`
+returns `null` for Baseline and a real window for Compare/Optimise.
+Pushed to `claude/zen-archimedes-26lz8o`. Commented on OA-86 in Jira
+with this diff and left it Done (code now matches the stricter
+reference-fidelity question, not just the bulleted criteria); flagged
+in the comment that genuine cross-step visual smoothness still hasn't
+been confirmed in a real browser (same sandbox limitation as OA-82/85)
+and remains the one unverified acceptance item ("Stable beta deploy
+verified").
 
 ## Previous task
 
