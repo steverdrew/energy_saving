@@ -15,31 +15,44 @@ export interface HeatMapDay {
   slots: HeatMapSlot[]
 }
 
-// The validated sequential blue ramp (dataviz skill, references/palette.md)
-// -- light->dark across 9 steps, cheapest to most expensive. One hue only;
-// usage is encoded separately (bar height), never as a second hue, so the
-// chart never asks colour to carry two magnitudes at once.
+// OA-113/OA-115: a sequential ramp derived from the product's purple
+// brand system, but deliberately a *secondary*, cooler/greyer hue --
+// slate-indigo (~hue 230) rather than the brand accent's own magenta-
+// violet (`--accent` family, #a855f7/#aa3bff/#c084fc, ~hue 272). OA-113's
+// first pass reused the accent's own hue for the chart and read as too
+// close to it; shifting the chart's hue further toward blue keeps it
+// "harmonious with the dark purple brand" while staying visually
+// distinct from interactive/CTA purple, so a chart element and a button
+// are never confused for the same kind of thing. Light->dark across 9
+// steps, cheapest to most expensive: deep slate-indigo at the cheap end,
+// muted slate-violet through the middle, pale cool near-neutral at the
+// expensive end -- desaturated through the middle/light steps rather
+// than a flat saturation ramp, so full-strength brand purple stays
+// reserved for interactive/accent use (buttons, selection, CTAs), never
+// a chart background fill. One hue family only; usage is encoded
+// separately (bar height/shape), never as a second hue, so the chart
+// never asks colour to carry two magnitudes at once.
 export const RATE_COLOR_STEPS_LIGHT = [
-  '#cde2fb',
-  '#b7d3f6',
-  '#9ec5f4',
-  '#86b6ef',
-  '#6da7ec',
-  '#5598e7',
-  '#3987e5',
-  '#2a78d6',
-  '#256abf',
+  '#dcdfe9',
+  '#aeb3cf',
+  '#8890b8',
+  '#6670a0',
+  '#4a5088',
+  '#384176',
+  '#2e3564',
+  '#242b52',
+  '#1b2140',
 ]
 export const RATE_COLOR_STEPS_DARK = [
-  '#184f95',
-  '#1c5cab',
-  '#256abf',
-  '#2a78d6',
-  '#3987e5',
-  '#5598e7',
-  '#6da7ec',
-  '#86b6ef',
-  '#9ec5f4',
+  '#1b2140',
+  '#242b52',
+  '#2e3564',
+  '#384176',
+  '#4a5088',
+  '#6670a0',
+  '#8890b8',
+  '#aeb3cf',
+  '#dcdfe9',
 ]
 
 /**

@@ -32,32 +32,23 @@ function LandingPage() {
   return (
     <>
       <section className="landing-hero" id="hero">
-        {/* OA-87: the mockup is used for *design* here (three-line split,
-            gradient/weight treatment per line, tight tracking) -- the
-            product's own existing copy is kept verbatim, not replaced
-            with the mockup's wording (Steve: "use the html for design
-            only, not text/copy"). Split at the same natural phrase
-            boundaries the mockup uses; the break before line 2 only
-            applies at the `md`-equivalent breakpoint and up (see
-            .landing-hero__break in LandingPage.css) -- below that, lines
-            1-2 flow and wrap naturally as one phrase.
-            Bugfix (linked to OA-87): the literal `{" "}` below is load-
-            bearing -- below the breakpoint `.landing-hero__break` is
-            `display:none`, which removes the <br> from the render
-            entirely rather than just suppressing a line break, so
-            without an explicit space here "of" and "when" concatenate
-            into "ofwhen". */}
+        {/* OA-111: testing "Hunt the energy vampires in your home." as the
+            primary hook while the product/app name is still being
+            decided -- a memorable problem statement, not the whole
+            product identity. "energy vampires" gets the existing
+            gradient treatment (reused from OA-87's design system, not a
+            new vampire-themed style) so it reads as the one emphasised
+            phrase; the rest of the headline and the subhead stay plain,
+            credible copy with no further vampire/fang/Halloween
+            language, per the ticket's guardrails. Doesn't reference
+            "Shift & Save" by name, so this copy still works if the final
+            app name changes later. */}
         <h1 className="landing-hero__headline">
-          Take control of{' '}
-          <br className="landing-hero__break" />
-          <span className="landing-hero__line--gradient">when you use energy</span>
-          <br />
-          <span className="landing-hero__line--muted">— and what it costs you.</span>
+          Hunt the <span className="landing-hero__line--gradient">energy vampires</span> in your home.
         </h1>
         <p className="landing-hero__sub">
-          Different tariffs suit different patterns of energy use. Shift
-          &amp; Save shows what your <strong>actual usage</strong> would have cost on another
-          tariff — and what better timing could change.
+          See where your electricity goes, what&rsquo;s costing you, and what you could save by changing when you use
+          it.
         </p>
         {/* OA-92: hero CTA starts the explanatory journey (Hero -> See how
             it works -> Interactive comparison -> Sign up free) -- an

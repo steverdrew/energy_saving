@@ -14,6 +14,21 @@
      a slot with no known rate. */
   --landing-time-profile-unknown: #2c2c3a;
 
+  /* OA-129: "do not fix this screen-by-screen with one-off font sizes" --
+     one set of semantic typography tokens, shared by Baseline/Compare/
+     Optimise (every stage renders through this same component), rather
+     than per-stage sizes. Desktop values follow the ticket's suggested
+     targets; the mobile media query below scales each down rather than
+     simply inheriting the desktop size. */
+  --demo-stage-heading-size: 25px;
+  --demo-supporting-size: 19px;
+  --demo-primary-metric-size: 28px;
+  --demo-secondary-metric-size: 17px;
+  --chart-event-label-size: 16px;
+  --chart-event-secondary-size: 14px;
+  --chart-axis-label-size: 14px;
+  --chart-footnote-size: 15px;
+
   position: relative;
   max-width: 900px;
   margin: 0 auto;
@@ -32,6 +47,22 @@
   }
 }
 
+/* OA-129: "mobile should scale down gracefully rather than simply
+   inheriting desktop sizes" -- every token above, scaled down together,
+   so hierarchy (which is larger than which) is preserved at every size. */
+@media (max-width: 640px) {
+  .landing-time-profile {
+    --demo-stage-heading-size: 20px;
+    --demo-supporting-size: 16px;
+    --demo-primary-metric-size: 22px;
+    --demo-secondary-metric-size: 14px;
+    --chart-event-label-size: 13px;
+    --chart-event-secondary-size: 11px;
+    --chart-axis-label-size: 11px;
+    --chart-footnote-size: 13px;
+  }
+}
+
 /* OA-98/OA-100: tariff/usage/cost summary -> explanation (+ optional
    caveat) -- one state's worth of narrative, remounted via `stepKey` on
    every step change to replay the OA-80 fade/slide (moved here from
@@ -42,25 +73,88 @@
   margin-bottom: 16px;
 }
 
+/* OA-126: the heading column and "Reset"/"Optimise" share one row, top
+   of the card -- controls sit top-right, next to the question they act
+   on, rather than as their own full-width row between the narrative and
+   the chart. `align-items: flex-start` keeps the controls pinned to the
+   heading's own top line even once the supporting copy below it wraps to
+   a second line on narrow viewports. */
+.landing-time-profile__heading-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.landing-time-profile__heading-col {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* OA-110: one question-style heading per stage, visually dominant enough
+   to read as the section's real prompt -- "Typical household" above
+   remains the page's one top-level heading, so this stays scoped to the
+   card. */
+.landing-time-profile__question {
+  margin: 0 0 4px;
+  font-size: var(--demo-stage-heading-size);
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text-h);
+}
+
+/* OA-110: a short supporting line under the question heading -- never a
+   long explanatory paragraph; the slider transition itself communicates
+   the detailed relationship. */
+.landing-time-profile__supporting {
+  margin: 0 0 10px;
+  font-size: var(--demo-supporting-size);
+  line-height: 1.35;
+  color: var(--text);
+  opacity: 0.85;
+}
+
+/* OA-126: a quiet label naming what `result` actually is (e.g. "Typical
+   day · 6.8 kWh") -- sits between the supporting line and the bold result
+   itself, so the headline £ figure is never read as a household's whole
+   daily spend. */
+.landing-time-profile__result-label {
+  margin: 0 0 2px;
+  font-size: var(--demo-secondary-metric-size);
+  color: var(--text);
+  opacity: 0.65;
+}
+
+/* OA-110: the stage's one compact, visually dominant result (e.g.
+   "£1.80 energy cost" or "Save around £73/year") -- the primary figure a
+   visitor should see first. */
+.landing-time-profile__result {
+  margin: 0 0 6px;
+  font-size: var(--demo-primary-metric-size);
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.landing-time-profile__result strong {
+  color: var(--text-h);
+  font-weight: 800;
+}
+
+.landing-time-profile__summary-diff {
+  color: #4ade80;
+}
+
 /* OA-104: "the longer-term number should carry more visual weight than a
-   small daily amount" -- a distinct, larger block above the regular
-   summary line, not just a bigger <strong> inside it. */
+   small daily amount" -- the Optimise stage's today/month detail line,
+   shown just below the dominant result above. */
 .landing-time-profile__payoff {
   margin: 0 0 10px;
 }
 
-.landing-time-profile__payoff-headline {
-  display: block;
-  font-size: 22px;
-  font-weight: 800;
-  line-height: 1.25;
-  color: #4ade80;
-}
-
 .landing-time-profile__payoff-detail {
   display: block;
-  margin-top: 2px;
-  font-size: 13px;
+  font-size: var(--demo-secondary-metric-size);
   color: var(--text);
   opacity: 0.75;
 }
@@ -68,30 +162,24 @@
 .landing-time-profile__payoff-caveat {
   display: block;
   margin-top: 4px;
-  font-size: 11px;
+  font-size: var(--chart-footnote-size);
   color: var(--text);
   opacity: 0.55;
 }
 
-.landing-time-profile__summary {
-  margin: 0 0 6px;
-  font-size: 15px;
+/* OA-126: the standing charge, disclosed quietly right next to the result
+   it's deliberately excluded from -- never mixed into `result`/`payoff`
+   itself, but also never relegated to only the below-chart footnote. */
+.landing-time-profile__standing-charge-note {
+  margin: 4px 0 0;
+  font-size: var(--demo-secondary-metric-size);
   color: var(--text);
-  opacity: 0.85;
-}
-
-.landing-time-profile__summary strong {
-  color: var(--text-h);
-  font-weight: 700;
-}
-
-.landing-time-profile__summary-diff {
-  color: #4ade80;
+  opacity: 0.6;
 }
 
 .landing-time-profile__explanation {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--chart-footnote-size);
   color: var(--text);
   opacity: 0.85;
 }
@@ -101,37 +189,16 @@
    since it's a clarifying footnote, not part of the main story. */
 .landing-time-profile__cost-note {
   margin: 4px 0 0;
-  font-size: 12px;
+  font-size: var(--chart-footnote-size);
   color: var(--text);
   opacity: 0.6;
 }
 
 .landing-time-profile__caveat {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: var(--chart-footnote-size);
   color: var(--text);
   opacity: 0.8;
-}
-
-/* OA-104: secondary, per-event detail -- subordinate to both the summary
-   and the payoff block above it. */
-.landing-time-profile__event-detail {
-  margin: 6px 0 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--text);
-  opacity: 0.7;
-}
-
-/* OA-105: one block per household event inside `.landing-time-profile__event-detail`
-   -- `span`s (not `div`s) so they stay valid inside the surrounding `<p>`,
-   with `display: block` for the visual stacking a list of events needs. */
-.landing-time-profile__event-detail-row {
-  display: block;
-}
-
-.landing-time-profile__event-detail-row + .landing-time-profile__event-detail-row {
-  margin-top: 6px;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -157,9 +224,10 @@
    they don't convert. */
 .landing-time-profile__controls {
   display: flex;
+  flex: none;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
-  margin-bottom: 14px;
 }
 
 .landing-time-profile__controls-button {
@@ -188,71 +256,192 @@
   cursor: not-allowed;
 }
 
-.landing-time-profile__controls-button--secondary {
-  background: transparent;
+/* OA-132: the primary Flexible/Fixed/Smart (and secondary Smart ·
+   <product>) selectors need a visible active state -- previously
+   `aria-pressed` carried no visual difference at all, fine for a
+   three-way "which named tariff" row read mostly by its own labels, but
+   not clear enough once there are two selector levels. */
+.landing-time-profile__controls-button[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
 
-.landing-time-profile__legend {
+/* OA-132: groups the primary type selector, the secondary smart-product
+   row, and (Optimise) the quiet tariff-context label into one column,
+   right-aligned alongside the question/supporting text in `__heading-row`. */
+.landing-time-profile__controls-stack {
   display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  margin-bottom: 14px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text);
-}
-
-.landing-time-profile__legend-item {
-  display: inline-flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 6px;
 }
 
-/* OA-101: a continuous cheaper -> more-expensive gradient swatch,
-   replacing the earlier three discrete category dots -- its background
-   is set inline from the same RATE_COLOR_STEPS_DARK ramp the columns
-   below use, so the legend always matches what's actually rendered. */
-.landing-time-profile__legend-gradient {
-  width: 56px;
-  height: 8px;
-  border-radius: 4px;
-  display: inline-block;
+/* OA-132: "do not present Economy 7/Agile as peers of Flexible and Fixed"
+   -- visually smaller/quieter than the primary row, so the hierarchy
+   (type first, product second) reads at a glance, not just through DOM
+   order. */
+.landing-time-profile__controls--secondary {
+  gap: 6px;
 }
 
-/* Foreground usage shape, shown in the legend as a short bar rather than
-   a dot -- distinguishes it from the price gradient above. */
-.landing-time-profile__legend-bar {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  display: inline-block;
-  background: var(--landing-time-profile-usage, rgba(255, 255, 255, 0.85));
+.landing-time-profile__controls-button--secondary {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+/* OA-136: the clickable "current tariff vs. alternatives" comparison list
+   -- each row names its tariff, cost, and (for every alternative) its
+   signed difference from the current tariff, so "the direction of
+   comparison must be unmistakable" reads directly off the row rather than
+   needing a separate selector plus a separate figure elsewhere. */
+.landing-time-profile__tariff-comparison {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.landing-time-profile__tariff-comparison-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-h, #fff);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.landing-time-profile__tariff-comparison-row:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.landing-time-profile__tariff-comparison-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* OA-136: "current/base tariff and chosen tariff are separate states" --
+   this marks whichever row is the live *chosen* tariff (which may or may
+   not be the current one), matching the pressed-state convention the
+   plain type selector already uses. */
+.landing-time-profile__tariff-comparison-row[aria-pressed='true'] {
+  border-color: var(--accent);
+}
+
+.landing-time-profile__tariff-comparison-label {
+  font-weight: 500;
+}
+
+.landing-time-profile__tariff-comparison-figures {
+  flex: none;
+  white-space: nowrap;
+}
+
+.landing-time-profile__tariff-comparison-diff {
+  opacity: 0.75;
+  font-weight: 400;
+}
+
+/* OA-117/OA-132: Optimise's quiet tariff context -- "may appear as quiet
+   context near the rate strip, but it must not compete with the
+   optimisation story", so no button chrome, just small muted text. */
+.landing-time-profile__tariff-context {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .landing-time-profile__body {
   position: relative;
 }
 
-/* The "time landscape": one flat row of 48 flush columns (no gap), each
-   a full-height coloured price band -- a continuous/banded backdrop
-   rather than the heat map's grid of discrete, gapped squares. Height is
-   a fixed aspect, not `aspect-ratio: 1`, so columns read as a landscape
-   strip rather than a block of squares. */
+/* OA-114: explanatory material (cost-basis footnote, caveats, the
+   collapsed methodology disclosure) moved below the chart -- a little
+   breathing room from the axis labels above it. */
+.landing-time-profile__below-chart {
+  margin-top: 14px;
+}
+
+/* OA-131: the dedicated, aligned price strip -- now the *only* price
+   encoding (replaces the old per-column background tint below). Thin
+   and separate from the usage track, so price and usage never compete
+   for the same visual channel; its segments use the same 48-half-hour
+   flex basis as `__track`'s columns (`flexGrow` per slot occupied), so a
+   segment always lines up exactly with the usage columns underneath it. */
+.landing-time-profile__price-strip {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  height: 16px;
+  margin-bottom: 6px;
+  /* Not `overflow: hidden` -- the structural-peak label (OA-99/OA-101)
+     needs to sit just above this strip without being clipped by it. */
+}
+
+.landing-time-profile__price-segment {
+  position: relative;
+  flex-grow: 1;
+  flex-shrink: 0;
+  flex-basis: 0;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  background-color: var(--landing-time-profile-unknown);
+}
+
+.landing-time-profile__price-segment:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.landing-time-profile__price-segment:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.landing-time-profile__price-segment:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.65);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+/* OA-131: names what the strip's colours mean -- the strip, never the
+   whole chart background (which no longer carries any price encoding). */
+.landing-time-profile__price-legend {
+  margin: 0 0 8px;
+  font-size: var(--chart-footnote-size);
+  color: var(--muted);
+}
+
+/* The usage "time landscape": one flat row of 48 flush columns (no gap)
+   -- OA-131: deliberately calm and neutral now that price lives in its
+   own strip above, so usage/event overlays never compete with price
+   colours for the same background. Height is a fixed aspect, not
+   `aspect-ratio: 1`, so columns read as a landscape strip rather than a
+   block of squares. */
 .landing-time-profile__track {
   position: relative;
   display: flex;
   align-items: stretch;
-  height: clamp(140px, 22vw, 220px);
+  /* OA-107: grows with the number of event lanes in play this render (set
+     inline as `--event-lanes`) so stacked, time-overlapping events still
+     get a legible row each, instead of squeezing an unbounded number of
+     lanes into a fixed height. */
+  height: clamp(calc(140px + (var(--event-lanes, 1) - 1) * 26px), 22vw, calc(220px + (var(--event-lanes, 1) - 1) * 26px));
   border-radius: 6px;
   overflow: hidden;
 }
 
-/* OA-101: each column's actual price colour is set inline from the
-   continuous rateColorStepIndex ramp (one source of truth with
-   heatMapMath.ts) -- this background is only the fallback for a slot
-   with no known rate (`data-unknown`). */
+/* OA-131: a flat, calm neutral background -- price no longer lives here
+   (see `__price-strip` above), so every column shares the same subtle
+   surface regardless of that half-hour's rate. */
 .landing-time-profile__column {
   position: relative;
   flex: 1 1 0;
@@ -264,7 +453,10 @@
   background-color: var(--landing-time-profile-unknown);
 }
 
-.landing-time-profile__column[data-selected],
+/* Keyboard-focus only -- `:focus-visible` doesn't match a mouse click, so
+   clicking/hovering a column never shows this outline box; only arrow-key
+   navigation does. The underlying `selected` state still drives the
+   sr-only description panel below, just without a visible on-click box. */
 .landing-time-profile__column:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.65);
   outline-offset: -2px;
@@ -278,6 +470,10 @@
    Agile is priced, the way a chart might annotate "market close" without
    implying every slot within it shares one price. Sits above the price
    columns, same stacking tier as the hour guides. */
+/* OA-131: now sits over the dedicated price strip (16px tall) rather
+   than the full chart -- the bracket spans the strip's own height, and
+   the label sits just above it (negative `top`), never clipped since
+   `__price-strip` deliberately isn't `overflow: hidden`. */
 .landing-time-profile__structural-peak {
   position: absolute;
   top: 0;
@@ -290,11 +486,11 @@
 
 .landing-time-profile__structural-peak-label {
   position: absolute;
-  top: 4px;
+  top: -20px;
   left: 50%;
   transform: translateX(-50%);
   white-space: nowrap;
-  font-size: 10px;
+  font-size: var(--chart-footnote-size);
   font-weight: 600;
   letter-spacing: 0.02em;
   color: rgba(255, 255, 255, 0.85);
@@ -330,78 +526,177 @@
   background: rgba(255, 255, 255, 0.07);
 }
 
-/* OA-105: a fixed/non-movable household event annotation -- shown on every
-   tab in the exact same position as its (Optimise-only) draggable
-   counterpart below, but visually distinct from it (dashed, no fill, not
-   grabbable) so movable and fixed events are never confused. */
-.landing-time-profile__event-annotation {
+/* Event drop-line: runs from the chip down to the track's bottom edge so
+   an event visibly anchors to the time axis below it, not just to the
+   chart's own hour/slot guides. Noticeably thicker than those guides
+   (3px vs. 1px) and in the brand's complementary amber -- warm against
+   the purple/indigo chart -- so it's never confused with the track's own
+   neutral white time guidance. */
+.landing-time-profile__event-line {
   position: absolute;
-  top: 0;
   bottom: 0;
   z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px dashed rgba(255, 255, 255, 0.55);
-  border-radius: 4px;
+  width: 3px;
+  margin-left: -1.5px;
+  background: rgba(245, 166, 35, 0.75);
   pointer-events: none;
 }
 
-.landing-time-profile__event-annotation-label {
-  padding: 2px 6px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--text-h, #fff);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  white-space: nowrap;
+.landing-time-profile__event-line[data-fixed] {
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(245, 166, 35, 0.6) 0,
+    rgba(245, 166, 35, 0.6) 4px,
+    transparent 4px,
+    transparent 8px
+  );
 }
 
-/* OA-103: the movable household event -- a distinct draggable block
-   layered over its slots, full track height so it reads as "this chunk
-   of the column, specifically" rather than a thin marker. Sits above the
-   usage path/guides (z-index 2, same tier as a focused/selected column)
-   since it needs to receive pointer/keyboard input directly. */
-.landing-time-profile__flexible-event {
+.landing-time-profile__event-line[data-active] {
+  background: rgba(251, 191, 85, 0.95);
+}
+
+/* OA-105: a fixed/non-movable household event annotation -- shown on every
+   tab in the exact same position as its (Optimise-only) draggable
+   counterpart, but visually distinct from it (quieter, dashed, not
+   grabbable) so movable and fixed events are never confused. OA-115:
+   fixed-height row anchored near the top of the track (`top`/`height`
+   set inline, see LandingTimeProfile.tsx's `EVENT_CHIP_*` constants) --
+   never stretches the chart's full height, so an event reads as "this
+   object, positioned here" rather than a new coloured data band cutting
+   through the price/usage layers underneath it. `overflow: visible` so
+   the label (below) can extend past this indicator's own width rather
+   than being hard-truncated. */
+.landing-time-profile__event-chip {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  z-index: 2;
+  z-index: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid rgba(255, 255, 255, 0.85);
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.14);
+  /* OA-116: "top-left alignment within the event overlay ... consistent
+     inset/padding" -- content anchors to the chip's top-left corner
+     (tight padding below) rather than centring, so the label reads as
+     attached to a fixed point on the event, stable as it moves. */
+  align-items: flex-start;
+  gap: 4px;
+  overflow: visible;
+  padding: 3px 5px;
+  pointer-events: none;
+}
+
+/* OA-115: movable events get a solid, subtly stronger outline than a
+   fixed annotation's dashed one -- "fixed: quieter/dashed, movable: solid
+   but subtle" -- plus pointer/touch/focus affordances a fixed annotation
+   never gets, since only movable events are interactive. */
+.landing-time-profile__event-chip:not([data-fixed]) {
+  z-index: 2;
   cursor: grab;
   touch-action: none;
+  pointer-events: auto;
 }
 
-.landing-time-profile__flexible-event:active {
+.landing-time-profile__event-chip:not([data-fixed]):active {
   cursor: grabbing;
-  background: rgba(255, 255, 255, 0.22);
 }
 
-.landing-time-profile__flexible-event:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.95);
-  outline-offset: 2px;
+/* OA-115: "selection should feel like this event is active, not this
+   entire time slice is selected" -- a stronger brand-accent outline/fill
+   local to the chip itself (focused, hovered, or being dragged), never a
+   full-height band through the chart. */
+.landing-time-profile__event-chip:not([data-fixed]):focus-visible,
+.landing-time-profile__event-chip[data-active] {
+  z-index: 3;
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
-.landing-time-profile__flexible-event-label {
-  padding: 2px 6px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--text-h, #fff);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  white-space: nowrap;
+/* OA-115/OA-116: a quiet grip affordance, movable events only -- signals
+   "this can be dragged" without adding another big visual element.
+   Shrunk alongside the rest of the chip in OA-116. */
+.landing-time-profile__event-chip-handle {
+  flex: none;
+  width: 6px;
+  height: 13px;
+  margin-top: 2px;
+  border-radius: 1px;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.55) 0,
+    rgba(255, 255, 255, 0.55) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+/* OA-116: top-left anchored, not vertically centred -- see the chip's own
+   `align-items: flex-start` above. */
+.landing-time-profile__event-chip-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  line-height: 1.15;
   pointer-events: none;
 }
 
+/* OA-115: the event name is never hard-truncated -- it can overflow its
+   own chip's coloured indicator (the chip itself allows overflow) rather
+   than falling back to "Wa..."/"Tumb..."/"Dehu...". Secondary timing text
+   is what gets dropped first when space is constrained (see
+   `COMPACT_LABEL_MAX_SLOT_COUNT` in LandingTimeProfile.tsx). OA-116: the
+   name is the primary scan target -- kept legible while everything around
+   it shrinks; the time line below is the one that goes quieter/smaller. */
+.landing-time-profile__event-chip-name {
+  font-size: var(--chart-event-label-size);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+  color: var(--text-h, #fff);
+  text-shadow: 0 1px 3px rgba(44, 11, 79, 0.9);
+  white-space: nowrap;
+}
+
+.landing-time-profile__event-chip-time {
+  font-size: var(--chart-event-secondary-size);
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--text-h, #fff);
+  opacity: 0.7;
+  text-shadow: 0 1px 3px rgba(44, 11, 79, 0.9);
+  white-space: nowrap;
+}
+
+/* Reset/Optimise jump every movable event straight to its new slot --
+   without a transition that reads as an abrupt teleport. A gentle
+   ease-out carries both the chip and its drop-line smoothly across the
+   chart to their new position ("flow", not snap). Shared with live
+   dragging/scrubbing, which already updates `left` in small, frequent
+   steps, so the same easing reads as fluid there too rather than
+   introducing lag. */
 @media (prefers-reduced-motion: no-preference) {
-  .landing-time-profile__flexible-event {
-    transition: left 0.12s ease;
+  .landing-time-profile__event-chip,
+  .landing-time-profile__event-line {
+    transition: left 0.4s cubic-bezier(0.22, 1, 0.36, 1);
   }
+}
+
+/* OA-108: the contextual per-event saving popover -- replaces the old
+   permanent per-appliance list under the headline. Shown only while its
+   own overlay is focused/hovered/dragged (LandingTimeProfile.tsx's
+   `activeEventId`), positioned just below the block it describes. */
+.landing-time-profile__event-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid var(--border);
+  color: var(--text-h, #fff);
+  font-size: var(--chart-event-secondary-size);
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 /* Foreground usage shape -- OA-97: one smooth path through all 48
@@ -435,7 +730,10 @@
    does here (48 slots), and degrades gracefully to an instant redraw in
    browsers that don't support it. */
 @media (prefers-reduced-motion: no-preference) {
-  .landing-time-profile__column {
+  /* OA-131: price colour now lives on the price-segment element, not the
+     (now price-neutral) column -- carries the same cross-tariff colour
+     interpolation the column used to have. */
+  .landing-time-profile__price-segment {
     transition: background-color 0.8s ease;
   }
 
@@ -469,7 +767,7 @@
    anchor points. */
 .landing-time-profile__axis {
   position: relative;
-  height: 14px;
+  height: 18px;
   margin-top: 4px;
 }
 
@@ -477,7 +775,7 @@
   position: absolute;
   top: 0;
   transform: translateX(-50%);
-  font-size: 10px;
+  font-size: var(--chart-axis-label-size);
   font-weight: 500;
   color: var(--text);
   opacity: 0.6;
@@ -509,7 +807,7 @@
    actually been selected. */
 .landing-time-profile__detail {
   margin: 10px 0 0;
-  font-size: 13px;
+  font-size: var(--chart-footnote-size);
   font-weight: 600;
   color: var(--text-h);
 }

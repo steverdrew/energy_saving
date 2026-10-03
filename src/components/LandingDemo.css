@@ -150,6 +150,31 @@
   outline-offset: 2px;
 }
 
+/* OA-112: "How we calculated this" -- the one collapsed-by-default
+   disclosure replacing OA-108's always-visible section headings/
+   paragraphs, so Optimise matches Baseline/Compare's card height. Same
+   compact-disclosure pattern as `.landing-demo__sources` above. */
+.landing-demo__assumptions {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.75;
+}
+
+.landing-demo__assumptions summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.landing-demo__assumptions ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.landing-demo__assumptions li {
+  margin: 4px 0;
+}
+
 /* OA-98: the tab panel wraps a single `<LandingTimeProfile>` card --
    narrative and chart are now one object (see that component's own
    comment), not a two-column grid of a separate narrative panel beside a

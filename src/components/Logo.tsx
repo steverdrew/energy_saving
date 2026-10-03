@@ -13,9 +13,36 @@ function LogoMark({ className }: { className?: string }) {
       focusable="false"
     >
       <rect x="1" y="8" width="6" height="20" rx="2" fill="currentColor" opacity="0.4" />
-      <rect x="9" y="14" width="6" height="14" rx="2" fill="currentColor" opacity="0.4" />
-      <rect x="17" y="22" width="6" height="6" rx="2" fill="currentColor" />
-      <rect x="25" y="14" width="6" height="14" rx="2" fill="currentColor" opacity="0.4" />
+      <rect
+        className="logo-mark__bar logo-mark__bar--neighbor"
+        x="9"
+        y="14"
+        width="6"
+        height="14"
+        rx="2"
+        fill="currentColor"
+        opacity="0.4"
+      />
+      <rect
+        className="logo-mark__bar logo-mark__bar--center"
+        x="17"
+        y="22"
+        width="6"
+        height="6"
+        rx="2"
+        fill="currentColor"
+        style={{ transformOrigin: '20px 25px' }}
+      />
+      <rect
+        className="logo-mark__bar logo-mark__bar--neighbor"
+        x="25"
+        y="14"
+        width="6"
+        height="14"
+        rx="2"
+        fill="currentColor"
+        opacity="0.4"
+      />
       <rect x="33" y="8" width="6" height="20" rx="2" fill="currentColor" opacity="0.4" />
     </svg>
   )

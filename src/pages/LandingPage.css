@@ -19,29 +19,14 @@
   line-height: 1.1;
 }
 
-/* Mirrors the mockup's `<br class="hidden md:block">`: lines 1-2 flow and
-   wrap naturally as one phrase below this breakpoint, and only split
-   into the deliberate three-line composition at desktop widths. */
-.landing-hero__break {
-  display: none;
-}
-
-@media (min-width: 860px) {
-  .landing-hero__break {
-    display: inline;
-  }
-}
-
+/* OA-111: "energy vampires" keeps the one emphasised phrase this
+   gradient-text treatment was built for (OA-87) -- reused, not
+   reinvented, so the hook doesn't bring its own vampire-themed styling. */
 .landing-hero__line--gradient {
   background: linear-gradient(135deg, #fff 0%, #c4b5fd 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-}
-
-.landing-hero__line--muted {
-  font-weight: 300;
-  color: #c4b5fd;
 }
 
 .landing-hero__sub {

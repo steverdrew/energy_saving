@@ -44,6 +44,56 @@
   flex-shrink: 0;
 }
 
+/* OA-124: a one-shot "power-on" cue on mount -- the centre bar (the
+   mark's "cheap price window") brightens/glows/settles, neighbouring
+   bars respond with a much smaller opacity lift on a slight delay so the
+   mark reads as waking up from the middle outward, not flashing at once. */
+.logo-mark__bar--center {
+  animation: logo-power-on 1.3s ease-out;
+}
+
+.logo-mark__bar--neighbor {
+  animation: logo-power-on-neighbor 1.3s ease-out;
+}
+
+@keyframes logo-power-on {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.8);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.12);
+    filter: drop-shadow(0 0 4px var(--accent));
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+}
+
+@keyframes logo-power-on-neighbor {
+  0%,
+  40% {
+    opacity: 0.4;
+  }
+  60% {
+    opacity: 0.65;
+  }
+  100% {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-mark__bar--center,
+  .logo-mark__bar--neighbor {
+    animation: none;
+  }
+}
+
 .brand-mark__word {
   color: var(--text-h);
 }

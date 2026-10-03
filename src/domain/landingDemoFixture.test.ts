@@ -3,16 +3,24 @@ import {
   buildLandingDemoFixture,
   cheapestStartSlotForEvent,
   clampEventStartSlot,
+  ECONOMY_7_OFF_PEAK_SLOT_RANGE,
   isRealHouseholdEvent,
   LANDING_DEMO_DATA_SOURCES,
   LANDING_DEMO_EVENTS,
   OFGEM_PRICE_CAP_STANDING_CHARGE_PENCE_PER_DAY,
+  TARIFF_IDS,
+  totalEventKwh,
 } from './landingDemoFixture'
 
 const DISHWASHER_ID = 'dishwasher'
 const WASHING_MACHINE_ID = 'washing_machine'
+const TUMBLE_DRYER_ID = 'tumble_dryer'
+const DEHUMIDIFIER_ID = 'dehumidifier' // OA-107: broadest window (0-44) -- used below for "any slot" examples.
+const OVEN_ID = 'oven_cooking' // OA-107: identified but fixed -- never movable.
 const dishwasherDefinition = LANDING_DEMO_EVENTS.find((e) => e.id === DISHWASHER_ID)!
 const washingMachineDefinition = LANDING_DEMO_EVENTS.find((e) => e.id === WASHING_MACHINE_ID)!
+const dehumidifierDefinition = LANDING_DEMO_EVENTS.find((e) => e.id === DEHUMIDIFIER_ID)!
+const ovenDefinition = LANDING_DEMO_EVENTS.find((e) => e.id === OVEN_ID)!
 
 describe('buildLandingDemoFixture', () => {
   it('produces 48 half-hourly slots for every step', () => {
@@ -41,7 +49,7 @@ describe('buildLandingDemoFixture', () => {
   })
 
   it('preserves total energy between compare and optimise, only moving the requested event', () => {
-    const fixture = buildLandingDemoFixture({ [DISHWASHER_ID]: 10 })
+    const fixture = buildLandingDemoFixture({ [DEHUMIDIFIER_ID]: 10 })
     expect(fixture.optimise.totalKwh).toBeCloseTo(fixture.compare.totalKwh, 6)
 
     const compareKwh = fixture.compare.day.slots.map((s) => s.kwh)
@@ -50,9 +58,10 @@ describe('buildLandingDemoFixture', () => {
       if (Math.abs((v ?? 0) - (optimiseKwh[i] ?? 0)) > 1e-9) acc.push(i)
       return acc
     }, [])
-    // Dishwasher leaves its actual slots (36/37) and arrives at the
-    // requested ones (10/11); the washing machine, untouched, doesn't appear.
-    expect(changedIndices.sort((a, b) => a - b)).toEqual([10, 11, 36, 37])
+    // The dehumidifier leaves its actual slots (20/21/22) and arrives at
+    // the requested ones (10/11/12); every other event, untouched, doesn't
+    // appear.
+    expect(changedIndices.sort((a, b) => a - b)).toEqual([10, 11, 12, 20, 21, 22])
   })
 
   it('keeps optimise on the same tariff (rates) as compare', () => {
@@ -145,30 +154,30 @@ describe('buildLandingDemoFixture', () => {
   // Optimise step -- the caller picks the slot it starts at per event id,
   // and only that event's own slots change.
   describe('movable household events (OA-103/105)', () => {
-    it('moves only the requested event, leaving the other event and baseline/compare untouched', () => {
-      const fixture = buildLandingDemoFixture({ [DISHWASHER_ID]: 20 })
+    it('moves only the requested event, leaving the other events and baseline/compare untouched', () => {
+      const fixture = buildLandingDemoFixture({ [DEHUMIDIFIER_ID]: 10 })
       const compareKwh = fixture.compare.day.slots.map((s) => s.kwh)
       const optimiseKwh = fixture.optimise.day.slots.map((s) => s.kwh)
       const changedIndices = compareKwh.reduce<number[]>((acc, v, i) => {
         if (Math.abs((v ?? 0) - (optimiseKwh[i] ?? 0)) > 1e-9) acc.push(i)
         return acc
       }, [])
-      expect(changedIndices.sort((a, b) => a - b)).toEqual([20, 21, 36, 37])
+      expect(changedIndices.sort((a, b) => a - b)).toEqual([10, 11, 12, 20, 21, 22])
       expect(fixture.baseline.day.slots.map((s) => s.kwh)).toEqual(
         buildLandingDemoFixture().baseline.day.slots.map((s) => s.kwh),
       )
     })
 
-    it('moves both events independently when both are requested', () => {
-      const fixture = buildLandingDemoFixture({ [DISHWASHER_ID]: 20, [WASHING_MACHINE_ID]: 30 })
+    it('moves events independently when several are requested', () => {
+      const fixture = buildLandingDemoFixture({ [DISHWASHER_ID]: 40, [WASHING_MACHINE_ID]: 30 })
       const dishwasher = fixture.projection.events.find((e) => e.id === DISHWASHER_ID)!
       const washingMachine = fixture.projection.events.find((e) => e.id === WASHING_MACHINE_ID)!
-      expect(dishwasher.currentStartSlot).toBe(20)
+      expect(dishwasher.currentStartSlot).toBe(40)
       expect(washingMachine.currentStartSlot).toBe(30)
     })
 
     it('preserves total energy and recomputes the timing saving live as an event moves', () => {
-      const moved = buildLandingDemoFixture({ [DISHWASHER_ID]: 20 })
+      const moved = buildLandingDemoFixture({ [DEHUMIDIFIER_ID]: 10 })
       expect(moved.optimise.totalKwh).toBeCloseTo(moved.compare.totalKwh, 6)
       expect(moved.timingSavingPence).toBeCloseTo(moved.compare.totalCostPence - moved.optimise.totalCostPence, 6)
       // A different position should generally produce a different (not
@@ -177,16 +186,52 @@ describe('buildLandingDemoFixture', () => {
     })
 
     it('clamps an out-of-range requested start slot to that event\'s own valid same-day window', () => {
-      expect(clampEventStartSlot(DISHWASHER_ID, -5)).toBe(dishwasherDefinition.validStartSlotRange.min)
-      expect(clampEventStartSlot(DISHWASHER_ID, 1000)).toBe(dishwasherDefinition.validStartSlotRange.max)
-      expect(clampEventStartSlot(DISHWASHER_ID, 12.4)).toBe(12)
-      // The washing machine's requiresAwakeHome window is narrower --
-      // clamping is per-event, not a single shared range.
+      expect(clampEventStartSlot(DEHUMIDIFIER_ID, -5)).toBe(dehumidifierDefinition.validStartSlotRange.min)
+      expect(clampEventStartSlot(DEHUMIDIFIER_ID, 1000)).toBe(dehumidifierDefinition.validStartSlotRange.max)
+      expect(clampEventStartSlot(DEHUMIDIFIER_ID, 12.4)).toBe(12)
+      // The washing machine's requiresAwakeHome window is narrower and
+      // starts later in the day -- clamping is per-event, not a single
+      // shared range.
       expect(clampEventStartSlot(WASHING_MACHINE_ID, 0)).toBe(washingMachineDefinition.validStartSlotRange.min)
-      expect(washingMachineDefinition.validStartSlotRange.min).toBeGreaterThan(dishwasherDefinition.validStartSlotRange.min)
+      expect(washingMachineDefinition.validStartSlotRange.min).toBeGreaterThan(dehumidifierDefinition.validStartSlotRange.min)
 
-      const fixtureAtMax = buildLandingDemoFixture({ [DISHWASHER_ID]: 1000 })
+      const fixtureAtMax = buildLandingDemoFixture({ [DEHUMIDIFIER_ID]: 1000 })
       expect(fixtureAtMax.optimise.day.slots).toHaveLength(48)
+    })
+
+    // OA-107: "tumble dryer cannot start before the washing machine
+    // finishes" -- a dependent event's effective window tracks the
+    // dependency's *current* position, not just its own static window.
+    it("narrows the tumble dryer's effective minimum to the washing machine's current end slot", () => {
+      expect(clampEventStartSlot(TUMBLE_DRYER_ID, 0)).toBe(
+        washingMachineDefinition.actualStartSlot + washingMachineDefinition.slotCount,
+      )
+
+      // Move the washing machine later; the dryer, even requested earlier
+      // than that, can't start before it now finishes.
+      const movedWashingMachineStart = 30
+      const currentPositions = { [WASHING_MACHINE_ID]: movedWashingMachineStart }
+      expect(clampEventStartSlot(TUMBLE_DRYER_ID, 10, currentPositions)).toBe(
+        movedWashingMachineStart + washingMachineDefinition.slotCount,
+      )
+
+      const fixture = buildLandingDemoFixture({
+        [WASHING_MACHINE_ID]: movedWashingMachineStart,
+        [TUMBLE_DRYER_ID]: 10,
+      })
+      const dryer = fixture.projection.events.find((e) => e.id === TUMBLE_DRYER_ID)!
+      expect(dryer.currentStartSlot).toBe(movedWashingMachineStart + washingMachineDefinition.slotCount)
+    })
+
+    // OA-107: an identified-but-fixed event (the oven) is still part of the
+    // shared event model/projection, but its window is a single slot --
+    // its own actual position -- so it never actually moves.
+    it('keeps a fixed, non-movable event pinned to its own actual slot', () => {
+      expect(ovenDefinition.movable).toBe(false)
+      expect(ovenDefinition.validStartSlotRange).toEqual({ min: ovenDefinition.actualStartSlot, max: ovenDefinition.actualStartSlot })
+      const fixture = buildLandingDemoFixture({ [OVEN_ID]: 0 })
+      const oven = fixture.projection.events.find((e) => e.id === OVEN_ID)!
+      expect(oven.currentStartSlot).toBe(ovenDefinition.actualStartSlot)
     })
 
     it('defaults every event to its own actual start slot when nothing is requested', () => {
@@ -209,7 +254,7 @@ describe('buildLandingDemoFixture', () => {
   // explicit, documented recurrence assumption -- never today's saving x 365.
   describe('monthly/annual projection (OA-104/105)', () => {
     it('derives each event\'s annual projection from its own saving per occurrence and documented weekly frequency, not from today x 365', () => {
-      const fixture = buildLandingDemoFixture({ [DISHWASHER_ID]: 10 })
+      const fixture = buildLandingDemoFixture({ [DISHWASHER_ID]: 40 })
       const event = fixture.projection.events.find((e) => e.id === DISHWASHER_ID)!
       expect(event.occurrencesPerWeek).toBe(dishwasherDefinition.occurrencesPerWeek)
       expect(event.projectedAnnualSavingPence).toBeCloseTo(event.savingPerOccurrencePence * event.occurrencesPerWeek * 52, 6)
@@ -219,14 +264,14 @@ describe('buildLandingDemoFixture', () => {
     })
 
     it('derives monthly as annual / 12 for each event, so monthly x 12 always equals the annual figure exactly', () => {
-      const fixture = buildLandingDemoFixture({ [DISHWASHER_ID]: 10 })
+      const fixture = buildLandingDemoFixture({ [DISHWASHER_ID]: 40 })
       for (const event of fixture.projection.events) {
         expect(event.projectedMonthlySavingPence * 12).toBeCloseTo(event.projectedAnnualSavingPence, 9)
       }
     })
 
     it('sums the household projection across every household event', () => {
-      const fixture = buildLandingDemoFixture({ [DISHWASHER_ID]: 10, [WASHING_MACHINE_ID]: 20 })
+      const fixture = buildLandingDemoFixture({ [DISHWASHER_ID]: 40, [WASHING_MACHINE_ID]: 20 })
       expect(fixture.projection.events).toHaveLength(LANDING_DEMO_EVENTS.length)
       expect(fixture.projection.dailyPotentialSavingPence).toBeCloseTo(fixture.timingSavingPence, 6)
       expect(fixture.projection.dailyPotentialSavingPence).toBeCloseTo(
@@ -245,22 +290,22 @@ describe('buildLandingDemoFixture', () => {
 
     it('recomputes one event\'s projection live as it moves, without disturbing the other event\'s projection', () => {
       const defaultFixture = buildLandingDemoFixture()
-      const moved = buildLandingDemoFixture({ [DISHWASHER_ID]: 33 })
+      const moved = buildLandingDemoFixture({ [DISHWASHER_ID]: 40 })
       const movedDishwasher = moved.projection.events.find((e) => e.id === DISHWASHER_ID)!
       const movedWashingMachine = moved.projection.events.find((e) => e.id === WASHING_MACHINE_ID)!
       const defaultWashingMachine = defaultFixture.projection.events.find((e) => e.id === WASHING_MACHINE_ID)!
-      expect(movedDishwasher.currentStartSlot).toBe(33)
+      expect(movedDishwasher.currentStartSlot).toBe(40)
       expect(moved.projection.projectedAnnualSavingPence).not.toBeCloseTo(defaultFixture.projection.projectedAnnualSavingPence, 0)
       expect(movedWashingMachine.projectedAnnualSavingPence).toBeCloseTo(defaultWashingMachine.projectedAnnualSavingPence, 6)
     })
 
     it('exposes inspectable per-event detail: id, name, duration, kWh, current/valid window', () => {
-      const fixture = buildLandingDemoFixture({ [DISHWASHER_ID]: 10 })
+      const fixture = buildLandingDemoFixture({ [DISHWASHER_ID]: 40 })
       const event = fixture.projection.events.find((e) => e.id === DISHWASHER_ID)!
       expect(event.label).toBeTruthy()
       expect(event.durationMinutes).toBe(dishwasherDefinition.slotCount * 30)
       expect(event.kwh).toBeGreaterThan(0)
-      expect(event.currentStartSlot).toBe(10)
+      expect(event.currentStartSlot).toBe(40)
       expect(event.validStartSlotRange).toEqual(dishwasherDefinition.validStartSlotRange)
     })
   })
@@ -298,7 +343,7 @@ describe('buildLandingDemoFixture', () => {
         const slot = cheapestStartSlotForEvent(event.id)
         const fixture = buildLandingDemoFixture({ [event.id]: slot })
         const projected = fixture.projection.events.find((e) => e.id === event.id)!
-        expect(projected.kwh).toBeCloseTo(event.kwhPerSlot * event.slotCount, 9)
+        expect(projected.kwh).toBeCloseTo(totalEventKwh(event), 9)
         expect(projected.durationMinutes).toBe(event.slotCount * 30)
       }
     })
@@ -314,9 +359,14 @@ describe('buildLandingDemoFixture', () => {
       }
     })
 
-    it('rejects an event with zero or negative kWh per slot', () => {
-      expect(isRealHouseholdEvent({ ...dishwasherDefinition, kwhPerSlot: 0 })).toBe(false)
-      expect(isRealHouseholdEvent({ ...dishwasherDefinition, kwhPerSlot: -0.1 })).toBe(false)
+    it('rejects an event with any zero or negative kWh shape stage', () => {
+      expect(isRealHouseholdEvent({ ...dishwasherDefinition, kwhShape: [0.6, 0, 0.45] })).toBe(false)
+      expect(isRealHouseholdEvent({ ...dishwasherDefinition, kwhShape: [0.6, -0.1, 0.45] })).toBe(false)
+    })
+
+    it('rejects an event whose shape length does not match its slot count', () => {
+      expect(isRealHouseholdEvent({ ...dishwasherDefinition, kwhShape: [0.6, 0.2] })).toBe(false)
+      expect(isRealHouseholdEvent({ ...dishwasherDefinition, kwhShape: [0.6, 0.2, 0.45, 0.1] })).toBe(false)
     })
 
     it('rejects an event with zero or negative slot count', () => {
@@ -339,5 +389,80 @@ describe('buildLandingDemoFixture', () => {
     const minPeak = Math.min(...peakSlots)
     const maxOffPeak = Math.max(...offPeakSlots)
     expect(minPeak).toBeGreaterThan(maxOffPeak)
+  })
+
+  // OA-127: Compare/Optimise can be built against any of the three
+  // tariffs, with Baseline always staying on Standard Variable (the
+  // reference the tariff-switch saving is measured against).
+  describe('tariff selection (OA-127)', () => {
+    it('defaults compare/optimise to Agile, unchanged from before this ticket', () => {
+      const fixture = buildLandingDemoFixture()
+      expect(fixture.compare.tariffName).toBe('Octopus Agile')
+      expect(fixture.optimise.tariffName).toBe('Octopus Agile')
+    })
+
+    it('keeps baseline on Standard Variable regardless of the selected tariff', () => {
+      for (const tariffId of TARIFF_IDS) {
+        const fixture = buildLandingDemoFixture({}, tariffId)
+        expect(fixture.baseline.tariffName).toBe('Standard Variable')
+      }
+    })
+
+    it('builds compare/optimise against the selected tariff’s own rates and name', () => {
+      const economy7 = buildLandingDemoFixture({}, 'economy-7')
+      expect(economy7.compare.tariffName).toBe('Economy 7')
+      expect(economy7.optimise.tariffName).toBe('Economy 7')
+
+      const standardVariable = buildLandingDemoFixture({}, 'standard-variable')
+      expect(standardVariable.compare.tariffName).toBe('Standard Variable')
+      // Standard Variable is flat, same rate baseline uses -- so, with
+      // identical usage (no event moved), compare/baseline costs match
+      // exactly and there is no tariff-switch saving.
+      expect(standardVariable.compare.totalCostPence).toBeCloseTo(standardVariable.baseline.totalCostPence, 6)
+      expect(standardVariable.tariffSwitchSavingPence).toBeCloseTo(0, 6)
+    })
+
+    it('still keeps optimise on the exact same tariff/rates as compare, for every tariff', () => {
+      for (const tariffId of TARIFF_IDS) {
+        const fixture = buildLandingDemoFixture({}, tariffId)
+        expect(fixture.optimise.tariffName).toBe(fixture.compare.tariffName)
+        expect(fixture.optimise.day.slots.map((s) => s.unitRateIncVatPence)).toEqual(
+          fixture.compare.day.slots.map((s) => s.unitRateIncVatPence),
+        )
+      }
+    })
+
+    it('represents Economy 7 as exactly two distinct rates -- one day price, one night price -- never a 48-rate Agile-style tariff', () => {
+      const fixture = buildLandingDemoFixture({}, 'economy-7')
+      const rates = fixture.compare.day.slots.map((s) => s.unitRateIncVatPence)
+      const distinctRates = new Set(rates)
+      expect(distinctRates.size).toBe(2)
+    })
+
+    it('prices every Economy 7 off-peak slot (and only those) at the cheaper night rate', () => {
+      const fixture = buildLandingDemoFixture({}, 'economy-7')
+      const rates = fixture.compare.day.slots.map((s) => s.unitRateIncVatPence ?? 0)
+      const nightRate = Math.min(...rates)
+      const dayRate = Math.max(...rates)
+      expect(nightRate).toBeLessThan(dayRate)
+      rates.forEach((rate, slot) => {
+        const isOffPeak = slot >= ECONOMY_7_OFF_PEAK_SLOT_RANGE.min && slot <= ECONOMY_7_OFF_PEAK_SLOT_RANGE.max
+        expect(rate).toBe(isOffPeak ? nightRate : dayRate)
+      })
+      // "the fixed off-peak period is 00:30-07:30 UTC, which becomes
+      // 01:30-08:30 during BST" -- a 7-hour window, i.e. 14 half-hour slots.
+      expect(ECONOMY_7_OFF_PEAK_SLOT_RANGE.max - ECONOMY_7_OFF_PEAK_SLOT_RANGE.min + 1).toBe(14)
+    })
+
+    it('optimises a broadly-flexible event (dehumidifier) into the Economy 7 off-peak window', () => {
+      const best = cheapestStartSlotForEvent('dehumidifier', {}, 'economy-7')
+      const dehumidifierSlotCount = dehumidifierDefinition.slotCount
+      expect(best).toBeGreaterThanOrEqual(ECONOMY_7_OFF_PEAK_SLOT_RANGE.min)
+      expect(best + dehumidifierSlotCount - 1).toBeLessThanOrEqual(ECONOMY_7_OFF_PEAK_SLOT_RANGE.max)
+    })
+
+    it('defaults cheapestStartSlotForEvent to Agile when no tariff is given, unchanged from before this ticket', () => {
+      expect(cheapestStartSlotForEvent('dehumidifier')).toBe(cheapestStartSlotForEvent('dehumidifier', {}, 'agile'))
+    })
   })
 })
