@@ -6,9 +6,7 @@
    horizontal gutter, which this section's own content would otherwise
    lose once it escapes .app-main's width) lives in the shared
    `.landing-section-band` class (App.css) -- this only adds the
-   comparison's own vertical padding/background/border on top of it. Its
-   content (.landing-demo__grid etc.) keeps its existing centering
-   untouched either way. */
+   comparison's own vertical padding/background/border on top of it. */
 .landing-demo {
   padding-top: 32px;
   padding-bottom: 32px;
@@ -35,19 +33,75 @@
   }
 }
 
-/* OA-83 (second pass): no standalone section title -- the ticket's own
-   review of the first pass called "Interactive Tariff Comparison"
-   functional but generic, and asked that the control/story carry the
-   section instead of another heading. The eyebrow line plus the
-   section's aria-label (on the enclosing <section>) keep it named for
-   assistive tech without adding visible chrome or vertical space. */
-.landing-demo__eyebrow {
+/* OA-100: "Typical household" is now the section's one real heading --
+   OA-83's original "no standalone section title" rationale (the control/
+   story should carry the section) held while the demo had no competing
+   heading of its own; once OA-99 added "Typical household" as a quiet
+   all-caps eyebrow, it ended up competing with Tab 1's "Your current
+   setup" heading inside the card (removed, see LandingTimeProfile.tsx)
+   for the reader's attention. Promoted to a real heading, visually close
+   to the tabs/source note below it rather than floating with extra gap. */
+.landing-demo__heading-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 16px;
+}
+
+.landing-demo__heading {
   text-align: center;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: normal;
+  color: var(--text-h);
+  margin: 0;
+}
+
+@media (min-width: 640px) {
+  .landing-demo__heading {
+    font-size: 28px;
+  }
+}
+
+/* OA-99: a quiet, discoverable "Sources" disclosure -- native <details>
+   needs no extra JS/state, and keeps the provenance one click away
+   without cluttering the main eyebrow line. */
+.landing-demo__sources {
+  font-size: 11px;
   color: var(--text);
-  margin: 0 0 14px;
+  opacity: 0.6;
+}
+
+.landing-demo__sources summary {
+  cursor: pointer;
+  text-align: center;
+  list-style: none;
+}
+
+.landing-demo__sources summary::-webkit-details-marker {
+  display: none;
+}
+
+.landing-demo__sources summary:hover,
+.landing-demo__sources summary:focus-visible {
+  opacity: 1;
+}
+
+.landing-demo__sources ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: center;
+}
+
+.landing-demo__sources li {
+  margin: 2px 0;
+}
+
+.landing-demo__sources a {
+  color: inherit;
+  text-decoration: underline;
 }
 
 /* OA-80/OA-83: a compact segmented control, not three separate buttons
@@ -89,130 +143,14 @@
   outline-offset: 2px;
 }
 
-/* OA-80/OA-79/OA-83/OA-87/OA-94: story panel left, visual right on
-   desktop -- stacks on narrow screens (narrative first, then the visual
-   -- already the DOM order, so no reordering needed for the mobile
-   requirement that the narrative appear before the visual).
-   OA-87 believed `.landing-section-band`/`.app-main` already capped this
-   grid at the page's ~1280px shell -- it doesn't. `.landing-section-band`
-   (App.css) makes `.landing-demo` itself a `width: 100vw` full-bleed
-   breakout, and nothing re-centers `.landing-demo__grid` inside it, so
-   on a wide monitor this grid actually spans the *entire viewport*,
-   growing past 1280px while every other section on the page stays
-   capped at `.app-main`'s width -- that mismatch, not the 5/7 column
-   split itself (already the ticket's target ~42/58 ratio), was what let
-   the chart "stretch to consume all available width" and separate from
-   the narrative on wide screens. OA-94 fixes it by capping/centering
-   this grid at the same ~1280px shell width explicitly, rather than
-   relying on an ambient container that doesn't actually apply here. */
-.landing-demo__grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 24px;
-  align-items: center;
-}
-
-@media (min-width: 860px) {
-  .landing-demo__grid {
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    /* OA-94: "reduce the horizontal gap... so narrative and chart read
-       as one composed feature" -- down from 48px. */
-    gap: 32px;
-    max-width: 1280px;
-    margin: 0 auto;
-  }
-
-  .landing-demo__story {
-    grid-column: span 5;
-  }
-
-  .landing-demo__heatmap-slot {
-    grid-column: span 7;
-    /* OA-94: "wide page does not mean infinitely wide chart" -- an
-       explicit ceiling independent of the grid-cap above, so the visual
-       stays landscape/substantial without ever reading as billboard-
-       sized if this shell widens again in future. */
-    max-width: 860px;
-  }
-}
-
-.landing-demo__story {
-  text-align: center;
-}
-
-@media (min-width: 860px) {
-  .landing-demo__story {
-    text-align: left;
-  }
-}
-
-.landing-demo__heatmap-slot {
-  /* A 48-column inner grid (LandingHeatMap.css) would otherwise force
-     this grid item wider than its 7-column track (grid items default to
-     `min-width: auto`, not 0). */
-  min-width: 0;
-}
-
-/* OA-83 (second pass): lead with the number, not a sentence -- a short
-   plain-text context line, the kWh/£ figure (the dominant element),
-   then a brief supporting line. No pill/box around the context line --
-   the first pass's bordered pill was exactly the kind of "another
-   pill, another bordered box" chrome the ticket's second pass asked to
-   remove; plain text at reduced opacity carries the same information
-   with less visual weight than the number below it. */
-.landing-demo__context {
-  margin: 0 0 6px;
-  font-size: 13px;
-  color: var(--text);
-  opacity: 0.75;
-}
-
-.landing-demo__context--accent {
-  color: var(--accent);
-  opacity: 1;
-  font-weight: 600;
-}
-
-.landing-demo__stat {
-  margin: 0 0 6px;
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-}
-
-@media (min-width: 860px) {
-  .landing-demo__stat {
-    justify-content: flex-start;
-  }
-}
-
-.landing-demo__stat-value {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--text-h);
-  white-space: nowrap;
-}
-
-.landing-demo__stat-diff {
-  font-size: 14px;
-  font-weight: 600;
-  color: #4ade80;
-}
-
-.landing-demo__caption {
-  margin: 6px 0 0;
-  font-size: 14px;
-  color: var(--text);
-  opacity: 0.85;
-}
-
-.landing-demo__caveat {
-  margin-top: 6px;
-  font-size: 13px;
-  color: var(--text);
-  opacity: 0.8;
+/* OA-98: the tab panel wraps a single `<LandingTimeProfile>` card --
+   narrative and chart are now one object (see that component's own
+   comment), not a two-column grid of a separate narrative panel beside a
+   chart card (the previous `.landing-demo__grid`/`__story`/
+   `__heatmap-slot`, removed). `<LandingTimeProfile>` centres and caps its
+   own width, so this wrapper needs no layout of its own. */
+.landing-demo__panel {
+  width: 100%;
 }
 
 .landing-demo__cta {
@@ -250,31 +188,5 @@
     flex: 1 1 auto;
     text-align: center;
     padding: 8px 6px;
-  }
-}
-
-/* OA-80: the transition between states should help explain what
-   changed -- a restrained fade/slide, replayed by remounting the panel
-   (React `key={step}`) on every step change. Respects reduced motion by
-   simply not defining the animation at all when the preference is set.
-   OA-86: scoped to the story panel only (it alone remounts via
-   `key={step}`, see LandingDemo.tsx) -- `.landing-demo__heatmap-slot`
-   (LandingHeatMap) stays mounted across step changes so its cells can
-   CSS-transition background-color/opacity in place instead of popping
-   into a freshly rendered end state. */
-@media (prefers-reduced-motion: no-preference) {
-  .landing-demo__story {
-    animation: landing-demo-panel-in 0.32s ease both;
-  }
-}
-
-@keyframes landing-demo-panel-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }

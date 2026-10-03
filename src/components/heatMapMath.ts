@@ -76,6 +76,23 @@ export function rateCategoryIndex(rate: number | null, min: number, max: number)
   return 2
 }
 
+/**
+ * OA-95: which of the 3 rate categories are actually present in a day's
+ * data (vs. always showing all 3) -- a flat-rate tariff (e.g. Standard
+ * Variable) buckets every slot into the "standard" middle band, so its
+ * legend should read "Standard" only, not "Cheap · Standard · Peak".
+ */
+export function presentRateCategories(days: HeatMapDay[], min: number, max: number): number[] {
+  const present = new Set<number>()
+  for (const day of days) {
+    for (const slot of day.slots) {
+      const category = rateCategoryIndex(slot.unitRateIncVatPence, min, max)
+      if (category !== null) present.add(category)
+    }
+  }
+  return [...present].sort((a, b) => a - b)
+}
+
 export function rateRange(days: HeatMapDay[]): { min: number; max: number } {
   let min = Infinity
   let max = -Infinity
@@ -98,6 +115,62 @@ export function maxUsage(days: HeatMapDay[]): number {
     }
   }
   return max
+}
+
+interface CurvePoint {
+  x: number
+  y: number
+}
+
+/**
+ * Catmull-Rom-to-Bezier conversion -- a smooth curve that passes through
+ * every input point exactly (unlike e.g. a Bezier fit, which would only
+ * approximate them). OA-97: this keeps the usage profile grounded in the
+ * real half-hour values (no point is skipped or averaged away) while
+ * reading as a smooth silhouette instead of hard rectangular steps.
+ */
+function catmullRomToBezierPath(points: CurvePoint[]): string {
+  if (points.length === 0) return ''
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`
+  let d = `M ${points[0].x} ${points[0].y}`
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i - 1] ?? points[i]
+    const p1 = points[i]
+    const p2 = points[i + 1]
+    const p3 = points[i + 2] ?? p2
+    const cp1x = p1.x + (p2.x - p0.x) / 6
+    const cp1y = p1.y + (p2.y - p0.y) / 6
+    const cp2x = p2.x - (p3.x - p1.x) / 6
+    const cp2y = p2.y - (p3.y - p1.y) / 6
+    d += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p2.x} ${p2.y}`
+  }
+  return d
+}
+
+/**
+ * OA-97: a smooth SVG area path through the 48 half-hourly usage ratios
+ * (each already clamped to [0, 1] of the day's peak), in a normalised
+ * `0..slots.length` x / `0..1` y coordinate space -- the caller scales it
+ * to its own pixel box via the SVG viewBox, so this stays a pure,
+ * testable function of the data rather than any rendered size. y is
+ * inverted (0 = top = max usage, 1 = bottom = no usage) to match SVG's
+ * downward y-axis, and the path closes down to the y=1 baseline so it
+ * fills as an area, not just an outline.
+ *
+ * The number of path commands depends only on `usageRatios.length` (always
+ * 48 for this component), never on the ratios themselves -- so the same
+ * state's path structurally lines up across Baseline/Compare/Optimise,
+ * which is what lets a CSS transition on `d` morph between them instead of
+ * snapping.
+ */
+export function buildSmoothUsageAreaPath(usageRatios: number[]): string {
+  const n = usageRatios.length
+  if (n === 0) return ''
+  const points: CurvePoint[] = usageRatios.map((ratio, i) => ({
+    x: i + 0.5,
+    y: 1 - Math.max(0, Math.min(1, ratio)),
+  }))
+  return `${catmullRomToBezierPath(points)} L ${n} 1 L 0 1 Z`
 }
 
 export interface HeatMapAnnotation {

@@ -2,6 +2,11 @@
    (glass card, padding, header/legend layout, sr-only table) is carried
    over unchanged from LandingHeatMap -- only the visual track itself
    (`__track`/`__column`/`__usage-bar`) is new. */
+/* OA-98: the comparison card is now the whole unit -- narrative above
+   chart -- so it gets a sensible central max-width instead of stretching
+   to fill whatever column it used to share with a separate narrative
+   panel. ~900px keeps the chart's own rendered width close to OA-94/97's
+   ~860px target once the card's padding is accounted for. */
 .landing-time-profile {
   --landing-time-profile-cheap: #10b981;
   --landing-time-profile-standard: #8b5cf6;
@@ -9,6 +14,8 @@
   --landing-time-profile-unknown: #2c2c3a;
 
   position: relative;
+  max-width: 900px;
+  margin: 0 auto;
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -24,37 +31,80 @@
   }
 }
 
-.landing-time-profile__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 20px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--border);
+/* OA-98/OA-100: tariff/usage/cost summary -> explanation (+ optional
+   caveat) -- one state's worth of narrative, remounted via `stepKey` on
+   every step change to replay the OA-80 fade/slide (moved here from
+   LandingDemo.css's now-removed `.landing-demo__story`). No heading here
+   -- OA-100 removed it (see LandingTimeProfile.tsx's doc comment): the
+   card now leads directly with the summary line. */
+.landing-time-profile__narrative {
+  margin-bottom: 16px;
 }
 
-.landing-time-profile__title {
-  margin: 0 0 2px;
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.landing-time-profile__summary {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: var(--text);
+  opacity: 0.85;
+}
+
+.landing-time-profile__summary strong {
   color: var(--text-h);
+  font-weight: 700;
 }
 
-.landing-time-profile__subtitle {
+.landing-time-profile__summary-diff {
+  color: #4ade80;
+}
+
+.landing-time-profile__explanation {
   margin: 0;
+  font-size: 14px;
+  color: var(--text);
+  opacity: 0.85;
+}
+
+/* OA-99: "do not silently mix" usage cost and the standing charge --
+   shown identically on every tab, smaller/quieter than the explanation
+   since it's a clarifying footnote, not part of the main story. */
+.landing-time-profile__cost-note {
+  margin: 4px 0 0;
   font-size: 12px;
   color: var(--text);
-  opacity: 0.7;
+  opacity: 0.6;
+}
+
+.landing-time-profile__caveat {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text);
+  opacity: 0.8;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .landing-time-profile__narrative {
+    animation: landing-time-profile-narrative-in 0.32s ease both;
+  }
+}
+
+@keyframes landing-time-profile-narrative-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .landing-time-profile__legend {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
   font-size: 12px;
   font-weight: 500;
   color: var(--text);
@@ -96,6 +146,7 @@
    a fixed aspect, not `aspect-ratio: 1`, so columns read as a landscape
    strip rather than a block of squares. */
 .landing-time-profile__track {
+  position: relative;
   display: flex;
   align-items: stretch;
   height: clamp(140px, 22vw, 220px);
@@ -122,47 +173,136 @@
 .landing-time-profile__column:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.65);
   outline-offset: -2px;
-  z-index: 1;
+  z-index: 2;
 }
 
-/* Foreground usage shape -- a solid bar anchored to the bottom of the
-   column, sized by height only (never opacity), so usage is always a
-   visually distinct layer sitting on top of the price landscape rather
-   than a shade of it. */
-.landing-time-profile__usage-bar {
-  display: block;
+/* OA-97: restrained vertical time guidance across the 24-hour track --
+   sits above the price-landscape columns but below the usage path/focus
+   outline, and never intercepts pointer/keyboard interaction. */
+.landing-time-profile__guides {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.landing-time-profile__guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.landing-time-profile__guide[data-strength='major'] {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+/* OA-97/follow-up: a faint divider at every half-hour slot boundary --
+   the track still reads as 48 discrete half-hour periods, not a
+   continuous gradient, without labelling all of them. */
+.landing-time-profile__guide[data-strength='slot'] {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+/* Foreground usage shape -- OA-97: one smooth path through all 48
+   half-hourly ratios (heatMapMath's buildSmoothUsageAreaPath), replacing
+   the previous one-bar-per-slot rendering. Still never opacity-encoded,
+   so usage stays a visually distinct layer on top of the price landscape
+   rather than a shade of it. */
+.landing-time-profile__usage-path {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   width: 100%;
-  height: calc(var(--usage-ratio, 0) * 100%);
-  min-height: 2px;
-  background: rgba(255, 255, 255, 0.85);
+  height: 100%;
+  pointer-events: none;
+}
+
+.landing-time-profile__usage-path path {
+  fill: rgba(255, 255, 255, 0.85);
   mix-blend-mode: overlay;
 }
 
-/* OA-86/89: colour and usage-bar-height transitions on the *same*
-   persistent column nodes across Baseline -> Compare -> Optimise
-   (LandingDemo.tsx keeps this component mounted across steps so this
-   can interpolate, rather than a fresh mount snapping straight to the
-   new state). Baseline -> Compare only animates background-color
-   (usage is identical); Compare -> Optimise only animates the usage
-   bar's height (the price landscape is identical). */
+/* OA-86/89/97: colour transitions on the *same* persistent column nodes,
+   and a `d` transition on the *same* persistent path node, across
+   Baseline -> Compare -> Optimise (LandingDemo.tsx keeps this component
+   mounted across steps so these can interpolate, rather than a fresh
+   mount snapping straight to the new state). Baseline -> Compare only
+   animates background-color (usage is identical, so the path doesn't
+   change); Compare -> Optimise only animates the path's `d` (the price
+   landscape is identical). Animating `d` this way requires the path to
+   keep the same number/order of commands across states, which it always
+   does here (48 slots), and degrades gracefully to an instant redraw in
+   browsers that don't support it. */
 @media (prefers-reduced-motion: no-preference) {
   .landing-time-profile__column {
     transition: background-color 0.8s ease;
   }
 
-  .landing-time-profile__usage-bar {
-    transition: height 0.8s ease;
+  .landing-time-profile__usage-path path {
+    transition: d 0.8s ease;
   }
 }
 
+/* Bridges the gap between the track's hour guides (clipped to the
+   track's own rounded corners via its `overflow: hidden`) and the axis
+   labels below -- a short tick at the same x-position as each guide, so
+   the line visually continues down to meet the time it marks instead of
+   stopping dead at the track's bottom edge. */
+.landing-time-profile__axis-ticks {
+  position: relative;
+  height: 6px;
+  margin-top: 2px;
+}
+
+.landing-time-profile__axis-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.32);
+}
+
+/* One label per hour (AXIS_HOURS), positioned at its own percentage of
+   the track's width rather than flex-distributed -- absolute positioning
+   is what lets every hour get a label instead of only a handful of fixed
+   anchor points. */
 .landing-time-profile__axis {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 8px;
+  position: relative;
+  height: 14px;
+  margin-top: 4px;
+}
+
+.landing-time-profile__axis-label {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
   font-size: 10px;
   font-weight: 500;
   color: var(--text);
   opacity: 0.6;
+  white-space: nowrap;
+}
+
+/* The first/last hour's label would otherwise overhang the card edge if
+   centred like the rest. */
+.landing-time-profile__axis-label:first-child {
+  transform: none;
+}
+
+.landing-time-profile__axis-label:last-child {
+  transform: translateX(-100%);
+}
+
+/* OA-97: "reduce visible axis-label density if needed" on narrow
+   viewports -- thin to alternate (even) hours rather than all 24, since
+   24 labels start to overlap below ~640px. The underlying 48-slot model
+   is unaffected; only which hours get a visible label changes. */
+@media (max-width: 640px) {
+  .landing-time-profile__axis-label:nth-child(even) {
+    display: none;
+  }
 }
 
 /* OA-86: "selected-cell details only after interaction" -- no permanent

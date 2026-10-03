@@ -1,9 +1,20 @@
 import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { buildLandingDemoFixture, type LandingDemoFixture } from '../domain/landingDemoFixture'
+import {
+  buildLandingDemoFixture,
+  LANDING_DEMO_DATA_SOURCES,
+  OFGEM_PRICE_CAP_STANDING_CHARGE_PENCE_PER_DAY,
+  type LandingDemoFixture,
+} from '../domain/landingDemoFixture'
 import { formatGbp } from '../format'
 import LandingTimeProfile from './LandingTimeProfile'
 import './LandingDemo.css'
+
+// OA-99: shown on every tab, identically -- the headline £ figure is
+// usage cost only, never silently mixed with the daily standing charge
+// (which doesn't vary by tariff or usage timing, so folding it in would
+// blur the tariff/timing comparison this demo exists to show).
+const COST_BASIS_NOTE = `Figures show usage cost only — excludes the ${formatGbp(OFGEM_PRICE_CAP_STANDING_CHARGE_PENCE_PER_DAY)}/day standing charge.`
 
 type DemoStepId = 'baseline' | 'compare' | 'optimise'
 
@@ -15,10 +26,22 @@ const STEP_TAB_LABELS: Record<DemoStepId, string> = {
   optimise: '3. Optimise timing',
 }
 
-function describeDifference(pence: number, moreLabel: string, lessLabel: string): string {
-  if (pence > 0) return `${formatGbp(pence)} ${lessLabel}`
-  if (pence < 0) return `${formatGbp(-pence)} ${moreLabel}`
-  return 'no difference'
+// OA-95/98: the state heading reads as a plain consumer statement, not
+// diagnostic/technical wording like "1. BASELINE -- STANDARD VARIABLE
+// (EXAMPLE DATA)".
+const STEP_HEADINGS: Record<DemoStepId, string> = {
+  baseline: 'Your current setup',
+  compare: 'Same usage, different tariff',
+  optimise: 'Same tariff, better timing',
+}
+
+// OA-101: the reference tariff is named explicitly ("£0.09 less than
+// Standard Variable"), not left implicit as it was when this sat next to
+// a baseline figure the reader had to remember from the previous tab.
+function describeDifference(pence: number, moreLabel: string, lessLabel: string, referenceTariffName: string): string {
+  if (pence > 0) return `${formatGbp(pence)} ${lessLabel} than ${referenceTariffName}`
+  if (pence < 0) return `${formatGbp(-pence)} ${moreLabel} than ${referenceTariffName}`
+  return `no different from ${referenceTariffName}`
 }
 
 function describeTimingPotential(pence: number): string {
@@ -31,43 +54,25 @@ function describeTimingPotential(pence: number): string {
  * OA-77/OA-80/OA-83: logged-out, interactive Baseline -> Compare tariff ->
  * Optimise timing walkthrough. All figures come from
  * `buildLandingDemoFixture` -- fixture data only, never a real
- * household's usage, so every panel says so explicitly rather than
- * leaving it implied. The segmented control behaves as a standard ARIA
+ * household's usage. The segmented control behaves as a standard ARIA
  * tablist (roving tabindex, arrow-key navigation) so it's usable by
- * keyboard as well as click/tap, and each step change remounts its
- * content (via `key`) to replay a restrained fade/slide transition --
- * skipped entirely under prefers-reduced-motion (see LandingDemo.css).
- *
- * OA-83 (second pass): the story panel leads with the number (kWh/£),
- * not a sentence -- a short context line above it and a brief
- * supporting line below, per the ticket's "dominant figure" hierarchy.
- * No standalone section heading, no pill/card chrome around that
- * context line or the Optimise step's figures -- the ticket's own
- * review of the first pass asked for fewer generic "another
- * pill/another card" containers, letting the segmented control and the
- * numbers themselves carry the section rather than a labelled box.
- * Reuses the same fixture/copy as before, just reordered/restyled; no
- * new claims are made.
+ * keyboard as well as click/tap.
  *
  * OA-85/86: multi-day fixture (colour = cheap/standard/peak, opacity =
  * usage) -- see landingDemoFixture's `days`.
  *
  * OA-89: the visual is `<LandingTimeProfile>`, a continuous price-
- * landscape + usage-bar time profile -- replaces the square-cell
- * `<LandingHeatMap>` (removed), whose colour+opacity-on-one-cell
- * encoding made price and usage too abstract to read at a glance. See
- * LandingTimeProfile.tsx's own comment for the full rationale.
+ * landscape + usage-bar time profile. See LandingTimeProfile.tsx's own
+ * comment for the full rationale.
  *
- * OA-86/89: the `key={step}` remount (for the story panel's fade/slide)
- * is scoped to `.landing-demo__story` only, not the whole grid --
- * `<LandingTimeProfile>` itself stays mounted across step changes. Each
- * slot across Baseline/Compare/Optimise shares the same `startsAt`
- * (only price-band colour/usage-bar height differ -- see
- * landingDemoFixture.ts), which are LandingTimeProfile's own React keys,
- * so switching steps updates each column's existing DOM node in place
- * rather than replacing it. That's what lets its CSS transitions
- * actually interpolate between states -- remounting fresh columns on
- * every step would have nothing to transition from.
+ * OA-98: there is no longer a separate narrative column here -- each
+ * step's heading/summary/explanation/caveat is handed to
+ * `<LandingTimeProfile>` as props and rendered *inside* the same card as
+ * the chart, above it, so the comparison reads as one component changing
+ * state rather than a text block beside a chart card. `<LandingTimeProfile>`
+ * itself stays mounted across step changes (only its narrative block
+ * remounts via `stepKey`) so the chart's own background-colour/path
+ * transitions keep interpolating -- see that component's doc comment.
  */
 function LandingDemo() {
   const [step, setStep] = useState<DemoStepId>('baseline')
@@ -91,6 +96,48 @@ function LandingDemo() {
     }
   }
 
+  let summary: React.ReactNode
+  let explanation: string
+  let caveat: string | undefined
+
+  if (step === 'baseline') {
+    summary = (
+      <>
+        {fixture.baseline.tariffName} · <strong>{fixture.baseline.totalKwh.toFixed(1)} kWh</strong> ·{' '}
+        <strong>{formatGbp(fixture.baseline.totalCostPence)}</strong>
+      </>
+    )
+    explanation = 'This is the baseline — exactly when energy gets used, half hour by half hour.'
+  } else if (step === 'compare') {
+    summary = (
+      // OA-101: two-line hierarchy -- tariff + price, then the
+      // difference named against the specific reference tariff it's
+      // being compared to -- replacing the earlier compressed single
+      // line ("Octopus Agile · £1.72 · £0.09 less") the ticket called out.
+      <>
+        {fixture.compare.tariffName} · <strong>{formatGbp(fixture.compare.totalCostPence)}</strong>
+        <br />
+        <strong className="landing-time-profile__summary-diff">
+          {describeDifference(fixture.tariffSwitchSavingPence, 'more', 'less', fixture.baseline.tariffName)}
+        </strong>
+      </>
+    )
+    explanation = 'Only the tariff changes — usage stays exactly the same.'
+    caveat = 'One example comparison, not a guarantee — which tariff costs less depends on your own usage pattern.'
+  } else {
+    summary = (
+      <>
+        {fixture.compare.tariffName} · <strong>{formatGbp(fixture.optimise.totalCostPence)}</strong> ·{' '}
+        <strong className="landing-time-profile__summary-diff">
+          {describeTimingPotential(fixture.timingSavingPence)}
+        </strong>
+      </>
+    )
+    explanation = 'Only flexible usage moves; total energy stays the same.'
+    caveat =
+      "Illustrative example only. We're not saying your home has this appliance, or that you could achieve this saving."
+  }
+
   return (
     // OA-92: the hero's "See how it works" CTA jumps here (#comparison-
     // demo) -- tabIndex={-1} makes the section programmatically
@@ -106,7 +153,42 @@ function LandingDemo() {
       data-active-step={step}
       tabIndex={-1}
     >
-      <p className="landing-demo__eyebrow">Example household — illustrative data, not your own</p>
+      {/* OA-99/OA-100: "Typical household" is the section's one real
+          heading (promoted from a quiet all-caps eyebrow in OA-100, once
+          it started competing with Tab 1's own "Your current setup"
+          heading -- removed, see LandingTimeProfile.tsx) -- the figures
+          are grounded in published Ofgem/Elexon/Octopus data (see
+          landingDemoFixture.ts's LANDING_DEMO_DATA_SOURCES) rather than
+          invented numbers, but it's still not the visitor's own usage
+          until they connect an account (see the CTA note below). */}
+      <div className="landing-demo__heading-row">
+        <h2 className="landing-demo__heading">Typical household</h2>
+        <details className="landing-demo__sources">
+          <summary>Based on Ofgem and Elexon data — not your own usage · Sources</summary>
+          <ul>
+            <li>
+              <a href={LANDING_DEMO_DATA_SOURCES.sourceUrls.ofgemTdcv} target="_blank" rel="noreferrer">
+                Ofgem — typical domestic consumption values (2026 decision)
+              </a>
+            </li>
+            <li>
+              <a href={LANDING_DEMO_DATA_SOURCES.sourceUrls.ofgemPriceCap} target="_blank" rel="noreferrer">
+                Ofgem — energy price cap, October–December 2026
+              </a>
+            </li>
+            <li>
+              <a href={LANDING_DEMO_DATA_SOURCES.sourceUrls.elexonProfiling} target="_blank" rel="noreferrer">
+                Elexon — domestic half-hourly load profiling
+              </a>
+            </li>
+            <li>
+              <a href={LANDING_DEMO_DATA_SOURCES.sourceUrls.octopusAgileApi} target="_blank" rel="noreferrer">
+                Octopus Energy — Agile tariff rates (API)
+              </a>
+            </li>
+          </ul>
+        </details>
+      </div>
 
       <div className="landing-demo__tabs" role="tablist" aria-label="Demo steps">
         {STEP_ORDER.map((id, index) => (
@@ -132,76 +214,20 @@ function LandingDemo() {
       </div>
 
       <div
-        className="landing-demo__grid"
+        className="landing-demo__panel"
         role="tabpanel"
         id={`landing-demo-panel-${step}`}
         aria-labelledby={`landing-demo-tab-${step}`}
       >
-        <div className="landing-demo__story" key={step}>
-          {step === 'baseline' && (
-            <>
-              <p className="landing-demo__context">Example tariff: {fixture.baseline.tariffName}</p>
-              <p className="landing-demo__stat">
-                <span className="landing-demo__stat-value">{fixture.baseline.totalKwh.toFixed(1)} kWh</span>
-                <span className="landing-demo__stat-value">
-                  <span aria-hidden="true">· </span>
-                  {formatGbp(fixture.baseline.totalCostPence)}
-                </span>
-              </p>
-              <p className="landing-demo__caption">
-                This is the baseline — exactly when energy gets used, half hour by half hour.
-              </p>
-            </>
-          )}
-
-          {step === 'compare' && (
-            <>
-              <p className="landing-demo__context landing-demo__context--accent">
-                Same usage. Same times. Compare with {fixture.compare.tariffName}.
-              </p>
-              <p className="landing-demo__stat">
-                <span className="landing-demo__stat-value">{formatGbp(fixture.compare.totalCostPence)}</span>
-                <span className="landing-demo__stat-diff">
-                  {describeDifference(fixture.tariffSwitchSavingPence, 'more', 'less')}
-                </span>
-              </p>
-              <p className="landing-demo__caption">Only the tariff changes — usage is identical to Baseline.</p>
-              <p className="landing-demo__caveat">
-                One example comparison, not a guarantee — which tariff costs less depends on your own usage pattern.
-              </p>
-            </>
-          )}
-
-          {step === 'optimise' && (
-            <>
-              <p className="landing-demo__context">
-                {fixture.compare.tariffName}, same usage — flexible load moved out of the expensive window.
-              </p>
-              <p className="landing-demo__stat">
-                <span className="landing-demo__stat-value">{formatGbp(fixture.optimise.totalCostPence)}</span>
-                <span className="landing-demo__stat-diff landing-demo__stat-diff--positive">
-                  {describeTimingPotential(fixture.timingSavingPence)}
-                </span>
-              </p>
-              <p className="landing-demo__caption">
-                Same tariff as Compare, same total energy — only the timing of flexible use (like a dishwasher)
-                changes.
-              </p>
-              <p className="landing-demo__caveat">
-                Illustrative example only. We&apos;re not saying your home has this appliance, or that you could
-                achieve this saving.
-              </p>
-            </>
-          )}
-        </div>
-
-        <div className="landing-demo__heatmap-slot">
-          <LandingTimeProfile
-            day={current.day}
-            title={`${STEP_TAB_LABELS[step]} — ${current.tariffName} (example data)`}
-            subtitle="Example day · half-hourly readings"
-          />
-        </div>
+        <LandingTimeProfile
+          day={current.day}
+          heading={STEP_HEADINGS[step]}
+          summary={summary}
+          explanation={explanation}
+          costNote={COST_BASIS_NOTE}
+          caveat={caveat}
+          stepKey={step}
+        />
       </div>
 
       {/* OA-92: the post-comparison conversion CTA -- "Sign up free",

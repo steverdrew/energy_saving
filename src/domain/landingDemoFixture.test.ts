@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildLandingDemoFixture } from './landingDemoFixture'
+import {
+  buildLandingDemoFixture,
+  LANDING_DEMO_DATA_SOURCES,
+  OFGEM_PRICE_CAP_STANDING_CHARGE_PENCE_PER_DAY,
+} from './landingDemoFixture'
 
 describe('buildLandingDemoFixture', () => {
   it('produces 48 half-hourly slots for every step', () => {
@@ -62,5 +66,33 @@ describe('buildLandingDemoFixture', () => {
       expect(step.days.map((d) => d.date)).toEqual([...step.days.map((d) => d.date)].sort())
       expect(new Set(step.days.map((d) => d.date)).size).toBe(4)
     }
+  })
+
+  // OA-99: grounded in published Ofgem/Elexon/Octopus data rather than
+  // invented numbers.
+  it('scales baseline usage to the Ofgem medium TDCV annual-average day (2,500 kWh/year)', () => {
+    const fixture = buildLandingDemoFixture()
+    expect(fixture.baseline.totalKwh).toBeCloseTo(2500 / 365, 2)
+  })
+
+  it('uses the Ofgem price-cap average Direct Debit unit rate as a flat Standard Variable rate', () => {
+    const fixture = buildLandingDemoFixture()
+    const rates = fixture.baseline.day.slots.map((s) => s.unitRateIncVatPence)
+    expect(new Set(rates)).toEqual(new Set([26.32]))
+  })
+
+  it('exposes the standing charge as a separate, documented figure never folded into usage cost', () => {
+    expect(OFGEM_PRICE_CAP_STANDING_CHARGE_PENCE_PER_DAY).toBe(54.83)
+  })
+
+  it('keeps provenance metadata alongside the fixture, testable and inspectable', () => {
+    expect(LANDING_DEMO_DATA_SOURCES.annualKwhSource).toMatch(/2,500 kWh\/year/)
+    expect(LANDING_DEMO_DATA_SOURCES.tariffRegion).toBe('C (London)')
+    expect(LANDING_DEMO_DATA_SOURCES.tariffDate).toBe('2026-06-15')
+    expect(LANDING_DEMO_DATA_SOURCES.sourceUrls.ofgemTdcv).toContain('ofgem.gov.uk')
+    expect(LANDING_DEMO_DATA_SOURCES.sourceUrls.ofgemPriceCap).toContain('ofgem.gov.uk')
+    expect(LANDING_DEMO_DATA_SOURCES.sourceUrls.elexonProfiling).toContain('elexon.co.uk')
+    expect(LANDING_DEMO_DATA_SOURCES.sourceUrls.octopusAgileApi).toContain('octopus.energy')
+    expect(LANDING_DEMO_DATA_SOURCES.fixtureVersion).toBeTruthy()
   })
 })

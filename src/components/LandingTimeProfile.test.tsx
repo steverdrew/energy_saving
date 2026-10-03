@@ -12,16 +12,30 @@ afterEach(cleanup)
 
 const fixture = buildLandingDemoFixture()
 
+function renderProfile(overrides: Partial<React.ComponentProps<typeof LandingTimeProfile>> = {}) {
+  return render(
+    <LandingTimeProfile
+      day={fixture.baseline.day}
+      heading="Baseline"
+      summary="Standard Variable · 6.8 kWh · £1.80"
+      explanation="Example day"
+      costNote="Figures show usage cost only."
+      stepKey="baseline"
+      {...overrides}
+    />,
+  )
+}
+
 describe('LandingTimeProfile', () => {
   it('renders one column per half-hour slot, each a real button with an accessible description', () => {
-    render(<LandingTimeProfile day={fixture.baseline.day} title="Baseline" subtitle="Example day" />)
+    renderProfile()
     const columns = screen.getAllByRole('button', { name: /kWh.*p\/kWh.*£/ })
     expect(columns).toHaveLength(48)
   })
 
   it('shows no detail line until a column is selected, then reveals it live', async () => {
     const user = userEvent.setup()
-    render(<LandingTimeProfile day={fixture.baseline.day} title="Baseline" subtitle="Example day" />)
+    renderProfile()
 
     expect(screen.queryByText(/kWh.*p\/kWh.*£/)).not.toBeInTheDocument()
 
@@ -34,7 +48,7 @@ describe('LandingTimeProfile', () => {
 
   it('is operable by keyboard alone via roving tabindex and arrow keys', async () => {
     const user = userEvent.setup()
-    render(<LandingTimeProfile day={fixture.baseline.day} title="Baseline" subtitle="Example day" />)
+    renderProfile()
 
     const columns = screen.getAllByRole('button', { name: /kWh.*p\/kWh.*£/ })
     expect(columns[0]).toHaveAttribute('tabindex', '0')
@@ -49,7 +63,85 @@ describe('LandingTimeProfile', () => {
   })
 
   it('always exposes a visually-hidden exact-values table, independent of selection state', () => {
-    render(<LandingTimeProfile day={fixture.baseline.day} title="Baseline" subtitle="Example day" />)
+    renderProfile()
     expect(screen.getByRole('table', { name: /baseline/i })).toBeInTheDocument()
+  })
+
+  // OA-97: the usage profile is one smooth SVG path across all 48 slots,
+  // not 48 independent bars.
+  it('renders the usage profile as a single smooth path spanning all 48 slots', () => {
+    const { container } = renderProfile()
+    const svg = container.querySelector('.landing-time-profile__usage-path')
+    expect(svg).toHaveAttribute('viewBox', '0 0 48 1')
+    const path = svg?.querySelector('path')
+    expect(path).toBeTruthy()
+    expect(path?.getAttribute('d')).toMatch(/^M /)
+    expect(container.querySelectorAll('.landing-time-profile__usage-bar')).toHaveLength(0)
+  })
+
+  // OA-95: the legend only names price bands actually present in this
+  // tab's data, rather than a fixed Cheap/Standard/Peak shown everywhere.
+  describe('legend', () => {
+    it('shows only "Standard" for a flat-rate day (no Cheap or Peak band present)', () => {
+      renderProfile()
+      expect(screen.getByText('Standard')).toBeInTheDocument()
+      expect(screen.queryByText('Cheap')).not.toBeInTheDocument()
+      expect(screen.queryByText('Peak')).not.toBeInTheDocument()
+    })
+
+    it('shows Cheap/Standard/Peak for a day whose rates actually span all three bands', () => {
+      renderProfile({ day: fixture.compare.day, heading: 'Compare' })
+      expect(screen.getByText('Cheap')).toBeInTheDocument()
+      expect(screen.getByText('Standard')).toBeInTheDocument()
+      expect(screen.getByText('Peak')).toBeInTheDocument()
+    })
+
+    it('always shows the Usage legend item regardless of which price bands are present', () => {
+      renderProfile()
+      expect(screen.getAllByText('Usage').length).toBeGreaterThan(0)
+    })
+  })
+
+  // OA-98/OA-100: the narrative (summary/explanation/caveat) lives inside
+  // this same card, above the chart, instead of a separate column -- and,
+  // as of OA-100, with no visible per-state heading (the section's one
+  // heading, "Typical household", lives in LandingDemo.tsx; `heading` here
+  // is only the chart's accessible name).
+  describe('narrative', () => {
+    it('renders the summary and explanation, in that order, above the legend, with no visible heading', () => {
+      renderProfile({
+        heading: 'Baseline chart',
+        summary: 'Standard Variable · 6.8 kWh · £1.80',
+        explanation: 'This is the baseline.',
+      })
+
+      expect(screen.queryByRole('heading')).not.toBeInTheDocument()
+      expect(screen.queryByText('Baseline chart')).not.toBeInTheDocument()
+      expect(screen.getByText('Standard Variable · 6.8 kWh · £1.80')).toBeInTheDocument()
+      expect(screen.getByText('This is the baseline.')).toBeInTheDocument()
+    })
+
+    it('still uses `heading` as the chart group and sr-table\'s accessible name', () => {
+      renderProfile({ heading: 'Baseline chart' })
+      expect(screen.getByRole('group', { name: 'Baseline chart' })).toBeInTheDocument()
+      expect(screen.getByRole('table', { name: /baseline chart/i })).toBeInTheDocument()
+    })
+
+    // OA-99: shown identically on every tab -- the headline £ figure is
+    // usage cost only, never silently mixed with the standing charge.
+    it('renders the cost-basis note', () => {
+      renderProfile({ costNote: 'Figures show usage cost only — excludes the standing charge.' })
+      expect(screen.getByText('Figures show usage cost only — excludes the standing charge.')).toBeInTheDocument()
+    })
+
+    it('omits the caveat line when none is given', () => {
+      const { container } = renderProfile()
+      expect(container.querySelector('.landing-time-profile__caveat')).not.toBeInTheDocument()
+    })
+
+    it('renders an optional caveat line when given', () => {
+      renderProfile({ caveat: 'Illustrative example only.' })
+      expect(screen.getByText('Illustrative example only.')).toBeInTheDocument()
+    })
   })
 })

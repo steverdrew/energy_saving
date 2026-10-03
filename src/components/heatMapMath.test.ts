@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildSmoothUsageAreaPath,
   findAnnotations,
   findPeakWindow,
   formatSlotTime,
   groupSlotsByLondonDay,
   maxUsage,
+  presentRateCategories,
   rateCategoryIndex,
   rateColorStepIndex,
   rateRange,
@@ -196,5 +198,58 @@ describe('groupSlotsByLondonDay', () => {
 
   it('returns no days for an empty slot list', () => {
     expect(groupSlotsByLondonDay([])).toEqual([])
+  })
+})
+
+describe('presentRateCategories', () => {
+  it('returns only the standard band for a flat-rate tariff', () => {
+    const day: HeatMapDay = { date: '2026-06-15', slots: [slot('2026-06-15T00:00:00Z', 1, 20), slot('2026-06-15T00:30:00Z', 1, 20)] }
+    expect(presentRateCategories([day], 20, 20)).toEqual([1])
+  })
+
+  it('returns every band actually present across a day with cheap/standard/peak rates', () => {
+    const day: HeatMapDay = {
+      date: '2026-06-15',
+      slots: [slot('2026-06-15T00:00:00Z', 1, 9), slot('2026-06-15T00:30:00Z', 1, 30), slot('2026-06-15T01:00:00Z', 1, 50)],
+    }
+    expect(presentRateCategories([day], 9, 55)).toEqual([0, 1, 2])
+  })
+
+  it('ignores slots with an unknown rate', () => {
+    const day: HeatMapDay = { date: '2026-06-15', slots: [slot('2026-06-15T00:00:00Z', 1, null)] }
+    expect(presentRateCategories([day], 0, 0)).toEqual([])
+  })
+})
+
+describe('buildSmoothUsageAreaPath', () => {
+  it('returns an empty string for no data', () => {
+    expect(buildSmoothUsageAreaPath([])).toBe('')
+  })
+
+  it('starts the curve at the first slot and passes through every input ratio exactly', () => {
+    const d = buildSmoothUsageAreaPath([0, 1, 0.5])
+    // x = slotIndex + 0.5, y = 1 - ratio (SVG y is inverted: 0 = top = max usage)
+    expect(d.startsWith('M 0.5 1')).toBe(true) // first point: ratio 0 -> y 1 (baseline)
+    expect(d).toContain('1.5 0') // second point: ratio 1 -> y 0 (peak)
+    expect(d).toContain('2.5 0.5') // third point: ratio 0.5 -> y 0.5
+  })
+
+  it('closes the area down to the y=1 baseline across the full slot-index width', () => {
+    const d = buildSmoothUsageAreaPath([0.2, 0.8, 0.4, 0.1])
+    expect(d.trim().endsWith('L 4 1 L 0 1 Z')).toBe(true)
+  })
+
+  it('produces the same number of curve commands regardless of the ratio values, so Compare/Optimise states stay structurally comparable', () => {
+    const commandCount = (d: string) => (d.match(/ C /g) ?? []).length
+    const flat = buildSmoothUsageAreaPath(new Array(48).fill(0.3))
+    const peaky = buildSmoothUsageAreaPath(Array.from({ length: 48 }, (_, i) => (i === 36 ? 1 : 0.1)))
+    expect(commandCount(flat)).toBe(47)
+    expect(commandCount(flat)).toBe(commandCount(peaky))
+  })
+
+  it('clamps out-of-range ratios into [0, 1]', () => {
+    const d = buildSmoothUsageAreaPath([-0.5, 1.5])
+    expect(d).toContain('0.5 1') // -0.5 clamped to 0 -> y 1
+    expect(d).toContain('1.5 0') // 1.5 clamped to 1 -> y 0
   })
 })
