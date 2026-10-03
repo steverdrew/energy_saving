@@ -17,8 +17,8 @@ What it does, in order:
      file automatically, but asks about each *untracked* file one at a
      time (default: skip) -- so a stray local script or scratch file
      never ends up in a production commit just because it happened to be
-     sitting in the working tree. Then prompts for a commit message (not
-     optional) and commits.
+     sitting in the working tree. Then commits automatically, with the
+     message "Deploy YYYY-MM-DD HH:MM" (no prompt).
   3. Runs the same checks CI runs before deploying (lint, build,
      check-bundle, test for the web app; test for the server), failing
      fast on the first failure so a broken push never reaches CI.
@@ -36,6 +36,7 @@ Usage:
 
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -115,9 +116,8 @@ def stage_and_commit() -> int | None:
     for path in staged:
         print(f"  {path}")
 
-    message = input("\nCommit message: ").strip()
-    if not message:
-        return fail("Empty commit message -- aborting, nothing committed.")
+    message = f"Deploy {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    print(f"\nCommit message: {message}")
 
     result = run(["git", "commit", "-m", message])
     if result.returncode != 0:
