@@ -1,6 +1,6 @@
 # HANDOFF
 
-_Last updated: 2026-10-03 18:40 BST_
+_Last updated: 2026-10-03 18:55 BST_
 
 _Note: this file previously grew into a full changelog (1700+ lines) across
 many sessions, against the handoff convention of staying under one page.
@@ -10,9 +10,10 @@ Rewritten clean at this entry — detailed history for anything before
 
 ## Current task
 
-**OA-103 / OA-104 / OA-105** (all built, not yet committed) — made the
-public landing page's "Typical household" demo (Tab 3 "Optimise timing")
-interactive, with shared household events across all three tabs.
+**OA-103 / OA-104 / OA-105** (all built and committed, `f20c8e3` on
+`main`, not pushed/deployed) — made the public landing page's "Typical
+household" demo (Tab 3 "Optimise timing") interactive, with shared
+household events across all three tabs.
 
 - **OA-103**: a household event on the Optimise tab is a draggable
   overlay (pointer + keyboard, `role="slider"`) over the usage chart;
@@ -40,16 +41,19 @@ independently on Optimise, annotations show correctly on Baseline/
 Compare, daily/monthly/annual figures update together, no console errors
 on a fresh page load).
 
-**Not committed.** Working tree has 7 modified files (see Key references)
-plus an unrelated untracked `local.py` at repo root — predates this
-session, leave it alone.
+Committed as one combined commit (`f20c8e3`), not three — OA-105 rewrites
+OA-103/104's single-event model in the same files, so three commits would
+mean reconstructing throwaway intermediate states rather than what
+actually shipped; recorded as a Decision below. Working tree is clean
+except an unrelated untracked `local.py` at repo root (predates this
+session, leave it alone).
 
 ## Next step
 
-Review the diff (`git diff`) and commit OA-103/104/105 — ask Steve
-whether this is one commit or three; default to three (one per ticket)
-matching the existing `OA-XXX: ...` commit-message convention if not told
-otherwise. No PR requested yet.
+Not pushed, no PR, not deployed. Ask Steve whether to push `main` and
+open a PR (or push directly, per however this repo normally ships), then
+deploy and transition OA-103/104/105 to Done in Jira once a stable beta
+deploy exists (OA-104's own acceptance criterion).
 
 ## Open items
 
@@ -97,6 +101,11 @@ otherwise. No PR requested yet.
   start, last start that still ends by 23:00) — a demo simplification of
   OA-73's `requiresAwakeHome` concept, not wired to the real
   `applianceProfile.ts` model.
+- Committed OA-103/104/105 as a single commit rather than three — the
+  working tree only ever reflected OA-105's final state (the code was
+  written in one continuous pass across the session), so splitting it
+  into three would require artificially reconstructing intermediate
+  diffs that never existed as real, independently-tested states.
 
 ## Constraints and preferences
 
