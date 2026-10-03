@@ -1,37 +1,22 @@
-/* OA-90: moved from LandingPage.css -- this footer is now shared by
-   every public page (Home/How it works/About), not landing-page-only.
-   Colour tokens still come from [data-landing] in App.css; relies on
-   the same .landing-section-band full-bleed breakout defined there. */
+/* OA-90/OA-93: shared public-site footer. Colour tokens come from
+   [data-landing] in App.css; relies on the same .landing-section-band
+   full-bleed breakout defined there.
+   OA-93: "deeper/darker closing band, subtle top border, simple link
+   row, compact spacing" -- padding shrunk from the old three-column
+   trust-statement treatment (removed entirely) to read as the page's
+   close, not another content section. */
 .landing-footer {
-  padding-top: 32px;
-  padding-bottom: 40px;
+  padding-top: 24px;
+  padding-bottom: 24px;
   background: #0a0f1c;
   border-top: 1px solid var(--border);
 }
 
-.landing-trust {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 24px;
-  text-align: center;
-}
-
-.landing-trust__item {
-  max-width: 260px;
-  font-size: 14px;
-  color: var(--text);
-}
-
-/* OA-90: footer's own public-page links (How it works/About/How dynamic
-   tariffs work) -- Privacy/Terms/Contact aren't implemented yet, so none
-   are added here rather than linking to pages that don't exist. */
 .landing-footer__links {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px 20px;
-  margin-top: 20px;
   text-align: center;
   font-size: 15px;
 }
@@ -43,4 +28,16 @@
 
 .landing-footer__links a:hover {
   text-decoration: underline;
+}
+
+/* OA-93: "optional secondary line... concise and visually subordinate,
+   not another content block" -- product name + independence statement,
+   small and low-emphasis rather than the old oversized standalone
+   trust/independence statements. */
+.landing-footer__closing {
+  margin: 12px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.6;
 }

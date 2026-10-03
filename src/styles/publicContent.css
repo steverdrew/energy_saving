@@ -57,6 +57,10 @@
   color: var(--text);
 }
 
+.landing-about a {
+  color: var(--accent);
+}
+
 .landing-about__independence {
   margin-top: 16px;
   color: var(--text-h);

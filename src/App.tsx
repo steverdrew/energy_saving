@@ -11,15 +11,21 @@ import ApplianceSetupPage from './pages/ApplianceSetupPage'
 import ComparePage from './pages/ComparePage'
 import CompatibilityFeedbackPage from './pages/CompatibilityFeedbackPage'
 import ConnectOctopusPage from './pages/ConnectOctopusPage'
+import ContactPage from './pages/ContactPage'
 import DebugPage from './pages/DebugPage'
 import ExplainerPage from './pages/ExplainerPage'
 import HowItWorksPage from './pages/HowItWorksPage'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import OptimisedPage from './pages/OptimisedPage'
+import PrivacyPage from './pages/PrivacyPage'
 import SavingsPage from './pages/SavingsPage'
+import TermsPage from './pages/TermsPage'
 
-const PUBLIC_SITE_PATHS = ['/', '/login', '/how-it-works', '/about']
+// OA-93: Privacy/Terms/Contact are footer-only links (not top nav) --
+// still public/dark-shelled pages, so included here for isPublicSiteRoute
+// below, but deliberately not added to the header nav's link list.
+const PUBLIC_SITE_PATHS = ['/', '/login', '/how-it-works', '/about', '/privacy', '/terms', '/contact']
 
 // The marketing landing page is aimed at signed-out visitors (its only CTA
 // is "sign in"). A signed-in user landing on "/" — e.g. from a bookmark —
@@ -88,6 +94,9 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/how-it-works" element={<HowItWorksPage />} />
             <Route path="/about" element={<AboutPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+            <Route path="/contact" element={<ContactPage />} />
             <Route
               path="/account"
               element={
