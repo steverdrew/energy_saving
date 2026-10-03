@@ -317,4 +317,114 @@ describe('LandingDemo', () => {
       expect(screen.getByText(/estimated from the example household/i)).toBeInTheDocument()
     })
   })
+
+  // OA-106: "Optimise all" / "Reset" secondary controls above the chart.
+  describe('Optimise all / Reset controls (OA-106)', () => {
+    it('shows Optimise all and Reset only on the Optimise tab, Optimise all before Reset', async () => {
+      const user = userEvent.setup()
+      renderDemo()
+
+      expect(screen.queryByRole('button', { name: 'Optimise all' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('tab', { name: '3. Optimise timing' }))
+      const buttons = screen.getAllByRole('button', { name: /^(Optimise all|Reset)$/ })
+      expect(buttons.map((b) => b.textContent)).toEqual(['Optimise all', 'Reset'])
+    })
+
+    it('starts with Reset disabled, since nothing has moved from the original schedule yet', async () => {
+      const user = userEvent.setup()
+      renderDemo()
+      await user.click(screen.getByRole('tab', { name: '3. Optimise timing' }))
+
+      expect(screen.getByRole('button', { name: 'Reset' })).toBeDisabled()
+    })
+
+    it('Optimise all moves every event to its cheapest valid slot, recomputing cost/saving live', async () => {
+      const user = userEvent.setup()
+      renderDemo()
+      await user.click(screen.getByRole('tab', { name: '3. Optimise timing' }))
+
+      await user.click(screen.getByRole('button', { name: 'Optimise all' }))
+
+      const dishwasher = screen.getByRole('slider', { name: /dishwasher cycle/i })
+      const washingMachine = screen.getByRole('slider', { name: /washing machine cycle/i })
+      // Cheapest slots are no longer the actual (36/14) positions, and
+      // both sliders stay within their own valid window.
+      expect(dishwasher).not.toHaveAttribute('aria-valuenow', '36')
+      expect(Number(washingMachine.getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(14)
+      expect(Number(washingMachine.getAttribute('aria-valuenow'))).toBeLessThanOrEqual(44)
+      expect(screen.queryByText(/no further difference from timing/)).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Reset' })).toBeEnabled()
+    })
+
+    it('Optimise all preserves each event\'s duration and kWh -- only the per-event detail\'s start time changes', async () => {
+      const user = userEvent.setup()
+      const { container } = renderDemo()
+      await user.click(screen.getByRole('tab', { name: '3. Optimise timing' }))
+
+      await user.click(screen.getByRole('button', { name: 'Optimise all' }))
+
+      const eventDetail = container.querySelector('.landing-time-profile__event-detail')
+      // Same two named events, same recurrence frequencies, still listed.
+      expect(eventDetail).toHaveTextContent(/dishwasher cycle moved to/i)
+      expect(eventDetail).toHaveTextContent(/4 cycles\/week/)
+      expect(eventDetail).toHaveTextContent(/washing machine cycle moved to/i)
+      expect(eventDetail).toHaveTextContent(/3 cycles\/week/)
+    })
+
+    it('Reset restores the exact original Tab 1/2 schedule and disables itself again', async () => {
+      const user = userEvent.setup()
+      renderDemo()
+      await user.click(screen.getByRole('tab', { name: '3. Optimise timing' }))
+
+      const slider = screen.getByRole('slider', { name: /dishwasher cycle/i })
+      slider.focus()
+      await user.keyboard('{ArrowLeft}'.repeat(32))
+      expect(slider).toHaveAttribute('aria-valuenow', '4')
+
+      await user.click(screen.getByRole('button', { name: 'Reset' }))
+
+      expect(screen.getByRole('slider', { name: /dishwasher cycle/i })).toHaveAttribute('aria-valuenow', '36')
+      expect(screen.getByRole('slider', { name: /washing machine cycle/i })).toHaveAttribute('aria-valuenow', '14')
+      expect(screen.getByText(/no further difference from timing/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Reset' })).toBeDisabled()
+    })
+
+    it('Reset after Optimise all returns to the original schedule, not just undoes the last move', async () => {
+      const user = userEvent.setup()
+      renderDemo()
+      await user.click(screen.getByRole('tab', { name: '3. Optimise timing' }))
+
+      await user.click(screen.getByRole('button', { name: 'Optimise all' }))
+      const slider = screen.getByRole('slider', { name: /washing machine cycle/i })
+      slider.focus()
+      await user.keyboard('{ArrowRight}')
+      await user.click(screen.getByRole('button', { name: 'Reset' }))
+
+      expect(screen.getByRole('slider', { name: /dishwasher cycle/i })).toHaveAttribute('aria-valuenow', '36')
+      expect(screen.getByRole('slider', { name: /washing machine cycle/i })).toHaveAttribute('aria-valuenow', '14')
+    })
+  })
+
+  // OA-106: an event overlay must never render unless it maps to a real,
+  // non-zero-kWh event in the shared model -- no empty/orphan/duplicate
+  // outlined blocks on the chart.
+  describe('no empty/orphan event overlays (OA-106)', () => {
+    it('renders exactly one overlay per real shared event, with a real label, on every tab', async () => {
+      const user = userEvent.setup()
+      const { container } = renderDemo()
+
+      for (const tabName of ['1. Baseline', '2. Compare tariff', '3. Optimise timing']) {
+        await user.click(screen.getByRole('tab', { name: tabName }))
+        const annotations = container.querySelectorAll(
+          '.landing-time-profile__event-annotation, .landing-time-profile__flexible-event',
+        )
+        expect(annotations).toHaveLength(2)
+        for (const annotation of annotations) {
+          expect(annotation.textContent?.trim()).not.toBe('')
+        }
+      }
+    })
+  })
 })

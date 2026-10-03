@@ -281,5 +281,61 @@ describe('LandingTimeProfile', () => {
       await user.keyboard('{ArrowRight}')
       expect(onMove).toHaveBeenLastCalledWith(46)
     })
+
+    // OA-106: an overlay must never render unless it has a real id/label,
+    // positive duration and a start slot that actually resolves to slots
+    // in this day -- the chart's own defence against an empty/orphan
+    // outlined block, independent of whatever LandingDemo.tsx passes in.
+    describe('empty/orphan overlay guard (OA-106)', () => {
+      it('does not render a fixed annotation with a blank label', () => {
+        const { container } = renderProfile({
+          day: fixture.baseline.day,
+          heading: 'Baseline',
+          events: [{ id: 'ghost', label: '   ', startSlot: 4, slotCount: 2, movable: false }],
+        })
+        expect(container.querySelector('.landing-time-profile__event-annotation')).not.toBeInTheDocument()
+      })
+
+      it('does not render an overlay with zero or negative slot count', () => {
+        const { container } = renderProfile({
+          day: fixture.baseline.day,
+          heading: 'Baseline',
+          events: [{ id: 'empty', label: 'Empty load', startSlot: 4, slotCount: 0, movable: false }],
+        })
+        expect(container.querySelector('.landing-time-profile__event-annotation')).not.toBeInTheDocument()
+        expect(screen.queryByText(/empty load/i)).not.toBeInTheDocument()
+      })
+
+      it('does not render a movable overlay whose slots fall outside the day', () => {
+        renderProfile({
+          day: fixture.optimise.day,
+          heading: 'Optimise',
+          events: [movableEvent({ startSlot: 47, slotCount: 2 })],
+        })
+        expect(screen.queryByRole('slider')).not.toBeInTheDocument()
+      })
+
+      it('renders only one overlay when the events array repeats the same id', () => {
+        renderProfile({
+          day: fixture.optimise.day,
+          heading: 'Optimise',
+          events: [movableEvent(), movableEvent()],
+        })
+        expect(screen.getAllByRole('slider', { name: /dishwasher cycle/i })).toHaveLength(1)
+      })
+
+      it('still renders every valid overlay alongside a filtered-out invalid one', () => {
+        renderProfile({
+          day: fixture.optimise.day,
+          heading: 'Optimise',
+          events: [
+            movableEvent(),
+            { id: 'ghost', label: '', startSlot: 10, slotCount: 2, movable: false },
+          ],
+        })
+        expect(screen.getByRole('slider', { name: /dishwasher cycle/i })).toBeInTheDocument()
+        expect(screen.queryByText(/ghost/i)).not.toBeInTheDocument()
+      })
+    })
   })
 })

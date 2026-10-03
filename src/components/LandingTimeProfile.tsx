@@ -62,6 +62,8 @@ export interface LandingTimeProfileProps {
   payoff?: ReactNode
   /** OA-104: an optional secondary, per-event line (e.g. "Dishwasher moved to 02:00 -- saves 18p this cycle, ~£73/year at 4 cycles/week") shown below the cost note -- inspectable detail, kept subordinate to the household-level `payoff` above. */
   eventDetail?: ReactNode
+  /** OA-106: optional secondary controls ("Optimise all" / "Reset"), shown above the chart -- only the Optimise step passes this. */
+  controls?: ReactNode
   /** Remounts just the narrative block (not the chart) to replay its OA-80 fade/slide on step change -- see the component doc comment for why the chart itself must stay mounted. */
   stepKey: string
   /** OA-99/OA-101: the 16:00-19:00 structural-peak annotation is a documented feature of *Agile's* pricing formula specifically -- showing it on a flat Standard Variable day would wrongly imply that flat tariff has the same structural peak. Baseline passes `false`; Compare/Optimise (both on Agile) pass `true`. */
@@ -156,6 +158,7 @@ function LandingTimeProfile({
   caveat,
   payoff,
   eventDetail,
+  controls,
   stepKey,
   showStructuralPeakAnnotation,
   events,
@@ -257,6 +260,24 @@ function LandingTimeProfile({
     return `${formatSlotTime(slots[0].startsAt)}–${formatSlotTime(slots[slots.length - 1].startsAt)}`
   }
 
+  // OA-106: defence-in-depth against the "empty outlined block" bug -- an
+  // overlay only renders when it has a real id/label, a positive
+  // duration, a start slot inside this day, and a resolvable time range
+  // (i.e. every slot it claims to occupy actually exists). The caller
+  // (LandingDemo.tsx) already filters its source events with
+  // `isRealHouseholdEvent`; this is the chart's own guarantee that it
+  // never draws an orphan/empty shell even if a future caller forgets to.
+  function isRenderableEventOverlay(overlay: LandingTimeProfileEventOverlay): boolean {
+    return (
+      overlay.id.trim().length > 0 &&
+      overlay.label.trim().length > 0 &&
+      overlay.slotCount > 0 &&
+      overlay.startSlot >= 0 &&
+      overlay.startSlot + overlay.slotCount <= day.slots.length &&
+      eventTimeRange(overlay) !== ''
+    )
+  }
+
   return (
     <div className="landing-time-profile">
       {/* OA-98/OA-100: summary -> explanation (+ optional caveat) -- the
@@ -284,6 +305,10 @@ function LandingTimeProfile({
         {eventDetail && <p className="landing-time-profile__event-detail">{eventDetail}</p>}
         {caveat && <p className="landing-time-profile__caveat">{caveat}</p>}
       </div>
+
+      {/* OA-106: "Optimise all" / "Reset", placed above the chart as clear
+          secondary controls -- only the Optimise step passes these. */}
+      {controls}
 
       {/* OA-101: a continuous cheaper -> more-expensive gradient, replacing
           the earlier "Cheap · Standard · Peak" 3-band legend -- Agile has
@@ -400,47 +425,53 @@ function LandingTimeProfile({
               as a percentage of the track, same basis as the
               structural-peak annotation above, so it always lines up with
               the columns it covers regardless of rendered width. */}
-          {events?.map((overlay) => {
-            const left = `${(overlay.startSlot / day.slots.length) * 100}%`
-            const width = `${(overlay.slotCount / day.slots.length) * 100}%`
-            const timeRange = eventTimeRange(overlay)
+          {events
+            ?.filter(isRenderableEventOverlay)
+            // OA-106: "no duplicate event containers" -- keep only the
+            // first overlay for a given id, in the unexpected case the
+            // caller's `events` array repeats one.
+            .filter((overlay, index, all) => all.findIndex((o) => o.id === overlay.id) === index)
+            .map((overlay) => {
+              const left = `${(overlay.startSlot / day.slots.length) * 100}%`
+              const width = `${(overlay.slotCount / day.slots.length) * 100}%`
+              const timeRange = eventTimeRange(overlay)
 
-            if (!overlay.movable) {
+              if (!overlay.movable) {
+                return (
+                  <div
+                    key={overlay.id}
+                    className="landing-time-profile__event-annotation"
+                    style={{ left, width }}
+                  >
+                    <span className="landing-time-profile__event-annotation-label">
+                      {overlay.label} · {timeRange}
+                    </span>
+                  </div>
+                )
+              }
+
               return (
                 <div
                   key={overlay.id}
-                  className="landing-time-profile__event-annotation"
+                  className="landing-time-profile__flexible-event"
+                  role="slider"
+                  tabIndex={0}
+                  aria-label={`Move ${overlay.label.toLowerCase()}`}
+                  aria-valuemin={overlay.minStartSlot}
+                  aria-valuemax={overlay.maxStartSlot}
+                  aria-valuenow={overlay.startSlot}
+                  aria-valuetext={`${overlay.label}, ${timeRange}`}
                   style={{ left, width }}
+                  onPointerDown={handleEventPointerDown}
+                  onPointerMove={(e) => handleEventPointerMove(e, overlay)}
+                  onKeyDown={(e) => handleEventKeyDown(e, overlay)}
                 >
-                  <span className="landing-time-profile__event-annotation-label">
+                  <span className="landing-time-profile__flexible-event-label">
                     {overlay.label} · {timeRange}
                   </span>
                 </div>
               )
-            }
-
-            return (
-              <div
-                key={overlay.id}
-                className="landing-time-profile__flexible-event"
-                role="slider"
-                tabIndex={0}
-                aria-label={`Move ${overlay.label.toLowerCase()}`}
-                aria-valuemin={overlay.minStartSlot}
-                aria-valuemax={overlay.maxStartSlot}
-                aria-valuenow={overlay.startSlot}
-                aria-valuetext={`${overlay.label}, ${timeRange}`}
-                style={{ left, width }}
-                onPointerDown={handleEventPointerDown}
-                onPointerMove={(e) => handleEventPointerMove(e, overlay)}
-                onKeyDown={(e) => handleEventKeyDown(e, overlay)}
-              >
-                <span className="landing-time-profile__flexible-event-label">
-                  {overlay.label} · {timeRange}
-                </span>
-              </div>
-            )
-          })}
+            })}
         </div>
 
         {/* Short tick marks bridging the gap between the track's hour

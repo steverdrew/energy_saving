@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildLandingDemoFixture,
+  cheapestStartSlotForEvent,
   clampEventStartSlot,
+  isRealHouseholdEvent,
   LANDING_DEMO_DATA_SOURCES,
   LANDING_DEMO_EVENTS,
   OFGEM_PRICE_CAP_STANDING_CHARGE_PENCE_PER_DAY,
@@ -260,6 +262,71 @@ describe('buildLandingDemoFixture', () => {
       expect(event.kwh).toBeGreaterThan(0)
       expect(event.currentStartSlot).toBe(10)
       expect(event.validStartSlotRange).toEqual(dishwasherDefinition.validStartSlotRange)
+    })
+  })
+
+  // OA-106: "Optimise all" needs each event's own cheapest valid slot,
+  // under the same rates/window a manual drag uses.
+  describe('cheapestStartSlotForEvent (OA-106)', () => {
+    it("returns a slot within the event's own valid window", () => {
+      for (const event of LANDING_DEMO_EVENTS) {
+        const slot = cheapestStartSlotForEvent(event.id)
+        expect(slot).toBeGreaterThanOrEqual(event.validStartSlotRange.min)
+        expect(slot).toBeLessThanOrEqual(event.validStartSlotRange.max)
+      }
+    })
+
+    it('is actually the cheapest -- no other valid slot costs less', () => {
+      for (const event of LANDING_DEMO_EVENTS) {
+        const best = cheapestStartSlotForEvent(event.id)
+        const bestFixture = buildLandingDemoFixture({ [event.id]: best })
+        const bestEvent = bestFixture.projection.events.find((e) => e.id === event.id)!
+        for (let slot = event.validStartSlotRange.min; slot <= event.validStartSlotRange.max; slot++) {
+          const candidateFixture = buildLandingDemoFixture({ [event.id]: slot })
+          const candidateEvent = candidateFixture.projection.events.find((e) => e.id === event.id)!
+          // "Saving" is cost avoided vs. the actual slot -- the cheapest
+          // slot must have a saving at least as large as every other slot.
+          expect(bestEvent.savingPerOccurrencePence).toBeGreaterThanOrEqual(
+            candidateEvent.savingPerOccurrencePence - 1e-9,
+          )
+        }
+      }
+    })
+
+    it('moving every event to its cheapest slot preserves each event\'s duration and total kWh', () => {
+      for (const event of LANDING_DEMO_EVENTS) {
+        const slot = cheapestStartSlotForEvent(event.id)
+        const fixture = buildLandingDemoFixture({ [event.id]: slot })
+        const projected = fixture.projection.events.find((e) => e.id === event.id)!
+        expect(projected.kwh).toBeCloseTo(event.kwhPerSlot * event.slotCount, 9)
+        expect(projected.durationMinutes).toBe(event.slotCount * 30)
+      }
+    })
+  })
+
+  // OA-106: "an event overlay must never appear unless it corresponds to a
+  // real modelled load" -- the guard shared by LandingDemo.tsx/
+  // LandingTimeProfile.tsx.
+  describe('isRealHouseholdEvent (OA-106)', () => {
+    it('accepts every real shared household event', () => {
+      for (const event of LANDING_DEMO_EVENTS) {
+        expect(isRealHouseholdEvent(event)).toBe(true)
+      }
+    })
+
+    it('rejects an event with zero or negative kWh per slot', () => {
+      expect(isRealHouseholdEvent({ ...dishwasherDefinition, kwhPerSlot: 0 })).toBe(false)
+      expect(isRealHouseholdEvent({ ...dishwasherDefinition, kwhPerSlot: -0.1 })).toBe(false)
+    })
+
+    it('rejects an event with zero or negative slot count', () => {
+      expect(isRealHouseholdEvent({ ...dishwasherDefinition, slotCount: 0 })).toBe(false)
+      expect(isRealHouseholdEvent({ ...dishwasherDefinition, slotCount: -1 })).toBe(false)
+    })
+
+    it('rejects an event with a blank id or label', () => {
+      expect(isRealHouseholdEvent({ ...dishwasherDefinition, id: '' })).toBe(false)
+      expect(isRealHouseholdEvent({ ...dishwasherDefinition, label: '   ' })).toBe(false)
     })
   })
 

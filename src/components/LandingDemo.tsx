@@ -2,7 +2,9 @@ import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   buildLandingDemoFixture,
+  cheapestStartSlotForEvent,
   clampEventStartSlot,
+  isRealHouseholdEvent,
   LANDING_DEMO_DATA_SOURCES,
   LANDING_DEMO_EVENTS,
   OFGEM_PRICE_CAP_STANDING_CHARGE_PENCE_PER_DAY,
@@ -118,6 +120,33 @@ function LandingDemo() {
     setOptimiseEventStartSlots((prev) => ({ ...prev, [eventId]: clampEventStartSlot(eventId, startSlot) }))
   }
 
+  // OA-106: "Optimise all" -- move every eligible (real) event to its own
+  // cheapest valid slot in one step, using the exact same per-event
+  // validity window and Agile rates a manual drag would use
+  // (cheapestStartSlotForEvent), never a shared/global search that could
+  // invent a placement a drag couldn't reach. Fixed events and background
+  // load are untouched -- only entries in `optimiseEventStartSlots` move.
+  function optimiseAll() {
+    setOptimiseEventStartSlots(() => {
+      const next: Record<string, number> = {}
+      for (const event of LANDING_DEMO_EVENTS) {
+        if (!isRealHouseholdEvent(event)) continue
+        next[event.id] = cheapestStartSlotForEvent(event.id)
+      }
+      return next
+    })
+  }
+
+  // OA-106: "Reset" means return to the original household schedule, not
+  // undo the last move -- clearing all overrides makes every event fall
+  // back to its `actualStartSlot`, the exact same position shown fixed on
+  // Tabs 1/2 (see `buildLandingDemoFixture`'s default).
+  function resetSchedule() {
+    setOptimiseEventStartSlots({})
+  }
+
+  const hasMovedFromOriginalSchedule = Object.keys(optimiseEventStartSlots).length > 0
+
   function selectStep(index: number) {
     const clamped = (index + STEP_ORDER.length) % STEP_ORDER.length
     setStep(STEP_ORDER[clamped])
@@ -139,6 +168,7 @@ function LandingDemo() {
   let caveat: string | undefined
   let payoff: React.ReactNode
   let eventDetail: React.ReactNode
+  let controls: React.ReactNode
 
   if (step === 'baseline') {
     summary = (
@@ -231,13 +261,36 @@ function LandingDemo() {
         ))}
       </>
     )
+
+    // OA-106: "Optimise all" / "Reset" as clear secondary controls above
+    // the chart -- Optimise all first, then Reset, per the ticket's
+    // suggested order.
+    controls = (
+      <div className="landing-time-profile__controls">
+        <button type="button" className="landing-time-profile__controls-button" onClick={optimiseAll}>
+          Optimise all
+        </button>
+        <button
+          type="button"
+          className="landing-time-profile__controls-button landing-time-profile__controls-button--secondary"
+          onClick={resetSchedule}
+          disabled={!hasMovedFromOriginalSchedule}
+        >
+          Reset
+        </button>
+      </div>
+    )
   }
 
-  // OA-105: the exact same shared events, in the exact same positions, on
-  // every tab -- Baseline/Compare always show each event's real
-  // (actualStartSlot) position as a fixed annotation; only Optimise makes
-  // them draggable, starting from that same position until moved.
-  const eventOverlays: LandingTimeProfileEventOverlay[] = LANDING_DEMO_EVENTS.map((event) => {
+  // OA-105/OA-106: the exact same shared events, in the exact same
+  // positions, on every tab -- Baseline/Compare always show each event's
+  // real (actualStartSlot) position as a fixed annotation; only Optimise
+  // makes them draggable, starting from that same position until moved.
+  // `isRealHouseholdEvent` is the one guard (shared with
+  // LandingTimeProfile.tsx's own render-time check) that keeps a
+  // malformed or zero-energy event definition from ever reaching the
+  // chart as an empty/orphan outlined block.
+  const eventOverlays: LandingTimeProfileEventOverlay[] = LANDING_DEMO_EVENTS.filter(isRealHouseholdEvent).map((event) => {
     const projected = fixture.projection.events.find((e) => e.id === event.id)
     if (step !== 'optimise') {
       return { id: event.id, label: event.label, startSlot: event.actualStartSlot, slotCount: event.slotCount, movable: false }
@@ -357,6 +410,7 @@ function LandingDemo() {
           caveat={caveat}
           payoff={payoff}
           eventDetail={eventDetail}
+          controls={controls}
           stepKey={step}
           // OA-99/OA-101: the 16:00-19:00 structural peak is a documented
           // feature of Agile's pricing specifically -- only Compare/

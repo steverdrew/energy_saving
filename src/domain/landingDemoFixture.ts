@@ -49,6 +49,16 @@ export interface HouseholdEventDefinition {
   occurrencesPerWeek: number
 }
 
+/** OA-106: "an event overlay must never appear unless it corresponds to a real modelled load" -- the single guard both LandingDemo.tsx (building `eventOverlays`) and LandingTimeProfile.tsx (rendering them) apply, so a malformed or zero-energy event definition can never reach the chart as an empty/orphan outlined block. */
+export function isRealHouseholdEvent(event: HouseholdEventDefinition): boolean {
+  return (
+    event.id.trim().length > 0 &&
+    event.label.trim().length > 0 &&
+    event.slotCount > 0 &&
+    event.kwhPerSlot > 0
+  )
+}
+
 export const LANDING_DEMO_EVENTS: readonly HouseholdEventDefinition[] = [
   {
     id: 'dishwasher',
@@ -175,6 +185,21 @@ function eventCostPence(event: HouseholdEventDefinition, startSlot: number, rate
   let cost = 0
   for (let i = 0; i < event.slotCount; i++) cost += event.kwhPerSlot * ratePence[startSlot + i]
   return cost
+}
+
+/** OA-106: "Optimise all" -- the single cheapest valid start slot for this event, costed against the exact same Agile rates and same-day validity window (`validStartSlotRange`) as manual dragging, so it can never place an event somewhere a drag couldn't. */
+export function cheapestStartSlotForEvent(eventId: string): number {
+  const event = getEvent(eventId)
+  let bestSlot = event.validStartSlotRange.min
+  let bestCost = Infinity
+  for (let slot = event.validStartSlotRange.min; slot <= event.validStartSlotRange.max; slot++) {
+    const cost = eventCostPence(event, slot, AGILE_REPRESENTATIVE_RATE_PENCE)
+    if (cost < bestCost) {
+      bestCost = cost
+      bestSlot = slot
+    }
+  }
+  return bestSlot
 }
 
 // OA-104: "do not simply calculate today's saving x 365" -- a deterministic,
