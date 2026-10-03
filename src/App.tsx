@@ -4,6 +4,7 @@ import { useAuth } from './auth/AuthContext'
 import ProtectedRoute from './auth/ProtectedRoute'
 import { BrandMark } from './components/Logo'
 import { OctopusConnectionProvider } from './octopus/OctopusConnectionContext'
+import AboutPage from './pages/AboutPage'
 import AccountPage from './pages/AccountPage'
 import ActualPage from './pages/ActualPage'
 import ApplianceSetupPage from './pages/ApplianceSetupPage'
@@ -12,10 +13,13 @@ import CompatibilityFeedbackPage from './pages/CompatibilityFeedbackPage'
 import ConnectOctopusPage from './pages/ConnectOctopusPage'
 import DebugPage from './pages/DebugPage'
 import ExplainerPage from './pages/ExplainerPage'
+import HowItWorksPage from './pages/HowItWorksPage'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import OptimisedPage from './pages/OptimisedPage'
 import SavingsPage from './pages/SavingsPage'
+
+const PUBLIC_SITE_PATHS = ['/', '/login', '/how-it-works', '/about']
 
 // The marketing landing page is aimed at signed-out visitors (its only CTA
 // is "sign in"). A signed-in user landing on "/" — e.g. from a bookmark —
@@ -31,14 +35,17 @@ function HomeRoute() {
 function App() {
   const { user, loading, logout } = useAuth()
   const location = useLocation()
-  // OA-79/OA-88: the dark/purple visual system (and the wider public-site
-  // shell width, see App.css) is scoped to the logged-out "public site"
-  // routes -- Home and Sign in -- not the authenticated app, which keeps
-  // its existing light theme/narrower shell untouched. OA-88 explicitly
-  // requires Home and Sign in to share one nav/shell rather than each
-  // route maintaining its own lookalike version, so both are covered by
-  // the same flag/attribute here instead of two separate checks.
-  const isPublicSiteRoute = !loading && !user && (location.pathname === '/' || location.pathname === '/login')
+  // OA-79/OA-88/OA-90: the dark/purple visual system (and the wider
+  // public-site shell width, see App.css) is scoped to the logged-out
+  // "public site" routes -- Home, Sign in, How it works, About -- not the
+  // authenticated app, which keeps its existing light theme/narrower
+  // shell untouched. OA-88 explicitly requires these routes to share one
+  // nav/shell rather than each maintaining its own lookalike version, so
+  // all are covered by the same flag/attribute here instead of separate
+  // checks per route. A signed-in user visiting How it works/About still
+  // gets their normal authenticated nav/theme -- these are marketing
+  // pages aimed at prospective users, not account-area content.
+  const isPublicSiteRoute = !loading && !user && PUBLIC_SITE_PATHS.includes(location.pathname)
 
   return (
     <OctopusConnectionProvider>
@@ -65,7 +72,11 @@ function App() {
                   </button>
                 </>
               ) : (
-                <NavLink to="/login">Sign in</NavLink>
+                <>
+                  <NavLink to="/how-it-works">How it works</NavLink>
+                  <NavLink to="/about">About</NavLink>
+                  <NavLink to="/login">Sign in</NavLink>
+                </>
               )}
             </nav>
           </div>
@@ -75,6 +86,8 @@ function App() {
           <Routes>
             <Route path="/" element={<HomeRoute />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/how-it-works" element={<HowItWorksPage />} />
+            <Route path="/about" element={<AboutPage />} />
             <Route
               path="/account"
               element={

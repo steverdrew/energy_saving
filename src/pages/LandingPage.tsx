@@ -1,22 +1,7 @@
 import { Link } from 'react-router-dom'
 import LandingDemo from '../components/LandingDemo'
+import PublicFooter from '../components/PublicFooter'
 import './LandingPage.css'
-
-const TRUST_POINTS = [
-  'Your usage stays private. We never sell your data.',
-  'We never move your money or switch anything without your say.',
-  'Built independently of Octopus Energy.',
-]
-
-// OA-55: only ever list something here once it's been tested end to end in
-// the beta -- today that's Octopus Energy (tariff import, actual usage and
-// cost, like-for-like tariff comparison). OA-74 retired the standalone
-// Cheapest Times page (manual appliance timer guidance) in favour of the
-// Actual/Compare journey, so it's no longer named here either. No
-// device/smart-plug integration exists yet (that's OA-12/OA-15,
-// deliberately not started), so none is named.
-const WORKS_WITH = ['Octopus Energy accounts']
-const COMING_SOON = ['Smart plugs', 'More connected appliances']
 
 function LandingPage() {
   return (
@@ -56,76 +41,12 @@ function LandingPage() {
 
       <LandingDemo />
 
-      {/* OA-87: "Hero -> understand the idea, Comparison -> see it work,
-          CTA -> act on it, Footer -> close" -- this chapter groups the
-          existing about/compatibility/who-we-are content under one
-          cleaner, darker band (the mockup's own CTA-section tone) so it
-          reads as the page's next chapter after the comparison, not a
-          continuation of the same surface. Individual section ids/
-          aria-labels (used by OA-82's automation-friendliness work)
-          are unchanged -- this only adds a shared background wrapper. */}
-      <div className="landing-chapter-cta landing-section-band">
-        <section className="landing-card landing-about" id="about" aria-label="What is Shift & Save?">
-          <h2>What is Shift &amp; Save?</h2>
-          <p>
-            Shift &amp; Save helps you get more from dynamic energy tariffs without having to watch
-            electricity prices all day.
-          </p>
-          <p>
-            We look at your real energy use, compare it against a different tariff — same usage,
-            same times — and show what better timing could change too.
-          </p>
-          <p>You stay in control. We make the complicated bit simple.</p>
-        </section>
-
-        <section className="landing-card landing-compat" id="compatibility" aria-label="Compatibility">
-          <div className="landing-compat__group">
-            <h2>Currently supports</h2>
-            <p>{WORKS_WITH.join(' · ')}</p>
-          </div>
-          <div className="landing-compat__group">
-            <h2>Coming soon</h2>
-            <p>{COMING_SOON.join(' · ')}</p>
-          </div>
-          <p className="landing-compat__cta">
-            Use something else?{' '}
-            <Link to="/tell-us-what-you-have">Tell us what you have.</Link>
-          </p>
-        </section>
-
-        <section className="landing-card landing-about" id="who-we-are" aria-label="Who we are">
-          <h2>Who we are</h2>
-          <p>
-            Shift &amp; Save is an independent UK product built to make smart energy tariffs easier to
-            understand and use.
-          </p>
-          <p>
-            We started with a simple question: if cheaper electricity is available at different times
-            of the day, why should ordinary households have to study 48 prices to benefit from it?
-          </p>
-          <p>
-            So we built Shift &amp; Save to do the maths, make the options clear and help people decide
-            what is actually worth doing.
-          </p>
-          <p className="landing-about__independence">
-            <strong>Shift &amp; Save is independent of Octopus Energy.</strong>
-          </p>
-        </section>
-      </div>
-
-      <footer className="landing-footer landing-section-band" id="footer">
-        <div className="landing-trust" aria-label="Why trust us">
-          {TRUST_POINTS.map((point) => (
-            <p className="landing-trust__item" key={point}>
-              {point}
-            </p>
-          ))}
-        </div>
-
-        <p className="landing-explainer-link">
-          <Link to="/how-smart-tariffs-work">How dynamic tariffs work</Link>
-        </p>
-      </footer>
+      {/* OA-90: the about/compatibility/who-we-are cards that used to sit
+          here moved to their own public pages (HowItWorksPage.tsx,
+          AboutPage.tsx) -- the landing page stays focused on Hero ->
+          Comparison -> Sign up, with that supporting depth reachable via
+          the shared nav/footer instead of interrupting this journey. */}
+      <PublicFooter />
     </>
   )
 }

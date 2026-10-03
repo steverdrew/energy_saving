@@ -1,0 +1,46 @@
+/* OA-90: moved from LandingPage.css -- this footer is now shared by
+   every public page (Home/How it works/About), not landing-page-only.
+   Colour tokens still come from [data-landing] in App.css; relies on
+   the same .landing-section-band full-bleed breakout defined there. */
+.landing-footer {
+  padding-top: 32px;
+  padding-bottom: 40px;
+  background: #0a0f1c;
+  border-top: 1px solid var(--border);
+}
+
+.landing-trust {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 24px;
+  text-align: center;
+}
+
+.landing-trust__item {
+  max-width: 260px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* OA-90: footer's own public-page links (How it works/About/How dynamic
+   tariffs work) -- Privacy/Terms/Contact aren't implemented yet, so none
+   are added here rather than linking to pages that don't exist. */
+.landing-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 20px;
+  margin-top: 20px;
+  text-align: center;
+  font-size: 15px;
+}
+
+.landing-footer__links a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.landing-footer__links a:hover {
+  text-decoration: underline;
+}

@@ -1,0 +1,112 @@
+/* OA-90: shared glass-card/prose treatment for public content pages (How
+   it works, About) -- moved out of LandingPage.css, where this started
+   as the landing page's own informational cards, now that it's reused
+   on two standalone pages. Colour tokens come from [data-landing] in
+   App.css. */
+
+.public-page__title {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 0 8px;
+  text-align: center;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-h);
+}
+
+.public-page__intro {
+  max-width: 640px;
+  margin: 0 auto 8px;
+  padding-bottom: 32px;
+  text-align: center;
+  font-size: 18px;
+  color: var(--text);
+}
+
+/* OA-90: the chapter-band treatment (moved from LandingPage.css, where
+   it wrapped the landing page's own about/compatibility/who-we-are
+   cards) -- reused here to give How it works/About pages the same
+   "distinct section band" rhythm as the rest of the public site,
+   instead of a flat, generic documentation-page background. */
+.landing-chapter-cta {
+  padding-top: 16px;
+  padding-bottom: 48px;
+  background: #0f172a;
+}
+
+.landing-card {
+  max-width: 640px;
+  margin: 24px auto 0;
+  padding: 28px 32px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  text-align: center;
+}
+
+.landing-about h2 {
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.landing-about p {
+  margin-top: 8px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.landing-about__independence {
+  margin-top: 16px;
+  color: var(--text-h);
+}
+
+.landing-compat {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 24px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.landing-compat__group h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.landing-compat__group p {
+  margin: 0;
+  color: var(--text-h);
+}
+
+.landing-compat__cta {
+  width: 100%;
+  margin: 0;
+}
+
+.landing-compat__cta a {
+  color: var(--accent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .landing-card {
+    animation: landing-fade-up 0.5s ease both;
+  }
+}
+
+@keyframes landing-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

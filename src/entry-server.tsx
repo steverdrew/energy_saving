@@ -20,6 +20,8 @@ export function renderLandingPage(): string {
             </a>
             <nav className="app-header__nav">
               <a href="/">Home</a>
+              <a href="/how-it-works">How it works</a>
+              <a href="/about">About</a>
               <a href="/login">Sign in</a>
             </nav>
           </div>
