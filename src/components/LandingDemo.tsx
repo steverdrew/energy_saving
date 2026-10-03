@@ -1,10 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   buildLandingDemoFixture,
   cheapestStartSlotForEvent,
-  clampEventStartSlot,
-  effectiveValidStartSlotRange,
   isRealHouseholdEvent,
   LANDING_DEMO_DATA_SOURCES,
   LANDING_DEMO_EVENTS,
@@ -16,8 +14,9 @@ import {
   type TariffId,
 } from '../domain/landingDemoFixture'
 import { formatGbp } from '../format'
+import Dialog from './Dialog'
 import type { HeatMapDay } from './heatMapMath'
-import LandingStoryScrubber, { type LandingStoryScrubberStage } from './LandingStoryScrubber'
+import LandingStepNav, { type LandingStepNavStep } from './LandingStepNav'
 import LandingTimeProfile, { type LandingTimeProfileEventOverlay, type PriceStripShape } from './LandingTimeProfile'
 import './LandingDemo.css'
 
@@ -39,10 +38,7 @@ type DemoStageId = 'baseline' | 'compare' | 'optimise'
 
 const STAGE_ORDER: DemoStageId[] = ['baseline', 'compare', 'optimise']
 
-// OA-109/OA-110: the scrubber's three labelled anchors -- replaces the old
-// `role="tablist"` segmented control. OA-110 drops the numeric prefixes
-// now the control is clearly continuous -- left-to-right position already
-// communicates order.
+// OA-109/OA-110/OA-156: the step nav's three labelled anchors.
 // OA-127/OA-132: short inline names for use mid-sentence ("actual Agile
 // prices") and as the secondary "Smart · <product>" detail -- never the
 // primary Compare choice any more (see `CATEGORY_LABELS`/`tariffContextLabel`
@@ -50,8 +46,8 @@ const STAGE_ORDER: DemoStageId[] = ['baseline', 'compare', 'optimise']
 const TARIFF_SHORT_LABELS: Record<TariffId, string> = {
   'standard-variable': 'Standard Variable',
   fixed: 'Fixed',
-  'economy-7': 'Economy 7',
-  agile: 'Agile',
+  'economy-7': 'Octopus Economy 7',
+  agile: 'Octopus Agile',
 }
 
 // OA-132: the three tariff *types* that are now the primary Compare
@@ -93,7 +89,7 @@ const TARIFF_PRICE_STRIP_SHAPES: Record<TariffId, PriceStripShape> = {
 // demo's longest-standing, most-illustrated example.
 const DEFAULT_SMART_TARIFF_ID: TariffId = 'agile'
 
-const SCRUBBER_STAGES: LandingStoryScrubberStage[] = [
+const STEP_NAV_STAGES: LandingStepNavStep[] = [
   { id: 'baseline', label: 'Baseline' },
   { id: 'compare', label: 'Compare' },
   { id: 'optimise', label: 'Optimise' },
@@ -171,17 +167,17 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value))
 }
 
-// OA-117: "the scrubber itself should demonstrate the optimisation" --
-// every eligible (real, movable) event's own cheapest valid slot, using
-// the exact same per-event validity window and Agile rates a manual drag
+// OA-117: "the nav itself should demonstrate the optimisation" -- every
+// eligible (real, movable) event's own cheapest valid slot, using the
+// exact same per-event validity window and Agile rates a manual drag
 // would use (`cheapestStartSlotForEvent`), never a shared/global search
 // that could invent a placement a drag couldn't reach. Fixed events
 // (e.g. the oven) and background load are untouched. Dependent events
 // (tumble dryer) are resolved after the event they depend on, so their
 // own cheapest-slot search sees that event's *already-optimised*
 // position, never an earlier start a drag couldn't reach either. This is
-// the schedule the story scrubber now auto-reveals on its way to
-// Optimise -- not something a visitor has to press a button to see.
+// the schedule that auto-reveals on stepping to Optimise -- not
+// something a visitor has to press a button to see.
 // OA-127: takes the currently-selected tariff, so arriving at Optimise
 // (or re-applying "Optimise") schedules movable events against whichever
 // tariff Compare is showing -- Economy 7 naturally prefers its overnight
@@ -237,13 +233,19 @@ function describeSavingPerOccurrence(pence: number): string {
 }
 
 /**
- * OA-109: blends two days' worth of slots into one, for the scrubber's
- * continuous transitional state. Usage (`kwh`) blends compare -> optimise
- * as `optFrac` goes 0 -> 1 (baseline and compare share identical usage,
- * so this single blend covers both the 0->1 and 1->2 halves of the
- * scrubber correctly); the unit rate blends baseline -> compare as
- * `baseFrac` goes 0 -> 1 (compare and optimise share identical rates, so
- * this covers the 1->2 half too, holding the rate constant there).
+ * OA-109/OA-156: blends two days' worth of slots into one. `baseFrac`/
+ * `optFrac` are always 0 or 1 now (OA-156 removed the continuous drag
+ * scrubber this blend originally existed to support mid-drag), so this
+ * simply selects the current step's day -- kept as a blend rather than a
+ * switch because `baseFrac`/`optFrac` already express that selection
+ * correctly at their integer endpoints, and it keeps the chart's `day`
+ * prop computed the same way regardless of step. Usage (`kwh`) blends
+ * compare -> optimise as `optFrac` goes 0 -> 1 (baseline and compare share
+ * identical usage, so this single blend covers both the Baseline->Compare
+ * and Compare->Optimise steps correctly); the unit rate blends baseline ->
+ * compare as `baseFrac` goes 0 -> 1 (compare and optimise share identical
+ * rates, so this covers the Compare->Optimise step too, holding the rate
+ * constant there).
  */
 function interpolateDay(fixture: LandingDemoFixture, baseFrac: number, optFrac: number): HeatMapDay {
   const { baseline, compare, optimise } = fixture
@@ -263,36 +265,41 @@ function interpolateDay(fixture: LandingDemoFixture, baseFrac: number, optFrac: 
 }
 
 /**
- * OA-108/OA-109: logged-out, interactive Baseline -> Compare tariff ->
- * Optimise timing story. All figures come from `buildLandingDemoFixture`
+ * OA-108/OA-109/OA-156: logged-out, interactive Baseline -> Compare tariff
+ * -> Optimise timing story. All figures come from `buildLandingDemoFixture`
  * -- fixture data only, never a real household's usage.
  *
- * OA-109: replaces the old 3-tab segmented control with a continuous drag
- * scrubber (`<LandingStoryScrubber>`) over one persistent
- * `<LandingTimeProfile>` chart. `progress` (0..2) is the single source of
- * truth for where the story currently is -- an integer when snapped to a
- * stage, fractional while being dragged. The chart itself never remounts
- * across the whole range: its `day` prop is a per-slot blend
- * (`interpolateDay`) of the three fixture steps, and its event overlays'
- * positions are blended the same way, so colour/usage/event-position
- * transitions all interpolate smoothly as `progress` changes, with no
- * hard cut at the old tab boundaries.
+ * OA-156: a guided, discrete Step 1 -> Step 2 -> Step 3 flow
+ * (`<LandingStepNav>` -- each step label is itself the navigation, clicking
+ * one jumps straight there) over one persistent
+ * `<LandingTimeProfile>` chart -- replaces OA-109's continuous drag
+ * scrubber. `progress` (0..2) is the single source of truth for where the
+ * story currently is; it only ever holds a whole stage index now; there is
+ * no more fractional mid-drag value. The chart itself still never remounts
+ * across steps: its `day` prop is still computed via `interpolateDay`
+ * (unchanged -- a blend that is exact, not approximate, at the integer
+ * `baseFrac`/`optFrac` values a discrete `progress` now always produces),
+ * so switching steps keeps the same chart mounted rather than swapping in
+ * a new one.
  *
- * OA-108/OA-112/OA-117: once the scrubber is at (or within half a stage
- * of) Optimise, the dominant `result` line becomes the annual saving, a
- * collapsed "How we calculated this" disclosure holds the secondary
- * methodology/caveats, and Reset sits directly above the now-draggable
- * chart (OA-117 removed "Optimise all" -- the scrubber auto-optimises on
- * its own by the time it reaches Optimise; see `computeAutoOptimisedStartSlots`
- * and the `optimiseEventStartSlots` state doc below). The old permanent
- * per-appliance list is gone;
- * `eventSavingText` instead hands LandingTimeProfile a contextual popover
- * shown only while a given event is focused/hovered/dragged.
+ * OA-108/OA-112/OA-117: once the nav is at Optimise, the dominant `result`
+ * line becomes the annual saving, a collapsed "How we calculated this"
+ * disclosure holds the secondary methodology/caveats, and the schedule
+ * auto-optimises on arrival (OA-117 removed "Optimise all"; see
+ * `computeAutoOptimisedStartSlots` and the `optimiseEventStartSlots` doc
+ * below). The old permanent per-appliance list is gone; `eventSavingText`
+ * instead supplies each movable event's own card with a short saving note
+ * once Optimise is reached.
+ *
+ * OA-168: the chart's events are no longer draggable -- see
+ * LandingTimeProfile.tsx's own doc comment for the redesign this replaced
+ * it with.
  */
 function LandingDemo() {
-  // OA-109: the one piece of story state -- 0 = Baseline, 1 = Compare
-  // tariff, 2 = Optimise timing, any real number in between is a live
-  // transitional position.
+  // OA-109/OA-156: the one piece of story state -- 0 = Baseline, 1 =
+  // Compare tariff, 2 = Optimise timing. Always a whole stage index now
+  // (OA-156 removed the old continuous drag scrubber's fractional
+  // mid-transition value).
   const [progress, setProgress] = useState(0)
   // OA-135: the tariff Baseline establishes as "the tariff I am on now" --
   // the reference point for Compare, and (until the user picks a
@@ -308,22 +315,27 @@ function LandingDemo() {
   // costed against; it starts equal to `currentTariffId` and only diverges
   // once the user explicitly selects an alternative on Compare.
   const [chosenTariffId, setChosenTariffId] = useState<TariffId>('standard-variable')
-  // OA-103/105/117: each household event's position on the Optimise stage
-  // is live, user-movable state -- lifted here (rather than into
-  // LandingTimeProfile) so it persists across scrubbing and drives the
-  // fixture rebuild below. Keyed by event id; an event with no entry here
-  // falls back to its actual (Baseline/Compare) slot -- OA-105's "no event
-  // appears for the first time on Optimise". OA-117/OA-137: the *initial*
-  // value is the auto-optimised schedule *only if that schedule would
-  // clear the meaningful-saving threshold* (see `computeEffectiveOptimisedStartSlots`)
-  // -- Standard Variable is flat, so there's genuinely nothing to optimise
-  // on arrival by default, and the schedule correctly starts at the
-  // original positions rather than appearing to move for no real saving.
-  // A manual drag (`moveEvent`) still overwrites a single event's entry
-  // from here on, same as before.
-  const [optimiseEventStartSlots, setOptimiseEventStartSlots] = useState<Record<string, number>>(() =>
-    computeEffectiveOptimisedStartSlots('standard-variable'),
-  )
+  // OA-117/OA-137/OA-168: each movable event's Optimise-stage position --
+  // purely derived from the chosen tariff now that OA-168 removed manual
+  // dragging (there's no longer any user-set override to layer on top).
+  // An event with no entry here falls back to its actual (Baseline/
+  // Compare) slot -- OA-105's "no event appears for the first time on
+  // Optimise". `computeEffectiveOptimisedStartSlots` only auto-moves
+  // anything if doing so would clear the meaningful-saving threshold --
+  // Standard Variable is flat, so there's genuinely nothing to optimise,
+  // and the schedule correctly stays at the original positions rather
+  // than appearing to move for no real saving.
+  const optimiseEventStartSlots = useMemo(() => computeEffectiveOptimisedStartSlots(chosenTariffId), [chosenTariffId])
+  // OA-166: the "More info" dialog explaining what "Typical household"
+  // means, what it's based on, what assumptions it includes, and where
+  // the detailed savings calculation lives -- opened from the header,
+  // closed via its own close button, Escape, or the overlay (see Dialog).
+  const [isHouseholdInfoOpen, setIsHouseholdInfoOpen] = useState(false)
+  // OA-167: the fuller appliance-safety dialog, opened from the short
+  // safety note shown alongside Optimise's results.
+  const [isSafetyInfoOpen, setIsSafetyInfoOpen] = useState(false)
+  const householdInfoTitleId = useId()
+  const safetyInfoTitleId = useId()
   const fixture: LandingDemoFixture = useMemo(
     () => buildLandingDemoFixture(optimiseEventStartSlots, chosenTariffId, currentTariffId),
     [optimiseEventStartSlots, chosenTariffId, currentTariffId],
@@ -364,14 +376,20 @@ function LandingDemo() {
   // reachable rather than requiring a redundant re-selection of it.
   const canReachOptimiseStage = TARIFF_CATEGORY[chosenTariffId] === 'smart'
 
+  // OA-155: "the public demo stays linear, while Smart-tariff users exit
+  // into signup/personalised analysis rather than being forced through a
+  // fake Standard -> Smart comparison" -- a visitor who says on Baseline
+  // that they're *already* on a smart tariff has nothing genuine to
+  // compare against on Compare (there's no "upgrade to Smart" story left
+  // to tell them), so the nav stops at Baseline for them entirely rather
+  // than continuing into that fake comparison.
+  const currentTariffIsSmart = TARIFF_CATEGORY[currentTariffId] === 'smart'
+
   // OA-136: picking an alternative tariff to inspect/carry into Optimise --
-  // re-optimises against the newly chosen tariff's own rates (OA-137-aware:
-  // falls back to the original schedule if that tariff has no genuine
-  // timing-saving opportunity), since the previous tariff's schedule isn't
-  // a valid "cheapest slot" search under a different pricing structure.
+  // `optimiseEventStartSlots` above re-derives automatically against
+  // whichever tariff this sets.
   function selectChosenTariff(tariffId: TariffId) {
     setChosenTariffId(tariffId)
-    setOptimiseEventStartSlots(computeEffectiveOptimisedStartSlots(tariffId))
   }
 
   // OA-135: changing the household's *current* tariff on Baseline also
@@ -403,43 +421,27 @@ function LandingDemo() {
     selectCurrentTariff(resolveTariffForCategory(category, currentTariffId))
   }
 
-  function selectChosenTariffCategory(category: TariffCategory) {
-    selectChosenTariff(resolveTariffForCategory(category, chosenTariffId))
-  }
-
-  // OA-136: "the tariff selected as current in Tab 1 must be visible,
-  // clearly disabled, and not selectable as the comparison target."
-  // Flexible/Fixed each resolve to exactly one tariff, so the category
-  // button itself is the thing to disable when it would just re-select
-  // the current tariff. Smart never gets disabled at the category level --
-  // it covers multiple products, so the specific matching product is
-  // disabled in the secondary row instead (see the Compare `controls`
-  // below), never the whole category.
-  function isCategoryDisabledAsComparisonTarget(category: TariffCategory): boolean {
-    return category !== 'smart' && resolveTariffForCategory(category, chosenTariffId) === currentTariffId
-  }
-
-  // OA-117: the scrubber itself (LandingStoryScrubber) already refuses to
-  // drag/click/key its way past a locked stage, but `progress` can still
-  // momentarily hold an unclamped value the instant `canReachOptimiseStage`
-  // flips from true to false (e.g. scrubbing back to Compare and switching
-  // to Flexible while still mid-drag toward Optimise) -- this is the single
-  // place that derives every other value in this component from `progress`,
-  // so clamping here too keeps the whole render consistent even in that
-  // instant, with no separate effect needed to correct the stored state.
-  const maxReachableStageIndex = canReachOptimiseStage ? 2 : 1
+  // OA-117/OA-156: the step nav itself (LandingStepNav) already refuses to
+  // click its way past a locked stage, but `progress` can still hold a
+  // stale value the instant `canReachOptimiseStage` flips from true to
+  // false (e.g. stepping back to Compare while already at Optimise, then
+  // switching to Flexible) -- this is the single place that derives every
+  // other value in this component from `progress`, so clamping here too
+  // keeps the whole render consistent even in that instant, with no
+  // separate effect needed to correct the stored state.
+  // OA-155: capped at Baseline (0) entirely when the current tariff is
+  // already Smart -- takes priority over `canReachOptimiseStage` (which
+  // only gates Optimise), since here there's nowhere genuine to go at all.
+  const maxReachableStageIndex = currentTariffIsSmart ? 0 : canReachOptimiseStage ? 2 : 1
   const clampedProgress = Math.max(0, Math.min(maxReachableStageIndex, progress))
   const nearestStageIndex = Math.round(clampedProgress)
   const nearestStage = STAGE_ORDER[nearestStageIndex]
-  // OA-109: "event dragging only at stage 3" -- gated on having actually
-  // arrived (snapped) there, not merely being more than halfway through
-  // the 2->3 transition, since the overlay is still sliding into position
-  // until then.
+  // OA-108: whether the nav has actually stepped to Optimise -- gates the
+  // per-event saving note (events are shown at their auto-optimised
+  // position on every stage once there's a genuine opportunity, but the
+  // saving note itself is only meaningful once Optimise is the active
+  // stage).
   const isAtOptimiseStage = clampedProgress === 2
-  // OA-108: the three-section Optimise hierarchy (and its controls) start
-  // showing once the scrubber is within the Optimise half of the story
-  // (`nearestStageIndex === 2`), not only once it's fully arrived --
-  // matching the continuous feel the rest of the transition has.
 
   const baseFrac = clamp01(clampedProgress)
   const optFrac = clamp01(clampedProgress - 1)
@@ -447,14 +449,6 @@ function LandingDemo() {
   const interpolatedDay = useMemo(() => interpolateDay(fixture, baseFrac, optFrac), [fixture, baseFrac, optFrac])
   const interpolatedTotalKwh = interpolatedDay.slots.reduce((sum, s) => sum + (s.kwh ?? 0), 0)
   const interpolatedTotalCostPence = interpolatedDay.slots.reduce((sum, s) => sum + (s.costPence ?? 0), 0)
-
-  // OA-107: dependency-aware -- passes the *current* positions (prior
-  // state, before this move) so clamping a dependent event (tumble dryer)
-  // correctly uses its dependency's (washing machine's) current position,
-  // not just that dependent event's own static window.
-  function moveEvent(eventId: string, startSlot: number) {
-    setOptimiseEventStartSlots((prev) => ({ ...prev, [eventId]: clampEventStartSlot(eventId, startSlot, prev) }))
-  }
 
   // OA-110/OA-126: the compact, visually dominant primary result for the
   // current stage -- kept separate from the question heading/supporting
@@ -474,12 +468,25 @@ function LandingDemo() {
   let payoff: React.ReactNode
   let controls: React.ReactNode
   let primarySelector: React.ReactNode
+  // OA-167: a short, calm safety note shown alongside Optimise's results
+  // only -- Baseline/Compare don't move anything, so there's nothing to
+  // caution about yet. Both Optimise branches below set this to the same
+  // note; it stays undefined everywhere else.
+  let safetyNote: React.ReactNode
+  const safetyNoteContent = (
+    <p className="landing-demo__safety-note">
+      <strong>Use appliances safely.</strong> Follow manufacturer guidance and only move loads to suitable times.{' '}
+      <button type="button" className="landing-demo__safety-link" onClick={() => setIsSafetyInfoOpen(true)}>
+        Safety information
+      </button>
+    </p>
+  )
 
   if (nearestStage === 'baseline') {
     // OA-135: "Tab 1's primary job is choosing the tariff this household
     // is on now" -- replaces the old usage-led "When do you use energy?"
     // heading, which no longer names the actual primary action here.
-    questionHeading = 'What tariff are you on now?'
+    questionHeading = 'What Octopus tariff are you on now?'
     supportingCopy = 'Choose your current tariff so we can compare this same household day against the alternatives.'
 
     // OA-126/OA-135: previously one combined "6.8 kWh · £1.80" line, which
@@ -487,7 +494,9 @@ function LandingDemo() {
     // Split into a quiet "Typical day · 6.8 kWh" label (names the Typical
     // household's modelled daily usage) above the bold "£1.80/day on
     // <tariff>" result (OA-135's own worked example wording), with the
-    // standing charge disclosed separately beneath both.
+    // standing charge disclosed separately beneath both. Shown as normal
+    // even when the current tariff is Smart -- OA-155's sign-up prompt
+    // (below) sits alongside this figure, not in place of it.
     resultLabel = <>Typical day · {interpolatedTotalKwh.toFixed(1)} kWh</>
     result = (
       <>
@@ -546,7 +555,7 @@ function LandingDemo() {
     // as the reference, not a table of every tariff's result at once.
     // The heading/result stay in terms of the current tariff until a
     // genuine alternative is picked (see `hasSelectedComparisonTariff`).
-    questionHeading = `Compare ${tariffContextLabel(currentTariffId)} with another tariff`
+    questionHeading = `Compare ${tariffContextLabel(currentTariffId)} with a smart tariff`
     supportingCopy = 'Same household. Same usage. Same timings. Only the tariff changes.'
     const currentEntry = fixture.tariffComparison.find((entry) => entry.isCurrentTariff)!
     if (hasSelectedComparisonTariff) {
@@ -598,20 +607,11 @@ function LandingDemo() {
     caveat =
       'Representative comparison — which tariff costs less depends on your own usage, region and actual prices on the day.'
 
-    // OA-136 (second pass): "reduce the control hierarchy... do not
-    // include [the current tariff's category] as a large disabled segment
-    // if removing it makes the choice simpler" -- the current tariff's own
-    // category (if it resolves to exactly one tariff -- Flexible/Fixed) is
-    // dropped from the row entirely rather than shown disabled, since it's
-    // already explicit in the heading/result context above. Smart stays in
-    // the row even when the current tariff is itself Smart -- there's
-    // still a genuine, different smart product to compare against -- with
-    // only that one matching product excluded from its own compact
-    // subtype row below.
-    const chosenCategory = TARIFF_CATEGORY[chosenTariffId]
-    const compareCategoryOptions = (['flexible', 'fixed', 'smart'] as const).filter(
-      (category) => !isCategoryDisabledAsComparisonTarget(category),
-    )
+    // OA-136 (fifth pass): "just Economy 7 and Agile" -- Flexible and
+    // Fixed are no longer offered as comparison targets at all; the only
+    // thing left to compare the current tariff against is a genuine Smart
+    // tariff, since that's the only comparison this demo's story (Standard
+    // -> Smart -> Optimise) is actually about.
     const compareSmartTariffOptions = SMART_TARIFF_IDS.filter((tariffId) => tariffId !== currentTariffId)
     primarySelector = (
       <div className="landing-time-profile__primary-selector-stack">
@@ -623,46 +623,18 @@ function LandingDemo() {
           role="group"
           aria-label={`Compare ${tariffContextLabel(currentTariffId)} with`}
         >
-          {compareCategoryOptions.map((category) => (
+          {compareSmartTariffOptions.map((tariffId) => (
             <button
-              key={category}
+              key={tariffId}
               type="button"
               className="landing-time-profile__segmented-button"
-              aria-pressed={category === chosenCategory}
-              onClick={() => selectChosenTariffCategory(category)}
+              aria-pressed={tariffId === chosenTariffId}
+              onClick={() => selectChosenTariff(tariffId)}
             >
-              {CATEGORY_LABELS[category]}
+              {TARIFF_SHORT_LABELS[tariffId]}
             </button>
           ))}
         </div>
-        {/* OA-136 (second pass): "should not look like another full-width
-            segmented tab bar... clearly feel secondary to the primary
-            tariff-type choice" -- the same compact pill treatment
-            Baseline's own Smart subtype row already uses, not the large
-            `__segmented` control the first pass gave this. The current
-            tariff's own matching product is excluded entirely (see
-            `compareSmartTariffOptions`) rather than shown disabled, for
-            the same "don't show what can't be chosen" reason as the
-            primary row above. */}
-        {chosenCategory === 'smart' && (
-          <div
-            className="landing-time-profile__controls landing-time-profile__controls--secondary"
-            role="group"
-            aria-label="Choose a smart tariff to compare"
-          >
-            {compareSmartTariffOptions.map((tariffId) => (
-              <button
-                key={tariffId}
-                type="button"
-                className="landing-time-profile__controls-button landing-time-profile__controls-button--secondary"
-                aria-pressed={tariffId === chosenTariffId && hasSelectedComparisonTariff}
-                onClick={() => selectChosenTariff(tariffId)}
-              >
-                {TARIFF_SHORT_LABELS[tariffId]}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
     )
   } else if (tariffHasTimingSavingOpportunity) {
@@ -686,14 +658,13 @@ function LandingDemo() {
     // Compare's own hero derives (`chosenEntry.annualDifferencePence`,
     // OA-146's rounded-once value), negated so a saving reads positive
     // here the same way the timing figures already do. It's constant
-    // through the 1->2 transition (already "banked" by the time Optimise
-    // is reached); only the timing portion animates in via `optFrac`, so
-    // the hero visibly grows from "tariff saving alone" to "tariff +
-    // timing" as the scrubber arrives.
+    // already "banked" by the time Optimise is reached; `optFrac` is 1
+    // once there (OA-156: always 0 or 1, no mid-transition value), so the
+    // hero reads as "tariff saving alone" on Compare and "tariff + timing"
+    // on Optimise.
     const chosenEntry = fixture.tariffComparison.find((entry) => entry.tariffId === chosenTariffId)!
     const tariffAnnualSavingPence = -chosenEntry.annualDifferencePence
     const annualSavingPence = lerp(0, fixture.projection.projectedAnnualSavingPence, optFrac)
-    const monthlySavingPence = lerp(0, fixture.projection.projectedMonthlySavingPence, optFrac)
     const dailySavingPence = lerp(0, fixture.timingSavingPence, optFrac)
     const totalAnnualSavingPence = tariffAnnualSavingPence + annualSavingPence
 
@@ -707,40 +678,58 @@ function LandingDemo() {
     // detail move into the disclosure below.
     resultLabel = undefined
     const direction = Math.round(totalAnnualSavingPence) === 0 ? 'neutral' : totalAnnualSavingPence > 0 ? 'save' : 'cost'
+    // OA-164: "the headline is the total annual saving, not the
+    // incremental optimisation amount" -- reverses OA-164's own earlier
+    // draft (which led with "+£X extra"). The total is the dominant
+    // figure once, a two-line breakdown underneath attributes it to its
+    // two sources (tariff switch, then timing), and an optional monthly
+    // figure gives tertiary context in a different unit -- never the same
+    // £/year total restated a second time.
     result = (
       <span className="landing-time-profile__annual-hero landing-time-profile__annual-hero--compact" data-direction={direction}>
         <strong className="landing-time-profile__annual-hero-figure">
           {describeAnnualOutcomeHeadline(totalAnnualSavingPence)}
         </strong>
+        <span className="landing-time-profile__annual-hero-breakdown">
+          <span className="landing-time-profile__annual-hero-breakdown-row">
+            {formatGbpWhole(tariffAnnualSavingPence)}/year from switching to Smart
+          </span>
+          <span className="landing-time-profile__annual-hero-breakdown-row">
+            + {formatGbpWhole(annualSavingPence)}/year from optimisation
+          </span>
+        </span>
         <span className="landing-time-profile__annual-hero-daily">
-          {formatGbpWhole(tariffAnnualSavingPence)} tariff saving
-          <br />+ {formatGbpWhole(annualSavingPence)} timing saving
+          ≈ {formatGbp(totalAnnualSavingPence / 12)}/month total
         </span>
       </span>
     )
     standingChargeNote = undefined
     payoff = undefined
-    // OA-152: "move caveats out of the primary view" -- the monthly/daily/
+    // OA-152: "move caveats out of the primary view" -- the daily/
     // standing-charge detail OA-153 put directly under the hero card now
     // lives here instead, collapsed by default, alongside the existing
-    // methodology bullets. OA-146's own reconciliation (monthly derives
-    // from the same total the hero shows; today's figure is labelled as a
-    // separate single-day measure) is unchanged, just relocated.
+    // methodology bullets. OA-146's own reconciliation (today's figure is
+    // labelled as a separate single-day measure) is unchanged, just
+    // relocated. OA-164: the monthly total itself moved the other way --
+    // out of this disclosure and into the hero's own tertiary line (see
+    // `result` above) -- so it's no longer restated here too; this bullet
+    // keeps only the methodology caveat behind it.
     explanation = (
       <details className="landing-demo__assumptions">
         <summary>How we calculated this</summary>
         <ul>
-          <li>
-            ≈ {formatGbp(Math.abs(tariffAnnualSavingPence / 12 + monthlySavingPence))}/month total, at the assumed cycle
-            frequency.
-          </li>
+          <li>The monthly figure assumes the same cycle frequency every month.</li>
           <li>
             Today's example day alone saves {formatGbp(Math.abs(dailySavingPence))} from timing — a separate, single-day
             figure, not this estimate's daily rate.
           </li>
           <li>Standing charge unaffected — never part of this saving.</li>
           <li>Same household events shown in Baseline and Compare, with each event&rsquo;s duration and kWh unchanged.</li>
-          <li>Only loads that can realistically shift move — each one respects its own timing window and any dependency on another event.</li>
+          <li>
+            Only loads that can realistically shift move — each one respects its own timing window and any dependency on
+            another event. The tumble dryer never moves into an overnight window, even under Economy 7: it can&rsquo;t start
+            before the washing machine finishes, and — for fire safety — isn&rsquo;t scheduled to run unattended overnight.
+          </li>
           <li>The timing saving is simply the original schedule&rsquo;s cost minus the optimised schedule&rsquo;s cost.</li>
           <li>Figures are usage cost only — the standing charge doesn&rsquo;t vary by tariff or timing, so it&rsquo;s excluded.</li>
           <li>Illustrative example frequency — how often each load actually runs is a documented assumption, not your own usage.</li>
@@ -756,6 +745,10 @@ function LandingDemo() {
     // redundant "Smart · Agile" label floating in the corner no longer
     // earns its place.
     controls = undefined
+    // OA-167: timing suggestions are informational, not an instruction to
+    // leave an appliance running unattended -- shown next to the result
+    // whenever something has actually moved.
+    safetyNote = safetyNoteContent
   } else {
     // OA-137/OA-152/OA-153: a Smart tariff is selected (Optimise is
     // otherwise unreachable -- see `canReachOptimiseStage`), but it has no
@@ -781,14 +774,19 @@ function LandingDemo() {
     )
     resultLabel = undefined
     const direction = Math.round(tariffAnnualSavingPence) === 0 ? 'neutral' : tariffAnnualSavingPence > 0 ? 'save' : 'cost'
+    // OA-164: same headline-then-breakdown structure as the genuine-
+    // opportunity branch above (consistency across the three steps), with
+    // the optimisation row honestly at £0 rather than a different shape.
     result = (
       <span className="landing-time-profile__annual-hero landing-time-profile__annual-hero--compact" data-direction={direction}>
         <strong className="landing-time-profile__annual-hero-figure">
           {describeAnnualOutcomeHeadline(tariffAnnualSavingPence)}
         </strong>
-        <span className="landing-time-profile__annual-hero-daily">
-          {formatGbpWhole(tariffAnnualSavingPence)} tariff saving
-          <br />+ £0 timing saving
+        <span className="landing-time-profile__annual-hero-breakdown">
+          <span className="landing-time-profile__annual-hero-breakdown-row">
+            {formatGbpWhole(tariffAnnualSavingPence)}/year from switching to Smart
+          </span>
+          <span className="landing-time-profile__annual-hero-breakdown-row">+ £0/year from optimisation</span>
         </span>
       </span>
     )
@@ -807,11 +805,12 @@ function LandingDemo() {
       </details>
     )
     controls = undefined
+    safetyNote = safetyNoteContent
   }
 
-  // OA-108: "per-event feedback should appear contextually... in/near the
-  // event block itself" -- only meaningful once events are actually
-  // draggable (Optimise), and only for a movable event.
+  // OA-108: a short, quiet per-event saving note -- only meaningful once
+  // Optimise is the active stage and the chosen tariff has a genuine
+  // timing-saving opportunity.
   function eventSavingText(eventId: string): string | undefined {
     if (!isAtOptimiseStage || !tariffHasTimingSavingOpportunity) return undefined
     const projected = fixture.projection.events.find((e) => e.id === eventId)
@@ -821,54 +820,44 @@ function LandingDemo() {
     )}/year at ${projected.occurrencesPerWeek} cycles/week`
   }
 
-  // OA-105/OA-107/OA-109: the exact same shared events, in the exact same
-  // positions, throughout the story -- Baseline/Compare always show each
-  // event's real (actualStartSlot) position as a fixed annotation; a
-  // movable event's displayed position blends toward its optimised slot
-  // as the scrubber moves through the 2->3 transition (`optFrac`), and
-  // only becomes an actually-draggable slider once the scrubber has fully
-  // arrived at Optimise (OA-109: "do not make event dragging active in
-  // stages 1 or 2"). An identified-but-fixed event (the oven) stays a
-  // fixed annotation throughout -- it's never draggable and "Optimise
-  // all" never touches it.
+  // OA-105/OA-109/OA-156/OA-168: the exact same shared events, in the
+  // exact same positions, throughout the story -- Baseline/Compare always
+  // show each event's real (actualStartSlot) position; a movable event's
+  // displayed position jumps to its optimised slot once the nav steps to
+  // Optimise (`optFrac`, always 0 or 1). An identified-but-fixed event
+  // (the oven) never moves -- "Optimise all" never touches it. OA-168:
+  // every event is now a plain annotation (nothing on the chart is
+  // draggable), so there's no longer a movable/fixed branch here -- only
+  // the displayed position and (for a movable event, once there's a
+  // genuine opportunity) its saving note differ.
   const eventOverlays: LandingTimeProfileEventOverlay[] = LANDING_DEMO_EVENTS.filter(isRealHouseholdEvent).map((event) => {
-    if (!event.movable) {
-      return { id: event.id, label: event.label, startSlot: event.actualStartSlot, slotCount: event.slotCount, movable: false }
-    }
-
-    const projected = fixture.projection.events.find((e) => e.id === event.id)
+    const projected = event.movable ? fixture.projection.events.find((e) => e.id === event.id) : undefined
     const optimisedStartSlot = projected?.currentStartSlot ?? event.actualStartSlot
     // OA-109: half-hour-slot granularity -- the underlying model has no
     // finer resolution than a slot, so the overlay's displayed position
     // during the transition rounds to the nearest one rather than
     // rendering at a sub-slot (and un-indexable) fractional position.
-    const displayedStartSlot = Math.round(lerp(event.actualStartSlot, optimisedStartSlot, optFrac))
-
-    // OA-137: no genuine timing-saving opportunity -- never a draggable
-    // slider, at any stage, since there's nothing meaningful to
-    // experiment with (and the schedule is already the household's
-    // original one -- `optimiseEventStartSlots` was never auto-populated
-    // with a trial schedule that didn't clear the threshold).
-    if (!isAtOptimiseStage || !tariffHasTimingSavingOpportunity) {
-      return { id: event.id, label: event.label, startSlot: displayedStartSlot, slotCount: event.slotCount, movable: false }
-    }
-
-    // OA-107: the dependent tumble dryer's draggable range is narrowed to
-    // whatever's currently valid (washing machine's current end slot),
-    // not just its own static window -- so a visitor can never drag it
-    // earlier than the dependency actually allows right now.
-    const { min, max } = effectiveValidStartSlotRange(event.id, optimiseEventStartSlots)
+    const displayedStartSlot = event.movable
+      ? Math.round(lerp(event.actualStartSlot, optimisedStartSlot, optFrac))
+      : event.actualStartSlot
+    const showSaving = event.movable && isAtOptimiseStage && tariffHasTimingSavingOpportunity
     return {
       id: event.id,
       label: event.label,
       startSlot: displayedStartSlot,
       slotCount: event.slotCount,
-      movable: true,
-      minStartSlot: min,
-      maxStartSlot: max,
-      onMove: (startSlot) => moveEvent(event.id, startSlot),
+      safetyConstraintNote: event.safetyConstraintNote,
+      savingText: showSaving ? eventSavingText(event.id) : undefined,
     }
   })
+
+  // OA-166: the "More info" dialog's assumptions list names the real
+  // household events backing this model, derived from the same shared
+  // `LANDING_DEMO_EVENTS` the chart itself renders -- never a hand-typed
+  // list that could drift from what's actually simulated.
+  const applianceLabelList = LANDING_DEMO_EVENTS.filter(isRealHouseholdEvent)
+    .map((event) => event.label)
+    .join(', ')
 
   return (
     // OA-92: the hero's "See how it works" CTA jumps here (#comparison-
@@ -890,61 +879,26 @@ function LandingDemo() {
           Octopus data (see landingDemoFixture.ts's
           LANDING_DEMO_DATA_SOURCES) rather than invented numbers, but
           it's still not the visitor's own usage until they connect an
-          account (see the CTA note below). */}
+          account (see the CTA note below). OA-166: the previous
+          source-heavy inline `<details>` here is replaced by a calmer
+          one-line statement plus a "More info" action -- the full
+          explanation (what the model means, what it's based on, what
+          assumptions it includes, the sources themselves, and a route to
+          the detailed savings calculation) now lives in the dialog this
+          opens, so the header itself stays light. */}
       <div className="landing-demo__heading-row">
         <h2 className="landing-demo__heading">Typical household</h2>
-        <details className="landing-demo__sources">
-          <summary>Based on Ofgem and Elexon data — not your own usage · Sources</summary>
-          <ul>
-            <li>
-              <a href={LANDING_DEMO_DATA_SOURCES.sourceUrls.ofgemTdcv} target="_blank" rel="noreferrer">
-                Ofgem — typical domestic consumption values (2026 decision)
-              </a>
-            </li>
-            <li>
-              <a href={LANDING_DEMO_DATA_SOURCES.sourceUrls.ofgemPriceCap} target="_blank" rel="noreferrer">
-                Ofgem — energy price cap, October–December 2026
-              </a>
-            </li>
-            <li>
-              <a href={LANDING_DEMO_DATA_SOURCES.sourceUrls.elexonProfiling} target="_blank" rel="noreferrer">
-                Elexon — domestic half-hourly load profiling
-              </a>
-            </li>
-            <li>
-              <a href={LANDING_DEMO_DATA_SOURCES.sourceUrls.octopusAgileApi} target="_blank" rel="noreferrer">
-                Octopus Energy — Agile tariff rates (API)
-              </a>
-            </li>
-            <li>
-              <a href={LANDING_DEMO_DATA_SOURCES.sourceUrls.octopusAgilePricing} target="_blank" rel="noreferrer">
-                Octopus Energy — how Agile prices are calculated
-              </a>
-            </li>
-          </ul>
-          {/* OA-99: "Agile profile based on median half-hour prices from
-              real published Agile rates over a defined historical
-              period" -- the representative-day methodology itself, not
-              just the raw sources above. */}
-          <p className="landing-demo__sources-method">
-            Agile profile based on median half-hour prices from real published Agile rates,{' '}
-            {LANDING_DEMO_DATA_SOURCES.tariffRegion}, {LANDING_DEMO_DATA_SOURCES.tariffDateRange}.
-          </p>
-        </details>
+        <p className="landing-demo__subheading">
+          A representative household model — not your own usage ·{' '}
+          <button
+            type="button"
+            className="landing-demo__more-info-link"
+            onClick={() => setIsHouseholdInfoOpen(true)}
+          >
+            More info
+          </button>
+        </p>
       </div>
-
-      {/* OA-109: the continuous drag scrubber -- replaces the old
-          `role="tablist"` segmented control. `progress` is the single
-          source of truth driving every interpolated value below. */}
-      <LandingStoryScrubber
-        stages={SCRUBBER_STAGES}
-        progress={clampedProgress}
-        onProgressChange={setProgress}
-        // OA-117: locks the Optimise label/drag range until the chosen
-        // comparison tariff is Smart.
-        maxReachableIndex={maxReachableStageIndex}
-        aria-label="Demo story stage"
-      />
 
       <div className="landing-demo__panel">
         <LandingTimeProfile
@@ -959,6 +913,7 @@ function LandingDemo() {
           caveat={caveat}
           payoff={payoff}
           standingChargeNote={standingChargeNote}
+          safetyNote={safetyNote}
           controls={controls}
           primarySelector={primarySelector}
           // OA-143/OA-136/OA-152: "Tab 1, 2 and 3 should share the same
@@ -982,11 +937,39 @@ function LandingDemo() {
           // the household is currently modelled as being on; Compare/
           // Optimise show whichever tariff is currently chosen.
           priceStripShape={TARIFF_PRICE_STRIP_SHAPES[nearestStageIndex === 0 ? currentTariffId : chosenTariffId]}
-          // OA-105/OA-109: the same shared events throughout the story --
-          // fixed annotations outside Optimise, draggable overlays once
-          // fully arrived there.
+          // OA-105/OA-109/OA-168: the same shared events throughout the
+          // story, as plain annotations (see LandingTimeProfile.tsx's doc
+          // comment for why nothing here is draggable any more).
           events={eventOverlays}
-          eventSavingText={eventSavingText}
+          // OA-156: the Step 1 -> Step 2 -> Step 3 nav, rendered inside
+          // this card between the narrative above and the chart below --
+          // replaces the old top-of-section drag scrubber.
+          // OA-155: once the current tariff is Smart, this whole slot
+          // becomes the sign-up prompt instead -- there's no genuine next
+          // step to show the step nav for, so it's replaced here, not
+          // left visible-but-disabled next to an unrelated message
+          // elsewhere on the card.
+          stepNav={
+            currentTariffIsSmart ? (
+              <p className="landing-demo__smart-gate">
+                Already on a smart tariff?{' '}
+                <Link to="/login" className="landing-demo__smart-gate-link">
+                  Sign up
+                </Link>{' '}
+                to start finding what you could save by using it better.
+              </p>
+            ) : (
+              <LandingStepNav
+                steps={STEP_NAV_STAGES}
+                activeIndex={clampedProgress}
+                onStepChange={setProgress}
+                // OA-117: locks the Optimise step until the chosen
+                // comparison tariff is Smart.
+                maxReachableIndex={maxReachableStageIndex}
+                aria-label="Demo story stage"
+              />
+            )
+          }
         />
       </div>
 
@@ -1004,6 +987,145 @@ function LandingDemo() {
           Connecting your account replaces this example with your own tariff and half-hourly usage.
         </span>
       </p>
+
+      {/* OA-155: secondary exit for visitors already on a smart tariff --
+          the public demo above stays a linear Standard -> Smart -> Optimise
+          walkthrough rather than branching into a real comparison for
+          them, so this gives that audience its own path straight to
+          signup/personalised analysis instead of sitting through a fake
+          comparison against their own tariff. Generic placement/styling
+          for now -- not yet positioned to intercept earlier in the flow. */}
+      <p className="landing-demo__cta landing-demo__cta--secondary">
+        <span className="landing-demo__cta-note">Already on a smart tariff?</span>
+        <Link to="/login" className="landing-demo__cta-link">
+          Sign up to start finding what you could save by using it better.
+        </Link>
+      </p>
+
+      {/* OA-166: "Typical household" explained -- what the model is, what
+          it's based on, what it includes, where the sources are, and a
+          route to the detailed savings calculation. Opened from the
+          header above; this dialog never duplicates that detailed
+          calculation itself (the "How we calculated this" disclosure at
+          Optimise), only links to it. */}
+      <Dialog
+        isOpen={isHouseholdInfoOpen}
+        onClose={() => setIsHouseholdInfoOpen(false)}
+        titleId={householdInfoTitleId}
+        title="About this model"
+      >
+        <h3>What &ldquo;Typical household&rdquo; means</h3>
+        <p>
+          This is a representative household model used to demonstrate how Shift &amp; Save works — it is{' '}
+          <strong>not your own smart-meter data</strong>, and it is not claiming to describe every household. Every
+          figure you see in this demo is a modelled estimate for the scenario currently selected, not a measurement.
+        </p>
+
+        <h3>What it&rsquo;s based on</h3>
+        <p>The usage and pricing shown here are built from published, sourced data:</p>
+        <ul>
+          <li>Ofgem&rsquo;s typical domestic electricity-usage assumptions (annual kWh and the price cap).</li>
+          <li>Elexon&rsquo;s domestic half-hourly load-profiling methodology, for how usage is spread across a day.</li>
+          <li>Representative appliance and timing assumptions for the demo household (see below).</li>
+          <li>Real published tariff-rate data for the comparison (Octopus Energy&rsquo;s Agile and Fixed products).</li>
+        </ul>
+        <p>
+          Ofgem and Elexon inform the overall shape and scale of usage — they don&rsquo;t specify exactly when any one
+          named appliance runs. Appliance timings are the demo&rsquo;s own representative assumption, not a figure
+          published by either source.
+        </p>
+
+        <h3>What assumptions are included</h3>
+        <p>The demo household&rsquo;s events ({applianceLabelList}) are each modelled with:</p>
+        <ul>
+          <li>A representative time of day it typically runs.</li>
+          <li>How often it recurs in a typical week.</li>
+          <li>Whether it&rsquo;s flexible (its timing can realistically move) or fixed in place.</li>
+        </ul>
+        <p>These are kept deliberately understandable rather than exposing every modelling detail.</p>
+
+        <h3>How the savings are calculated</h3>
+        <p>
+          The tariff and timing savings shown on Optimise come from a documented calculation, not this dialog&rsquo;s
+          summary.{' '}
+          {canReachOptimiseStage ? (
+            <button
+              type="button"
+              className="dialog__link-button"
+              onClick={() => {
+                setIsHouseholdInfoOpen(false)
+                setProgress(2)
+              }}
+            >
+              See how we calculated the savings
+            </button>
+          ) : (
+            'Choose a Smart tariff on Baseline, then open "How we calculated this" on the Optimise step to see the full breakdown.'
+          )}
+        </p>
+
+        <h3>Sources</h3>
+        <ul>
+          <li>
+            <a href={LANDING_DEMO_DATA_SOURCES.sourceUrls.ofgemTdcv} target="_blank" rel="noreferrer">
+              Ofgem — typical domestic consumption values (2026 decision)
+            </a>
+          </li>
+          <li>
+            <a href={LANDING_DEMO_DATA_SOURCES.sourceUrls.ofgemPriceCap} target="_blank" rel="noreferrer">
+              Ofgem — energy price cap, October–December 2026
+            </a>
+          </li>
+          <li>
+            <a href={LANDING_DEMO_DATA_SOURCES.sourceUrls.elexonProfiling} target="_blank" rel="noreferrer">
+              Elexon — domestic half-hourly load profiling
+            </a>
+          </li>
+          <li>
+            <a href={LANDING_DEMO_DATA_SOURCES.sourceUrls.octopusAgileApi} target="_blank" rel="noreferrer">
+              Octopus Energy — Agile tariff rates (API)
+            </a>
+          </li>
+          <li>
+            <a href={LANDING_DEMO_DATA_SOURCES.sourceUrls.octopusAgilePricing} target="_blank" rel="noreferrer">
+              Octopus Energy — how Agile prices are calculated
+            </a>
+          </li>
+        </ul>
+        <p>
+          Agile profile based on median half-hour prices from real published Agile rates, {LANDING_DEMO_DATA_SOURCES.tariffRegion},{' '}
+          {LANDING_DEMO_DATA_SOURCES.tariffDateRange}.
+        </p>
+      </Dialog>
+
+      {/* OA-167: the fuller appliance-safety information, opened from the
+          short note shown alongside Optimise's results. */}
+      <Dialog
+        isOpen={isSafetyInfoOpen}
+        onClose={() => setIsSafetyInfoOpen(false)}
+        titleId={safetyInfoTitleId}
+        title="Safety information"
+      >
+        <p>
+          Timing suggestions here are informational. Shift &amp; Save doesn&rsquo;t control your appliances — you
+          decide whether a suggested time is safe and appropriate for your appliance, your home and your
+          circumstances.
+        </p>
+        <ul>
+          <li>Always follow your appliance&rsquo;s manufacturer instructions.</li>
+          <li>Don&rsquo;t leave an appliance running unattended if the manufacturer, or normal safe-use guidance, advises against it.</li>
+          <li>Never override fire, electrical or ventilation safety to use cheaper electricity.</li>
+          <li>Don&rsquo;t obstruct an appliance&rsquo;s ventilation.</li>
+          <li>Don&rsquo;t use a damaged appliance, plug or cable.</li>
+          <li>Only schedule appliances that are designed and suitable for delayed or unattended operation.</li>
+        </ul>
+        <p>
+          These suggestions are based on tariff timing and the modelled constraints shown in this demo — not an
+          inspection of your specific appliance or home. Shift &amp; Save provides informational, modelled timing
+          suggestions only; unless a future, explicit automation feature says otherwise, it never controls your
+          appliances for you.
+        </p>
+      </Dialog>
     </section>
   )
 }

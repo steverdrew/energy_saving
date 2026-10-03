@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useId, useMemo, useRef, useState } from 'react'
 import { formatGbp } from '../format'
+import InfoTooltip from './InfoTooltip'
 import {
   buildSmoothUsageAreaPath,
   describeSlot,
@@ -15,30 +16,19 @@ import {
 } from './heatMapMath'
 import './LandingTimeProfile.css'
 
-/** OA-105: one household event overlaid on the track -- a fixed, non-interactive annotation on Baseline/Compare, or (when `movable`) a draggable overlay on Optimise. Shared shape across all three tabs so "no event appears for the first time on Tab 3" is structural, not just a convention. */
-export type LandingTimeProfileEventOverlay =
-  | {
-      id: string
-      label: string
-      /** Slot index (0-47) the event currently starts at. */
-      startSlot: number
-      /** How many contiguous half-hour slots the event occupies. */
-      slotCount: number
-      movable: false
-    }
-  | {
-      id: string
-      label: string
-      startSlot: number
-      slotCount: number
-      movable: true
-      minStartSlot: number
-      maxStartSlot: number
-      /** Called with a new (already-clamped-by-caller-expected) start slot as the event is dragged or moved by keyboard. */
-      onMove: (startSlot: number) => void
-    }
-
-type MovableEventOverlay = Extract<LandingTimeProfileEventOverlay, { movable: true }>
+/** OA-105/OA-168: one household event overlaid on the track -- the same shape on every tab now that none of them are draggable (see the redesign's doc comment below): a plain annotation, positioned by `startSlot`/`slotCount`, with only the label and two purely-informational extras. */
+export interface LandingTimeProfileEventOverlay {
+  id: string
+  label: string
+  /** Slot index (0-47) the event currently starts at. */
+  startSlot: number
+  /** How many contiguous half-hour slots the event occupies. */
+  slotCount: number
+  /** OA-165/OA-167: set only when this event's window is a deliberate safety constraint, not a missed optimisation -- shown as an info icon beside the event, explaining why on hover/focus/tap. */
+  safetyConstraintNote?: ReactNode
+  /** OA-108/OA-168: a short, quiet per-event saving note (e.g. "Saves 18p this cycle") -- shown directly in the event's own card, only when it's the sole event there (a grouped card stays a plain list; see `groupOverlappingEvents`). */
+  savingText?: ReactNode
+}
 
 // OA-131: how this tariff's price should be segmented in the dedicated
 // price strip above the chart -- deliberately not the fixture's own
@@ -84,92 +74,95 @@ function buildPriceStripSegments(slots: readonly HeatMapSlot[], shape: PriceStri
   return segments
 }
 
-// OA-133: "Economy 7 should not use a continuous cheaper -> more-expensive
-// legend" -- Flexible/Fixed and Agile keep their own static copy, but
-// two-rate's legend names its two explicit states (day rate / off-peak)
-// with the *actual* off-peak time range (`offPeakTimeRange`, resolved by
-// the caller from this day's own segments), never a hand-written clock
-// window that could drift from the real data.
-function priceStripLegendText(shape: PriceStripShape, offPeakTimeRange: string | null): string {
-  if (shape === 'flat') return 'Flat rate — the same price all day'
-  if (shape === 'dynamic') return 'Cheaper ← price → More expensive'
-  return offPeakTimeRange ? `Day rate · Off-peak ${offPeakTimeRange}` : 'Day rate · Off-peak'
-}
+// OA-105/OA-107/OA-109/OA-156: event dragging/lanes used to live here --
+// removed in the OA-168 redesign (see the component doc comment below),
+// which replaced per-event lanes with grouped, non-interactive annotation
+// cards above the chart.
+// OA-168: merges an event into the previous group not only when their
+// time spans genuinely overlap, but when they're close enough that two
+// separate cards would visually collide (each card is a fixed ~180px max
+// width; two events barely an hour apart, e.g. a washing machine
+// immediately followed by its tumble dryer, would otherwise render two
+// cards fighting for the same few dozen pixels). A plain time-slot buffer
+// rather than a real text-width measurement -- see the component's own
+// doc comment for why a full collision-avoidance pass isn't used here.
+const EVENT_GROUP_MERGE_BUFFER_SLOTS = 2
 
-// OA-107: "event labels must never render on top of one another ... if
-// multiple events overlap in time, place them in separate visual lanes/
-// rows". A simple greedy interval-partitioning pass -- sort by start slot,
-// then assign each overlay to the first lane whose last-placed event has
-// already finished by this overlay's start slot, opening a new lane
-// otherwise. Two events placed deliberately at the same time (e.g. EV
-// charging and the dishwasher) are a valid, realistic simultaneous load
-// (the ticket is explicit that this must be allowed) -- lanes solve the
-// *label* collision that would otherwise cause, without implying the
-// loads themselves conflict.
-// OA-115: a label is now allowed to overflow its own (duration-sized)
-// chip rather than being hard-truncated, so two events placed back to
-// back in time -- no actual time overlap, just adjacent -- can still get
-// their *labels* visually colliding once those labels are wider than the
-// slots they cover. This rough character-per-slot estimate (not a real
-// text measurement, which would need a DOM ref/ResizeObserver this
-// component doesn't otherwise need) reserves extra lane width for a
-// short-duration event with a long name, so it's pushed to its own lane
-// instead of visually colliding with its neighbour's label.
-// Follow-up fix: 2.2 chars/slot assumed more horizontal room than
-// `--chart-event-label-size`'s actual bold 16px glyphs take up at the
-// card's own ~900px width (48 slots -> ~18px/slot, ~9-10px/bold-char --
-// closer to 1.8 chars/slot), so two adjacent long labels (e.g. "Washing
-// machine" immediately followed by "Oven") could still land in the same
-// lane and visually run together. Lowered to 1.8, plus a one-slot buffer
-// on top of the estimate so neighbouring labels keep a visible gap rather
-// than sitting flush against each other.
-const ESTIMATED_CHARS_PER_LABEL_SLOT = 1.8
-const LABEL_LANE_BUFFER_SLOTS = 1
-
-function computeEventLanes(overlays: readonly LandingTimeProfileEventOverlay[]): Map<string, number> {
-  const laneEndSlots: number[] = []
-  const laneByEventId = new Map<string, number>()
+function groupOverlappingEvents(
+  overlays: readonly LandingTimeProfileEventOverlay[],
+): Array<{ startSlot: number; endSlot: number; events: LandingTimeProfileEventOverlay[] }> {
   const sorted = [...overlays].sort((a, b) => a.startSlot - b.startSlot)
+  const groups: Array<{ startSlot: number; endSlot: number; events: LandingTimeProfileEventOverlay[] }> = []
   for (const overlay of sorted) {
-    const labelSlotSpan = Math.ceil(overlay.label.length / ESTIMATED_CHARS_PER_LABEL_SLOT)
-    const end = overlay.startSlot + Math.max(overlay.slotCount, labelSlotSpan) + LABEL_LANE_BUFFER_SLOTS
-    let lane = laneEndSlots.findIndex((laneEnd) => laneEnd <= overlay.startSlot)
-    if (lane === -1) {
-      lane = laneEndSlots.length
-      laneEndSlots.push(end)
+    const last = groups[groups.length - 1]
+    if (last && overlay.startSlot < last.endSlot + EVENT_GROUP_MERGE_BUFFER_SLOTS) {
+      last.events.push(overlay)
+      last.endSlot = Math.max(last.endSlot, overlay.startSlot + overlay.slotCount)
     } else {
-      laneEndSlots[lane] = end
+      groups.push({ startSlot: overlay.startSlot, endSlot: overlay.startSlot + overlay.slotCount, events: [overlay] })
     }
-    laneByEventId.set(overlay.id, lane)
   }
-  return laneByEventId
+  return groups
 }
 
-// OA-107/OA-115: "prefer a compact label ... when space is constrained,
-// show the event name only" -- below this width (in half-hour slots), the
-// secondary time-range line is dropped first, keeping just the event
-// name (OA-115: never hard-truncated -- see the chip label CSS, which
-// lets the name overflow its own coloured indicator rather than clipping
-// it). The full time range stays available via the native title tooltip
-// (fixed annotations) or the slider's aria-valuetext (movable events)
-// either way.
-const COMPACT_LABEL_MAX_SLOT_COUNT = 2
+// OA-168: keeps a card's centre from being positioned flush against the
+// chart's own left/right edge, where it would visually overhang the card.
+// A plain clamp rather than a full collision-avoidance pass (see the
+// doc comment below for why that's an acceptable simplification here).
+const EVENT_CARD_EDGE_CLAMP_PERCENT = 8
 
-// OA-115: event chips are now a fixed-height row anchored near the top of
-// the track, not a box stretching the full chart height -- "selecting an
-// event should emphasise the event block itself, not read like a new
-// data band/time-slice selection". `EVENT_CHIP_TOP_OFFSET_PX` clears the
-// structural-peak annotation's own label (OA-99/OA-101), which sits at
-// the very top of the track. OA-116: shrunk roughly 25-30% from OA-115's
-// first pass -- "the graph should remain the primary visual", not the
-// chips describing it. OA-129: grown back up again to fit the larger
-// `--chart-event-label-size`/`--chart-event-secondary-size` type scale
-// (16px/14px) -- the chart height itself (`.landing-time-profile__track`,
-// in LandingTimeProfile.css) already scales with `--event-lanes`, so this
-// doesn't crowd the chart, it just gives each lane a bit more room.
-const EVENT_CHIP_HEIGHT_PX = 28
-const EVENT_CHIP_GAP_PX = 6
-const EVENT_CHIP_TOP_OFFSET_PX = 20
+// OA-168: the minimum horizontal distance (as a percentage of the track's
+// width) kept between two cards' centres -- cards whose own time position
+// would otherwise land closer than this get pushed right, since each card
+// is a fixed ~180px max width and two time positions only an hour or two
+// apart (closer than `EVENT_GROUP_MERGE_BUFFER_SLOTS` would merge them,
+// but not close enough to) would otherwise still visually collide.
+const EVENT_CARD_MIN_GAP_PERCENT = 20
+
+interface PositionedEventGroup {
+  group: ReturnType<typeof groupOverlappingEvents>[number]
+  /** The group's real time position -- what its connector curve points at. */
+  naturalLeftPercent: number
+  /** Where the card itself renders -- pushed right of `naturalLeftPercent` only when needed to keep `EVENT_CARD_MIN_GAP_PERCENT` from its left-hand neighbour. */
+  displayLeftPercent: number
+}
+
+/**
+ * OA-168: a simple greedy left-to-right label-spacing pass -- sorts groups
+ * by their true time position, then pushes each one right just far enough
+ * to keep `EVENT_CARD_MIN_GAP_PERCENT` from the previous (already-placed)
+ * card, never left. A card that needed pushing no longer sits directly
+ * above the time it describes -- `naturalLeftPercent` is kept alongside
+ * `displayLeftPercent` precisely so the caller can draw a curved connector
+ * from the (possibly shifted) card back down to the real position.
+ */
+function layoutEventCardPositions(
+  groups: ReturnType<typeof groupOverlappingEvents>,
+  totalSlots: number,
+): PositionedEventGroup[] {
+  const withNaturalPosition = groups.map((group) => {
+    const midSlot = (group.startSlot + group.endSlot) / 2
+    const rawPercent = (midSlot / totalSlots) * 100
+    const naturalLeftPercent = Math.min(
+      100 - EVENT_CARD_EDGE_CLAMP_PERCENT,
+      Math.max(EVENT_CARD_EDGE_CLAMP_PERCENT, rawPercent),
+    )
+    return { group, naturalLeftPercent }
+  })
+  const orderedByPosition = [...withNaturalPosition].sort((a, b) => a.naturalLeftPercent - b.naturalLeftPercent)
+  let previousDisplayPercent = -Infinity
+  const positionedByPosition = orderedByPosition.map(({ group, naturalLeftPercent }) => {
+    const displayLeftPercent = Math.min(
+      100 - EVENT_CARD_EDGE_CLAMP_PERCENT,
+      Math.max(naturalLeftPercent, previousDisplayPercent + EVENT_CARD_MIN_GAP_PERCENT),
+    )
+    previousDisplayPercent = displayLeftPercent
+    return { group, naturalLeftPercent, displayLeftPercent }
+  })
+  // Restores the original (time) order -- the sort above was only needed
+  // for the left-to-right spacing pass itself.
+  return groups.map((group) => positionedByPosition.find((p) => p.group === group)!)
+}
 
 export interface LandingTimeProfileProps {
   day: HeatMapDay
@@ -189,6 +182,8 @@ export interface LandingTimeProfileProps {
   costNote: string
   /** An optional secondary disclaimer block (Compare/Optimise's "illustrative example" caveats, or OA-108's "View assumptions" disclosure). */
   caveat?: ReactNode
+  /** OA-167: Optimise's short, calm appliance-safety note (with a link to the fuller "Safety information" dialog) -- shown below the chart alongside the other below-chart disclosures, only on Optimise (Baseline/Compare never move anything, so pass nothing here). */
+  safetyNote?: ReactNode
   /** OA-104: an optional prominent payoff line shown above `summary`, carrying more visual weight than the daily figure -- e.g. "You could save around £73/year...". Only the Optimise step passes this. */
   payoff?: ReactNode
   /** OA-126: the standing charge, disclosed quietly right next to the result it's deliberately excluded from (e.g. "+ 55p/day standing charge") -- shown on every stage, consistently, so the headline £ figure is never mistaken for a visitor's full daily bill. */
@@ -205,10 +200,10 @@ export interface LandingTimeProfileProps {
   showStructuralPeakAnnotation: boolean
   /** OA-131: how the active tariff's price should be segmented in the dedicated price strip above the chart -- `'flat'` for Standard Variable, `'two-rate'` for Economy 7, `'dynamic'` for Agile's 48 genuinely distinct half-hourly prices. The caller already knows which tariff is active (`TariffId`); this keeps that domain concept out of this presentation-only component. */
   priceStripShape: PriceStripShape
-  /** OA-105: every household event, shown as an overlay on the track -- fixed annotations on Baseline/Compare, draggable overlays (the `movable: true` variant) on Optimise. Shared across all three tabs so events are never invented fresh on one tab. */
+  /** OA-105: every household event, shown as an overlay on the track -- the same plain annotation on every tab (see the component doc comment for why nothing here is draggable any more). */
   events?: LandingTimeProfileEventOverlay[]
-  /** OA-108: "per-event feedback should appear contextually ... in/near the event block itself when it's selected, focused, or being dragged" -- replaces the old permanent per-appliance list. Given a movable overlay's id, returns the compact saving text to show in a popover near it while focused/hovered/dragged, or `undefined` for no popover (e.g. nothing has moved from its original slot yet). */
-  eventSavingText?: (eventId: string) => string | undefined
+  /** OA-156: the Step 1 -> Step 2 -> Step 3 navigation (`<LandingStepNav>`), rendered inside this card between the choices/result narrative above and the chart below -- replaces the old top-of-section drag scrubber, which sat above this whole card instead. Optional only so a caller without a story to navigate (none currently) can omit it. */
+  stepNav?: ReactNode
 }
 
 // Every hour of the 24-hour day -- one axis label underneath each, not
@@ -268,25 +263,18 @@ const SLOT_DIVIDER_HOURS: number[] = Array.from({ length: 47 }, (_, i) => (i + 1
  * relationship is the whole point, not the heat map's day-over-day
  * repetition.
  *
- * Each column stays a real `<button>` (OA-82/84: semantic controls,
- * accessible summary) with the same describeSlot aria-label and
- * roving-tabindex arrow-key navigation as the heat map it replaces, plus
- * the same always-in-DOM sr-only exact-values table. Columns are keyed
- * by `slot.startsAt`, which is identical across Baseline/Compare/
- * Optimise (see landingDemoFixture.ts), so LandingDemo.tsx keeping this
- * component mounted across step changes lets the background/foreground
- * CSS transitions interpolate in place: Baseline -> Compare only changes
- * background colour (usage bars don't move), Compare -> Optimise only
- * moves usage bars (background stays identical).
- *
- * OA-98: this card is now the *whole* comparison unit, not a chart paired
- * with a separate narrative column -- LandingDemo.tsx no longer renders
- * its own story panel. The card reads top-to-bottom as one object
- * changing state: heading -> tariff/usage/cost summary -> explanation
- * (+ optional caveat) -> active-state legend -> chart. Only the narrative
- * block remounts (via `stepKey`) to replay its fade/slide on step change;
- * the chart itself stays mounted throughout, same as before, so its own
- * transitions keep interpolating.
+ * OA-168: event dragging (OA-103/105/107/108/109/115/116) is removed --
+ * every event (Baseline, Compare and Optimise alike) is now a plain,
+ * non-interactive annotation, positioned by its own `startSlot`. Events
+ * that overlap (or sit close enough in time that separate labels would
+ * collide) are merged into one card listing each of their names, rather
+ * than the old per-event lane system -- a deliberate simplification: with
+ * nothing draggable any more, a handful of static cards never need to
+ * fight for the same horizontal space the way live-dragged sliders could,
+ * so a full collision-avoidance pass (lanes, label-width estimation) is
+ * no longer worth its own complexity -- only a simple edge clamp
+ * (`EVENT_CARD_EDGE_CLAMP_PERCENT`) keeps a card's centre off the chart's
+ * own left/right edge.
  */
 function LandingTimeProfile({
   day,
@@ -298,6 +286,7 @@ function LandingTimeProfile({
   explanation,
   costNote,
   caveat,
+  safetyNote,
   payoff,
   standingChargeNote,
   controls,
@@ -307,16 +296,11 @@ function LandingTimeProfile({
   showStructuralPeakAnnotation,
   priceStripShape,
   events,
-  eventSavingText,
+  stepNav,
 }: LandingTimeProfileProps) {
   const [selected, setSelected] = useState<number | null>(null)
-  // OA-108: which movable event's contextual saving popover is showing --
-  // set on focus/hover/drag of that event's overlay, cleared on blur/
-  // pointer-leave. Replaces the old permanent per-appliance list.
-  const [activeEventId, setActiveEventId] = useState<string | null>(null)
   const panelId = useId()
   const cellRefs = useRef<Array<HTMLButtonElement | null>>([])
-  const trackRef = useRef<HTMLDivElement>(null)
 
   const days = useMemo(() => [day], [day])
   const { min, max } = useMemo(() => rateRange(days), [days])
@@ -356,23 +340,28 @@ function LandingTimeProfile({
     [day, priceStripShape],
   )
 
-  // OA-133: the real off-peak time range for a 'two-rate' tariff (e.g.
-  // "01:30–08:30"), resolved from this day's own segments -- never a
-  // hand-written clock window that could drift from the actual rate data.
-  // The off-peak segment is whichever one carries the lower of the two
-  // rates present.
-  const offPeakTimeRange = useMemo(() => {
+  // OA-133/OA-168: the off-peak segment itself (whichever carries the
+  // lower of the two 'two-rate' rates) -- both the legend's time range and
+  // the chart's own subtle background shading are derived from this one
+  // value, so the two treatments can never drift apart.
+  const offPeakSegment = useMemo(() => {
     if (priceStripShape !== 'two-rate') return null
     const rates = priceStripSegments.map((s) => s.rate).filter((r): r is number => r !== null)
     if (rates.length === 0) return null
     const offPeakRate = Math.min(...rates)
-    const offPeakSegment = priceStripSegments.find((s) => s.rate === offPeakRate)
+    return priceStripSegments.find((s) => s.rate === offPeakRate) ?? null
+  }, [priceStripShape, priceStripSegments])
+
+  // OA-133: the real off-peak time range for a 'two-rate' tariff (e.g.
+  // "01:30–08:30"), resolved from this day's own segments -- never a
+  // hand-written clock window that could drift from the actual rate data.
+  const offPeakTimeRange = useMemo(() => {
     const firstSlot = offPeakSegment && day.slots[offPeakSegment.startSlot]
     const lastSlot = offPeakSegment && day.slots[offPeakSegment.startSlot + offPeakSegment.slotCount - 1]
     if (!firstSlot || !lastSlot) return null
     const lastSlotEnd = new Date(new Date(lastSlot.startsAt).getTime() + 30 * 60 * 1000).toISOString()
     return `${formatSlotTime(firstSlot.startsAt)}–${formatSlotTime(lastSlotEnd)}`
-  }, [priceStripShape, priceStripSegments, day])
+  }, [offPeakSegment, day])
 
   function focusSlot(slotIndex: number) {
     const clamped = Math.max(0, Math.min(day.slots.length - 1, slotIndex))
@@ -391,61 +380,8 @@ function LandingTimeProfile({
 
   const selectedSlot = selected !== null ? day.slots[selected] ?? null : null
 
-  // OA-107: computed once per render, used both for the track's own
-  // `--event-lanes` sizing and for each overlay's lane placement below.
-  const renderableEventOverlays = useMemo(
-    () =>
-      (events ?? [])
-        .filter(isRenderableEventOverlay)
-        // OA-106: "no duplicate event containers" -- keep only the first
-        // overlay for a given id, in the unexpected case the caller's
-        // `events` array repeats one.
-        .filter((overlay, index, all) => all.findIndex((o) => o.id === overlay.id) === index),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- isRenderableEventOverlay closes over `day` only; `events` already covers every input this memo actually varies on.
-    [events],
-  )
-  const eventLanes = useMemo(() => computeEventLanes(renderableEventOverlays), [renderableEventOverlays])
-  const eventLaneCount = Math.max(1, ...Array.from(eventLanes.values(), (lane) => lane + 1))
-
-  // OA-103/105: pointer position -> slot index, centring the drag point
-  // under the cursor rather than snapping the event's left edge to it,
-  // then clamping to this event's own valid same-day window (handed in by
-  // the caller -- LandingDemo.tsx clamps again before committing state,
-  // this is only so the dragged position never visually escapes the
-  // window). Each event carries its own min/max, so two events with
-  // different constraints (e.g. a washing machine's requiresAwakeHome vs.
-  // a dishwasher's unconstrained window) are each held to their own.
-  function slotFromPointerX(clientX: number, overlay: MovableEventOverlay): number {
-    const rect = trackRef.current?.getBoundingClientRect()
-    if (!rect || rect.width === 0) return overlay.startSlot
-    const ratio = (clientX - rect.left) / rect.width
-    const rawSlot = Math.round(ratio * day.slots.length - overlay.slotCount / 2)
-    return Math.max(overlay.minStartSlot, Math.min(overlay.maxStartSlot, rawSlot))
-  }
-
-  function handleEventPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    e.currentTarget.setPointerCapture(e.pointerId)
-    e.preventDefault()
-  }
-
-  function handleEventPointerMove(e: React.PointerEvent<HTMLDivElement>, overlay: MovableEventOverlay) {
-    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
-    const nextSlot = slotFromPointerX(e.clientX, overlay)
-    if (nextSlot !== overlay.startSlot) overlay.onMove(nextSlot)
-  }
-
-  function handleEventKeyDown(e: React.KeyboardEvent<HTMLDivElement>, overlay: MovableEventOverlay) {
-    if (e.key === 'ArrowRight') {
-      e.preventDefault()
-      overlay.onMove(Math.min(overlay.maxStartSlot, overlay.startSlot + 1))
-    } else if (e.key === 'ArrowLeft') {
-      e.preventDefault()
-      overlay.onMove(Math.max(overlay.minStartSlot, overlay.startSlot - 1))
-    }
-  }
-
-  function eventTimeRange(overlay: LandingTimeProfileEventOverlay): string {
-    const slots = Array.from({ length: overlay.slotCount }, (_, i) => day.slots[overlay.startSlot + i]).filter(
+  function eventTimeRange(startSlot: number, slotCount: number): string {
+    const slots = Array.from({ length: slotCount }, (_, i) => day.slots[startSlot + i]).filter(
       (s): s is HeatMapDay['slots'][number] => s !== undefined,
     )
     if (slots.length === 0) return ''
@@ -484,9 +420,26 @@ function LandingTimeProfile({
       overlay.slotCount > 0 &&
       overlay.startSlot >= 0 &&
       overlay.startSlot + overlay.slotCount <= day.slots.length &&
-      eventTimeRange(overlay) !== ''
+      eventTimeRange(overlay.startSlot, overlay.slotCount) !== ''
     )
   }
+
+  // OA-106: "no duplicate event containers" -- keep only the first overlay
+  // for a given id, in the unexpected case the caller's `events` array
+  // repeats one.
+  const renderableEventOverlays = useMemo(
+    () =>
+      (events ?? [])
+        .filter(isRenderableEventOverlay)
+        .filter((overlay, index, all) => all.findIndex((o) => o.id === overlay.id) === index),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isRenderableEventOverlay closes over `day` only; `events` already covers every input this memo actually varies on.
+    [events],
+  )
+  const eventGroups = useMemo(() => groupOverlappingEvents(renderableEventOverlays), [renderableEventOverlays])
+  const positionedEventGroups = useMemo(
+    () => layoutEventCardPositions(eventGroups, day.slots.length),
+    [eventGroups, day],
+  )
 
   return (
     <div className="landing-time-profile">
@@ -605,52 +558,49 @@ function LandingTimeProfile({
         })()}
       </div>
 
+      {/* OA-156: the Step 1 -> Step 2 -> Step 3 nav sits here, inside the
+          card, under the choices/result narrative above and above the
+          chart below -- not remounted on step change (unlike the
+          narrative above it) since it's the control driving that change,
+          not part of what it animates. */}
+      {stepNav}
+
       <div className="landing-time-profile__body">
-        {/* OA-131: the dedicated, aligned price strip -- now the *only*
-            price encoding; the usage track below is deliberately calmer
-            (a flat neutral background) so price and usage never compete
-            for the same visual channel. Uses the same 48-half-hour flex
-            basis as the track below (`flexGrow` per slot occupied), so a
-            segment always lines up exactly with the usage columns it
-            covers, regardless of rendered width. */}
+        {/* OA-131/OA-168: the dedicated rate bar -- a plain muted track
+            with only the genuinely distinct price information picked out:
+            one highlighted off-peak segment for 'two-rate', a uniform
+            fill for 'flat' (nothing to distinguish), and the real
+            per-slot colour ramp for 'dynamic'. Still a real row of
+            `<button>`s (not a decorative strip) so "exact rate details
+            available via tap" and "touch interaction must work without
+            hover" both still hold -- clicking/tapping reuses the same
+            selection + live region the usage columns below already
+            expose. */}
         <div
-          className="landing-time-profile__price-strip"
+          className="landing-time-profile__rate-bar"
           role="group"
           aria-label={`${heading} — price strip`}
-          style={{ '--event-lanes': eventLaneCount } as React.CSSProperties}
         >
           {priceStripSegments.map((segment) => {
-            // OA-133: "Economy 7 should not use a continuous cheaper ->
-            // more-expensive gradient" -- 'two-rate' gets two fixed,
-            // maximally-distinct tones from the ramp (its two ends)
-            // rather than a value sampled from the generic continuous
-            // normalisation, so it reads as two explicit states, not a
-            // position on a scale. 'dynamic' (Agile) keeps the real
-            // continuous normalisation against this day's own min/max.
-            const step =
-              segment.rate === null
-                ? null
-                : priceStripShape === 'two-rate'
-                  ? segment.rate === Math.min(...priceStripSegments.map((s) => s.rate ?? Infinity))
-                    ? 0
-                    : 8
-                  : rateColorStepIndex(segment.rate, min, max)
+            const isOffPeak = priceStripShape === 'two-rate' && segment === offPeakSegment
+            const dynamicStep =
+              priceStripShape === 'dynamic'
+                ? segment.rate !== null
+                  ? rateColorStepIndex(segment.rate, min, max)
+                  : null
+                : null
             return (
-              // A real button (not just a decorative div): "exact rate
-              // details available via hover/tap" and "touch interaction
-              // must work without hover" both need a genuine tap target,
-              // not a native `title` tooltip (hover-only, and absent on
-              // touch). Clicking/tapping reuses the same selection + live
-              // region the usage columns below already expose.
               <button
                 key={segment.startSlot}
                 type="button"
-                className="landing-time-profile__price-segment"
+                className="landing-time-profile__rate-bar-segment"
+                data-shape={priceStripShape}
+                data-offpeak={isOffPeak || undefined}
                 style={{
                   flexGrow: segment.slotCount,
-                  backgroundColor: step !== null ? RATE_COLOR_STEPS_DARK[step] : undefined,
+                  backgroundColor: dynamicStep !== null ? RATE_COLOR_STEPS_DARK[dynamicStep] : undefined,
                 }}
-                data-unknown={step === null || undefined}
+                data-unknown={priceStripShape === 'dynamic' && dynamicStep === null ? '' : undefined}
                 aria-label={describePriceStripSegment(segment)}
                 onClick={() => setSelected(segment.startSlot)}
               />
@@ -678,33 +628,70 @@ function LandingTimeProfile({
           )}
         </div>
 
-        {/* OA-131: names what the strip's colours mean -- "the price
-            strip", never the whole chart background, which no longer
-            carries any price encoding. Wording matches how that tariff's
-            strip actually renders (flat/two-rate/dynamic). */}
-        <p className="landing-time-profile__price-legend">{priceStripLegendText(priceStripShape, offPeakTimeRange)}</p>
+        {/* OA-168: a dot-based legend naming the same two states the rate
+            bar above highlights -- a hollow dot for day rate, the same
+            filled accent dot the bar's own off-peak segment uses for
+            off-peak, so the legend and the bar read as one treatment
+            rather than two unrelated colour systems. */}
+        {priceStripShape === 'two-rate' ? (
+          <p className="landing-time-profile__price-legend">
+            <span className="landing-time-profile__legend-item">
+              <span className="landing-time-profile__legend-dot" data-tone="day" aria-hidden="true" />
+              Day rate
+            </span>
+            <span className="landing-time-profile__legend-item">
+              <span className="landing-time-profile__legend-dot" data-tone="offpeak" aria-hidden="true" />
+              <strong>Off-peak</strong>
+              {offPeakTimeRange ? ` ${offPeakTimeRange}` : ''}
+            </span>
+          </p>
+        ) : priceStripShape === 'flat' ? (
+          <p className="landing-time-profile__price-legend">
+            <span className="landing-time-profile__legend-dot" data-tone="flat" aria-hidden="true" />
+            Flat rate — the same price all day
+          </p>
+        ) : (
+          <p className="landing-time-profile__price-legend landing-time-profile__price-legend--gradient">
+            <span className="landing-time-profile__legend-gradient-label">Cheaper</span>
+            <span className="landing-time-profile__legend-gradient" aria-hidden="true" />
+            <span className="landing-time-profile__legend-gradient-label">More expensive</span>
+          </p>
+        )}
 
         {/* Follow-up fix: event chips/labels used to live inside
             `__track` itself, which clips (`overflow: hidden`, needed so
             the price-neutral columns keep the track's own rounded
             corners) -- a long label on an event near the end of the day
-            (e.g. "Tumble dryer"/"Dishwasher" around 22:00-23:30) could
-            get visually cut off at the track's right edge. `__track-wrap`
-            sizes to the track (the only element in normal flow inside
-            it), and `__event-layer` is an absolutely-positioned sibling
-            covering the exact same box but *without* the clip, so a
-            chip's label can overflow past the track's edge without being
-            hidden. Percentage-based left/width positioning is unaffected
-            since the layer's box is identical to the track's. */}
+            could get visually cut off at the track's right edge.
+            `__track-wrap` sizes to the track (the only element in normal
+            flow inside it), and `__event-layer` is an absolutely-
+            positioned sibling covering the exact same box but *without*
+            the clip, so a card can overflow past the track's edge
+            without being hidden. Percentage-based left positioning is
+            unaffected since the layer's box is identical to the track's. */}
         <div className="landing-time-profile__track-wrap">
         <div
-          ref={trackRef}
           className="landing-time-profile__track"
           role="group"
           aria-label={heading}
           aria-describedby={selectedSlot ? panelId : undefined}
-          style={{ '--event-lanes': eventLaneCount } as React.CSSProperties}
         >
+          {/* OA-133/OA-168: a subtle background tint across the off-peak
+              window -- the same accent hue the legend dot/rate-bar
+              highlight above use, kept deliberately much lower-opacity
+              here so it reads as ambient context for the usage shape
+              rather than competing with it. */}
+          {offPeakSegment && (
+            <div
+              className="landing-time-profile__offpeak-band"
+              aria-hidden="true"
+              style={{
+                left: `${(offPeakSegment.startSlot / day.slots.length) * 100}%`,
+                width: `${(offPeakSegment.slotCount / day.slots.length) * 100}%`,
+              }}
+            />
+          )}
+
           {day.slots.map((slot, slotIndex) => {
             const isSelected = selected === slotIndex
             return (
@@ -765,124 +752,89 @@ function LandingTimeProfile({
           </svg>
         </div>
 
-        {/* OA-105/OA-115: every shared household event, overlaid in the
-              same position on every tab -- a fixed, non-interactive chip
-              here, or (Optimise only) a draggable chip, clamped by the
-              caller to that event's own valid same-day window. OA-115:
-              each chip is a fixed-height row anchored near the top of the
-              track (not a box stretching the chart's full height, which
-              read as a new data band rather than an object), positioned
-              horizontally as a percentage of the track (same basis as the
-              structural-peak annotation above) so it lines up with the
-              columns it covers regardless of rendered width -- but its
-              *label* is allowed to overflow that coloured indicator
-              (`overflow: visible` in CSS) rather than hard-truncating, so
-              short events like "Washing machine" never render as "Wa...". */}
+        {/* OA-105/OA-168: every shared household event, grouped (by
+            `groupOverlappingEvents`) into one annotation card per cluster
+            of overlapping/adjacent events, floating above the chart --
+            replaces the old per-event lane chips (see the component doc
+            comment for why collision-avoidance beyond the spacing pass
+            below isn't needed once nothing is draggable). `layoutEventCardPositions`
+            spaces cards that would otherwise sit too close together out
+            left-to-right; a curved connector (drawn below, in the same
+            layer) links each card back down to the real time position it
+            describes whenever that spacing has moved it away. */}
         <div className="landing-time-profile__event-layer">
-          {renderableEventOverlays.map((overlay) => {
-            const left = `${(overlay.startSlot / day.slots.length) * 100}%`
-            const width = `${(overlay.slotCount / day.slots.length) * 100}%`
-            const timeRange = eventTimeRange(overlay)
-            // OA-107/OA-115: collision-safe lanes -- each event occupies
-            // its own fixed-height row, stacked downward from
-            // `EVENT_CHIP_TOP_OFFSET_PX`, instead of dividing the full
-            // track height between however many lanes are in play.
-            const lane = eventLanes.get(overlay.id) ?? 0
-            const laneStyle = {
-              top: `${EVENT_CHIP_TOP_OFFSET_PX + lane * (EVENT_CHIP_HEIGHT_PX + EVENT_CHIP_GAP_PX)}px`,
-              height: `${EVENT_CHIP_HEIGHT_PX}px`,
-              bottom: 'auto' as const,
-            }
-            const showTimeInLabel = overlay.slotCount > COMPACT_LABEL_MAX_SLOT_COUNT
-            // OA-115: "selection should feel like this event is active, not
-            // this entire time slice is selected" -- reuses the same
-            // focused/hovered/dragging state OA-108's popover already
-            // tracks, as the one local "active" emphasis for the chip
-            // itself (stronger brand-accent outline/fill), never a
-            // full-chart selection band.
-            const isActive = activeEventId === overlay.id
-            // Centred on the event's own span, same horizontal basis as the
-            // chip -- thicker and in the brand's complementary amber (vs.
-            // the neutral white hour/slot guides) so an event's drop-line is
-            // never mistaken for the track's own time guidance.
-            const lineLeft = `${((overlay.startSlot + overlay.slotCount / 2) / day.slots.length) * 100}%`
-            const lineStyle = { left: lineLeft, top: laneStyle.top }
-
-            if (!overlay.movable) {
+          <svg
+            className="landing-time-profile__event-connectors"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            {positionedEventGroups.map(({ group, naturalLeftPercent, displayLeftPercent }) => {
+              const groupKey = group.events.map((e) => e.id).join('+')
+              // A smooth S-curve from just under the card (vertical
+              // tangent, so it reads as leaving the card cleanly) down to
+              // the real time position at the foot of the track (also
+              // vertical, so it reads as landing squarely on it).
               return (
-                <div key={overlay.id}>
-                  <span
-                    className="landing-time-profile__event-line"
-                    data-fixed=""
-                    style={lineStyle}
-                    aria-hidden="true"
-                  />
-                  <div
-                    className="landing-time-profile__event-chip"
-                    data-fixed=""
-                    style={{ left, width, ...laneStyle }}
-                  >
-                    <span className="landing-time-profile__event-chip-label">
-                      <span className="landing-time-profile__event-chip-name">{overlay.label}</span>
-                      {showTimeInLabel && (
-                        <span className="landing-time-profile__event-chip-time">{timeRange}</span>
-                      )}
-                    </span>
-                  </div>
-                </div>
-              )
-            }
-
-            // OA-108: the contextual saving popover -- only while this
-            // specific overlay is focused/hovered/being dragged, and only
-            // when the caller has something to say about it (e.g. nothing
-            // to show until the event has actually moved).
-            const savingText = eventSavingText?.(overlay.id)
-            const showPopover = isActive && Boolean(savingText)
-
-            return (
-              <div key={overlay.id}>
-                <span
-                  className="landing-time-profile__event-line"
-                  data-active={isActive || undefined}
-                  style={lineStyle}
-                  aria-hidden="true"
+                <path
+                  key={groupKey}
+                  className="landing-time-profile__event-connector"
+                  d={`M ${displayLeftPercent} 20 C ${displayLeftPercent} 60, ${naturalLeftPercent} 60, ${naturalLeftPercent} 100`}
                 />
-                <div
-                  className="landing-time-profile__event-chip"
-                  data-active={isActive || undefined}
-                  role="slider"
-                  tabIndex={0}
-                  aria-label={`Move ${overlay.label.toLowerCase()}`}
-                  aria-valuemin={overlay.minStartSlot}
-                  aria-valuemax={overlay.maxStartSlot}
-                  aria-valuenow={overlay.startSlot}
-                  aria-valuetext={`${overlay.label}, ${timeRange}${savingText ? ` -- ${savingText}` : ''}`}
-                  style={{ left, width, ...laneStyle }}
-                  onPointerDown={(e) => {
-                    setActiveEventId(overlay.id)
-                    handleEventPointerDown(e)
-                  }}
-                  onPointerMove={(e) => handleEventPointerMove(e, overlay)}
-                  onPointerEnter={() => setActiveEventId(overlay.id)}
-                  onPointerLeave={() => setActiveEventId((current) => (current === overlay.id ? null : current))}
-                  onFocus={() => setActiveEventId(overlay.id)}
-                  onBlur={() => setActiveEventId((current) => (current === overlay.id ? null : current))}
-                  onKeyDown={(e) => handleEventKeyDown(e, overlay)}
-                >
-                  {/* OA-115: "optional small drag handle/affordance" -- a
-                      quiet grip mark, movable events only, so a fixed
-                      annotation is never mistaken for something draggable. */}
-                  <span className="landing-time-profile__event-chip-handle" aria-hidden="true" />
-                  <span className="landing-time-profile__event-chip-label">
-                    <span className="landing-time-profile__event-chip-name">{overlay.label}</span>
-                    {showTimeInLabel && (
-                      <span className="landing-time-profile__event-chip-time">{timeRange}</span>
+              )
+            })}
+          </svg>
+          {positionedEventGroups.map(({ group, displayLeftPercent }) => {
+            const timeRange = eventTimeRange(group.startSlot, group.endSlot - group.startSlot)
+            const isGrouped = group.events.length > 1
+            const groupKey = group.events.map((e) => e.id).join('+')
+            return (
+              <div
+                key={groupKey}
+                className="landing-time-profile__event-group"
+                style={{ left: `${displayLeftPercent}%` }}
+              >
+                <div className="landing-time-profile__event-card">
+                  <span className="landing-time-profile__event-card-time">
+                    {/* OA-168: a small clock mark only on a grouped card --
+                        a quiet visual cue that this one time range covers
+                        several appliances, not just one. */}
+                    {isGrouped && (
+                      <svg
+                        className="landing-time-profile__event-card-clock"
+                        viewBox="0 0 16 16"
+                        aria-hidden="true"
+                      >
+                        <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.3" />
+                        <path d="M8 4.5V8l2.6 1.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                      </svg>
                     )}
+                    {timeRange}
                   </span>
-                  {showPopover && (
-                    <span className="landing-time-profile__event-popover" role="status">
-                      {savingText}
+                  {isGrouped ? (
+                    <ul className="landing-time-profile__event-card-list">
+                      {group.events.map((overlay) => (
+                        <li key={overlay.id}>
+                          {overlay.label}
+                          {overlay.safetyConstraintNote && (
+                            <InfoTooltip label={`Why is ${overlay.label.toLowerCase()} kept in this window?`}>
+                              {overlay.safetyConstraintNote}
+                            </InfoTooltip>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <span className="landing-time-profile__event-card-name">
+                      {group.events[0].label}
+                      {group.events[0].safetyConstraintNote && (
+                        <InfoTooltip label={`Why is ${group.events[0].label.toLowerCase()} kept in this window?`}>
+                          {group.events[0].safetyConstraintNote}
+                        </InfoTooltip>
+                      )}
+                      {group.events[0].savingText && (
+                        <span className="landing-time-profile__event-card-saving">{group.events[0].savingText}</span>
+                      )}
                     </span>
                   )}
                 </div>
@@ -928,6 +880,7 @@ function LandingTimeProfile({
       <div className="landing-time-profile__below-chart">
         <p className="landing-time-profile__cost-note">{costNote}</p>
         {caveat && <div className="landing-time-profile__caveat">{caveat}</div>}
+        {safetyNote && <div className="landing-time-profile__safety-note">{safetyNote}</div>}
         {explanation && <div className="landing-time-profile__explanation">{explanation}</div>}
       </div>
 

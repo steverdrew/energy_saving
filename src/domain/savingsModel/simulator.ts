@@ -16,6 +16,7 @@
 
 import type { ApplianceEvent, HouseholdArchetype } from './archetypes'
 import { SLOTS_PER_DAY } from './archetypes'
+import { totalEventKwh } from '../applianceEvents'
 
 export interface TariffPriceCurve {
   id: string
@@ -62,7 +63,7 @@ function clampToValidWindow(event: ApplianceEvent, startSlot: number): number {
 /** Lays an archetype's events plus base/background load onto a 48-slot kWh array, preserving total kWh regardless of event positions. */
 export function buildUsageProfile(archetype: HouseholdArchetype, eventOverrides: Readonly<Record<string, number>> = {}): number[] {
   const positions = eventPositions(archetype.events, eventOverrides)
-  const eventKwhTotal = archetype.events.reduce((sum, e) => sum + e.kwhPerSlot * e.slotCount, 0)
+  const eventKwhTotal = archetype.events.reduce((sum, e) => sum + totalEventKwh(e), 0)
   const baseLoadTotal = archetype.annualKwh / 365 - eventKwhTotal
   if (baseLoadTotal < 0) {
     throw new Error(
@@ -86,7 +87,7 @@ export function buildUsageProfile(archetype: HouseholdArchetype, eventOverrides:
 
   for (const event of archetype.events) {
     const start = positions[event.id]
-    for (let i = 0; i < event.slotCount; i++) usage[start + i] += event.kwhPerSlot
+    for (let i = 0; i < event.slotCount; i++) usage[start + i] += event.kwhShape[i]
   }
   return usage
 }
@@ -140,11 +141,16 @@ export function timingEffect(archetype: HouseholdArchetype, tariff: TariffPriceC
     if (!event.movable) continue
     const min = Math.max(event.validStartSlotRange.min, dependencyMinStartSlot(event, optimisedOverrides, archetype.events))
     const max = event.validStartSlotRange.max
+    // Tie-broken toward the event's own actual slot -- a candidate slot
+    // only displaces it when strictly cheaper, so a flat/no-opportunity
+    // tariff never reports a "moved" event purely from loop iteration
+    // order over equally-priced slots.
     let bestSlot = event.actualStartSlot
-    let bestCost = Infinity
+    let bestCost = 0
+    for (let i = 0; i < event.slotCount; i++) bestCost += event.kwhShape[i] * tariff.ratePence[event.actualStartSlot + i]
     for (let slot = min; slot <= max; slot++) {
       let cost = 0
-      for (let i = 0; i < event.slotCount; i++) cost += event.kwhPerSlot * tariff.ratePence[slot + i]
+      for (let i = 0; i < event.slotCount; i++) cost += event.kwhShape[i] * tariff.ratePence[slot + i]
       if (cost < bestCost) {
         bestCost = cost
         bestSlot = slot

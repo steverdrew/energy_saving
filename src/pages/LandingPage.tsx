@@ -1,4 +1,5 @@
 import type { MouseEvent } from 'react'
+import { Link } from 'react-router-dom'
 import LandingDemo from '../components/LandingDemo'
 import PublicFooter from '../components/PublicFooter'
 import './LandingPage.css'
@@ -32,33 +33,43 @@ function LandingPage() {
   return (
     <>
       <section className="landing-hero" id="hero">
-        {/* OA-111: testing "Hunt the energy vampires in your home." as the
-            primary hook while the product/app name is still being
-            decided -- a memorable problem statement, not the whole
-            product identity. "energy vampires" gets the existing
-            gradient treatment (reused from OA-87's design system, not a
-            new vampire-themed style) so it reads as the one emphasised
-            phrase; the rest of the headline and the subhead stay plain,
-            credible copy with no further vampire/fang/Halloween
-            language, per the ticket's guardrails. Doesn't reference
-            "Shift & Save" by name, so this copy still works if the final
-            app name changes later. */}
-        <h1 className="landing-hero__headline">
-          Hunt the <span className="landing-hero__line--gradient">energy vampires</span> in your home.
-        </h1>
+        {/* OA-168: replaces OA-111's "Hunt the energy vampires in your
+            home" hook -- that framing was too narrow (it only spoke to
+            waste detection), while the product is now about tariff
+            comparison, practical timing optimisation, waste, neutral
+            recommendations, and "do nothing" being a genuine valid
+            answer. The new headline is the exact copy already used as
+            VisionPage's own title (OA-151) -- the hero and the vision
+            page now open with the same statement rather than two
+            competing ones. The vampire phrase itself isn't deleted: it's
+            repositioned as the waste section's own heading (see
+            VisionPage.tsx's "energy vampires" section). No gradient
+            emphasis on any one word here -- unlike "energy vampires",
+            there's no single phrase this headline is built to spotlight. */}
+        <h1 className="landing-hero__headline">Small changes. Bigger consequences.</h1>
         <p className="landing-hero__sub">
-          See where your electricity goes, what&rsquo;s costing you, and what you could save by changing when you use
-          it.
+          See what your electricity is costing you, whether another tariff would suit you better, and what — if
+          anything — is actually worth changing.
         </p>
-        {/* OA-92: hero CTA starts the explanatory journey (Hero -> See how
-            it works -> Interactive comparison -> Sign up free) -- an
-            in-page jump to the comparison section below, not a route
-            change. href="#comparison-demo" is the no-JS/keyboard-default
-            fallback; handleSeeHowItWorksClick takes over for a real click
-            to avoid the scroll container mismatch described there. */}
-        <a href="#comparison-demo" className="landing-hero__cta" onClick={handleSeeHowItWorksClick}>
-          See how it works
-        </a>
+        <div className="landing-hero__ctas">
+          {/* OA-92: hero CTA starts the explanatory journey (Hero -> See
+              how it works -> Interactive comparison -> Sign up free) --
+              an in-page jump to the comparison section below, not a
+              route change. href="#comparison-demo" is the no-JS/keyboard-
+              default fallback; handleSeeHowItWorksClick takes over for a
+              real click to avoid the scroll container mismatch described
+              there. */}
+          <a href="#comparison-demo" className="landing-hero__cta" onClick={handleSeeHowItWorksClick}>
+            See how it works
+          </a>
+        </div>
+        {/* OA-171: sets the account expectation right under the CTA so
+            visitors aren't surprised by it during onboarding, without
+            cluttering the hero with the Smart tariff / smart meter
+            detail -- that stays in onboarding where it's actionable. */}
+        <p className="landing-hero__requirement">
+          Requires an Octopus Energy account · <Link to="/why-octopus">Learn more</Link>
+        </p>
       </section>
 
       <LandingDemo />

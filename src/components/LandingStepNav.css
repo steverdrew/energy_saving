@@ -1,0 +1,115 @@
+/* OA-156: replaces the old `.landing-story-scrubber` drag track/thumb with
+   a plain row of step buttons plus Back/Next -- no pointer-dragging, no
+   fractional in-between state, so there's no track/fill/thumb geometry to
+   style here at all, just button states. */
+/* OA-156 (refinement): matches `.landing-time-profile__segmented`'s own
+   box exactly (`width: 100%` up to the same 420px cap, left-aligned at
+   the same starting edge as the tariff tabs above it, never centred
+   against the whole card) -- so the two step-nav rows read as centred
+   underneath those tabs specifically, not the page. */
+.landing-step-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 420px;
+  margin: 16px 0;
+}
+
+.landing-step-nav__steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex-wrap: wrap;
+}
+
+.landing-step-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* OA-156 (redesign): larger, more deliberate step badges -- each step is
+   its own clear block (generous padding, rounded corners) rather than a
+   small text label, matching the mockup's "one obvious card per step"
+   treatment instead of a compact inline row. */
+.landing-step-nav__step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 22px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--text);
+  opacity: 0.6;
+  cursor: pointer;
+  transition: opacity 0.2s ease, color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.landing-step-nav__badge {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.landing-step-nav__step > :not(.landing-step-nav__badge) {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.landing-step-nav__step[data-active] {
+  color: var(--text-h, #fff);
+  background: var(--accent-bg, rgba(168, 85, 247, 0.16));
+  border-color: var(--accent-border, rgba(168, 85, 247, 0.55));
+  opacity: 1;
+}
+
+/* The steps themselves are the only navigation now (no separate Back/Next
+   pair) -- same hover/focus treatment as the tariff tabs
+   (`.landing-time-profile__segmented-button`) so an enabled, inactive
+   step (clickable to jump to) reads as part of the same interactive
+   family as the selectors above it, not just a quieter label. */
+.landing-step-nav__step:hover:not([data-active]):not(:disabled) {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-h, #fff);
+  opacity: 1;
+}
+
+.landing-step-nav__step:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* OA-117 (carried over): "the disabled state should be visually clear but
+   not punitive" -- stays fully legible, just not clickable, with a lower
+   opacity ceiling than an enabled-but-inactive step so it still reads as
+   "not yet available" at a glance. */
+.landing-step-nav__step[data-locked] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.landing-step-nav__connector {
+  color: var(--text);
+  opacity: 0.4;
+  font-size: 18px;
+}
+
+@media (max-width: 480px) {
+  .landing-step-nav__steps {
+    gap: 4px;
+  }
+
+  .landing-step-nav__step {
+    padding: 8px 10px;
+  }
+}

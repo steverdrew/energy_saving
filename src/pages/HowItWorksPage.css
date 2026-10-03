@@ -1,0 +1,105 @@
+/* OA-142: Phase One UI mockup for the How it works page. Keeps the
+   existing [data-landing] dark/purple tokens and .landing-card glass
+   treatment from publicContent.css -- this file only adds the 3-step
+   hierarchy, step badges and CTA that OA-142 asks for, so the three core
+   sections (what it does / same usage different tariff / better timing)
+   read as one obvious sequence instead of a flat stack of cards. */
+
+.how-it-works__steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  max-width: 1080px;
+  margin: 24px auto 0;
+  padding: 0 24px;
+}
+
+@media (max-width: 860px) {
+  .how-it-works__steps {
+    grid-template-columns: 1fr;
+    max-width: 640px;
+  }
+}
+
+/* OA-142: step cards reuse .landing-card's glass treatment via
+   composition in the JSX (className="landing-card how-it-works__step")
+   rather than redefining border/background/blur here. */
+.how-it-works__step {
+  margin: 0;
+  text-align: left;
+}
+
+.how-it-works__step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 12px;
+  border-radius: 50%;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  color: var(--text-h);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.how-it-works__step h2 {
+  font-size: 18px;
+  margin: 0 0 8px;
+  color: var(--text-h);
+}
+
+.how-it-works__step p {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.how-it-works__cta-row {
+  text-align: center;
+  margin: 40px auto 0;
+}
+
+/* OA-142: same pill treatment as the landing hero's CTA (LandingPage.css
+   .landing-hero__cta) -- duplicated at this small scale rather than
+   extracted into a shared component, since no shared CTA component
+   exists yet (see PublicFooter/LandingDemo, which each define their own
+   CTA link styling too). */
+.how-it-works__cta {
+  display: inline-block;
+  padding: 14px 28px;
+  font-size: 18px;
+  font-weight: 600;
+  text-decoration: none;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 999px;
+  box-shadow: 0 8px 28px rgba(168, 85, 247, 0.4);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.how-it-works__cta:hover {
+  box-shadow: 0 10px 34px rgba(168, 85, 247, 0.55);
+  transform: translateY(-1px);
+}
+
+.how-it-works__cta-note {
+  display: block;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* OA-142: secondary content (dynamic-tariff explainer, compatibility)
+   stays in the original single-column .landing-card layout, visually
+   smaller/quieter than the 3-step grid above so the core logic stays
+   the obvious focal point, per the ticket's "use visual hierarchy"
+   design direction. */
+.how-it-works__secondary {
+  margin-top: 8px;
+}
+
+.how-it-works__secondary .landing-card {
+  max-width: 640px;
+}

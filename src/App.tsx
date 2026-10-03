@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import './App.css'
 import { useAuth } from './auth/AuthContext'
@@ -21,11 +22,24 @@ import OptimisedPage from './pages/OptimisedPage'
 import PrivacyPage from './pages/PrivacyPage'
 import SavingsPage from './pages/SavingsPage'
 import TermsPage from './pages/TermsPage'
+import VisionPage from './pages/VisionPage'
+import WhyOctopusPage from './pages/WhyOctopusPage'
 
-// OA-93: Privacy/Terms/Contact are footer-only links (not top nav) --
-// still public/dark-shelled pages, so included here for isPublicSiteRoute
-// below, but deliberately not added to the header nav's link list.
-const PUBLIC_SITE_PATHS = ['/', '/login', '/how-it-works', '/about', '/privacy', '/terms', '/contact']
+// OA-93/OA-169: Privacy/Terms/Contact/Why Octopus are footer-only links
+// (not top nav) -- still public/dark-shelled pages, so included here for
+// isPublicSiteRoute below, but deliberately not added to the header
+// nav's link list.
+const PUBLIC_SITE_PATHS = [
+  '/',
+  '/login',
+  '/how-it-works',
+  '/vision',
+  '/about',
+  '/why-octopus',
+  '/privacy',
+  '/terms',
+  '/contact',
+]
 
 // The marketing landing page is aimed at signed-out visitors (its only CTA
 // is "sign in"). A signed-in user landing on "/" — e.g. from a bookmark —
@@ -53,9 +67,22 @@ function App() {
   // pages aimed at prospective users, not account-area content.
   const isPublicSiteRoute = !loading && !user && PUBLIC_SITE_PATHS.includes(location.pathname)
 
+  // `.app-shell[data-landing]`'s `overflow-x: hidden` (App.css) implicitly
+  // makes it (not `window`) the scrolling container on public-site routes
+  // -- react-router never resets scroll position on navigation itself, so
+  // without this, clicking a nav/footer link (e.g. "Vision") lands on the
+  // new page at whatever scroll depth the previous page was left at.
+  // Resets both the shell and the window so this holds regardless of
+  // which one is actually scrolling for the current route.
+  const appShellRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    appShellRef.current?.scrollTo({ top: 0 })
+    window.scrollTo(0, 0)
+  }, [location.pathname])
+
   return (
     <OctopusConnectionProvider>
-      <div className="app-shell" data-landing={isPublicSiteRoute || undefined}>
+      <div className="app-shell" data-landing={isPublicSiteRoute || undefined} ref={appShellRef}>
         <header className="app-header">
           <div className="app-header__inner">
             <NavLink to="/" className="app-header__brand">
@@ -80,6 +107,7 @@ function App() {
               ) : (
                 <>
                   <NavLink to="/how-it-works">How it works</NavLink>
+                  <NavLink to="/vision">Vision</NavLink>
                   <NavLink to="/about">About</NavLink>
                   <NavLink to="/login">Sign in</NavLink>
                 </>
@@ -93,7 +121,9 @@ function App() {
             <Route path="/" element={<HomeRoute />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/how-it-works" element={<HowItWorksPage />} />
+            <Route path="/vision" element={<VisionPage />} />
             <Route path="/about" element={<AboutPage />} />
+            <Route path="/why-octopus" element={<WhyOctopusPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/contact" element={<ContactPage />} />

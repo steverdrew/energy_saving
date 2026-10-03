@@ -19,6 +19,7 @@ const DEHUMIDIFIER_ID = 'dehumidifier' // OA-107: broadest window (0-44) -- used
 const OVEN_ID = 'oven_cooking' // OA-107: identified but fixed -- never movable.
 const dishwasherDefinition = LANDING_DEMO_EVENTS.find((e) => e.id === DISHWASHER_ID)!
 const washingMachineDefinition = LANDING_DEMO_EVENTS.find((e) => e.id === WASHING_MACHINE_ID)!
+const tumbleDryerDefinition = LANDING_DEMO_EVENTS.find((e) => e.id === TUMBLE_DRYER_ID)!
 const dehumidifierDefinition = LANDING_DEMO_EVENTS.find((e) => e.id === DEHUMIDIFIER_ID)!
 const ovenDefinition = LANDING_DEMO_EVENTS.find((e) => e.id === OVEN_ID)!
 
@@ -189,11 +190,10 @@ describe('buildLandingDemoFixture', () => {
       expect(clampEventStartSlot(DEHUMIDIFIER_ID, -5)).toBe(dehumidifierDefinition.validStartSlotRange.min)
       expect(clampEventStartSlot(DEHUMIDIFIER_ID, 1000)).toBe(dehumidifierDefinition.validStartSlotRange.max)
       expect(clampEventStartSlot(DEHUMIDIFIER_ID, 12.4)).toBe(12)
-      // The washing machine's requiresAwakeHome window is narrower and
-      // starts later in the day -- clamping is per-event, not a single
-      // shared range.
-      expect(clampEventStartSlot(WASHING_MACHINE_ID, 0)).toBe(washingMachineDefinition.validStartSlotRange.min)
-      expect(washingMachineDefinition.validStartSlotRange.min).toBeGreaterThan(dehumidifierDefinition.validStartSlotRange.min)
+      // The washing machine's own window ends earlier in the day than the
+      // dehumidifier's -- clamping is per-event, not a single shared range.
+      expect(clampEventStartSlot(WASHING_MACHINE_ID, 1000)).toBe(washingMachineDefinition.validStartSlotRange.max)
+      expect(washingMachineDefinition.validStartSlotRange.max).toBeLessThan(dehumidifierDefinition.validStartSlotRange.max)
 
       const fixtureAtMax = buildLandingDemoFixture({ [DEHUMIDIFIER_ID]: 1000 })
       expect(fixtureAtMax.optimise.day.slots).toHaveLength(48)
@@ -410,8 +410,8 @@ describe('buildLandingDemoFixture', () => {
 
     it('builds compare/optimise against the selected tariff’s own rates and name', () => {
       const economy7 = buildLandingDemoFixture({}, 'economy-7')
-      expect(economy7.compare.tariffName).toBe('Economy 7')
-      expect(economy7.optimise.tariffName).toBe('Economy 7')
+      expect(economy7.compare.tariffName).toBe('Octopus Economy 7')
+      expect(economy7.optimise.tariffName).toBe('Octopus Economy 7')
 
       const standardVariable = buildLandingDemoFixture({}, 'standard-variable')
       expect(standardVariable.compare.tariffName).toBe('Standard Variable')
@@ -463,6 +463,40 @@ describe('buildLandingDemoFixture', () => {
 
     it('defaults cheapestStartSlotForEvent to Agile when no tariff is given, unchanged from before this ticket', () => {
       expect(cheapestStartSlotForEvent('dehumidifier')).toBe(cheapestStartSlotForEvent('dehumidifier', {}, 'agile'))
+    })
+
+    // OA-165: the washing machine and dishwasher previously had
+    // daytime-only/evening-only windows authored before Economy 7 existed,
+    // so "Optimise" could never move them into its overnight off-peak
+    // window even though doing so is genuinely cheaper -- this is the bug
+    // the ticket fixes.
+    it('optimises the washing machine into the Economy 7 off-peak window', () => {
+      const best = cheapestStartSlotForEvent(WASHING_MACHINE_ID, {}, 'economy-7')
+      expect(best).toBeGreaterThanOrEqual(ECONOMY_7_OFF_PEAK_SLOT_RANGE.min)
+      expect(best + washingMachineDefinition.slotCount - 1).toBeLessThanOrEqual(ECONOMY_7_OFF_PEAK_SLOT_RANGE.max)
+    })
+
+    it('optimises the dishwasher into the Economy 7 off-peak window', () => {
+      const best = cheapestStartSlotForEvent(DISHWASHER_ID, {}, 'economy-7')
+      expect(best).toBeGreaterThanOrEqual(ECONOMY_7_OFF_PEAK_SLOT_RANGE.min)
+      expect(best + dishwasherDefinition.slotCount - 1).toBeLessThanOrEqual(ECONOMY_7_OFF_PEAK_SLOT_RANGE.max)
+    })
+
+    // OA-165: the tumble dryer must never be scheduled to run unattended
+    // overnight (fire-risk guidance) -- its own static window floor
+    // (08:30) enforces this regardless of tariff or of the washing
+    // machine moving earlier under Economy 7.
+    it('never optimises the tumble dryer into the Economy 7 off-peak window, even once the washing machine moves earlier', () => {
+      const washingMachineBest = cheapestStartSlotForEvent(WASHING_MACHINE_ID, {}, 'economy-7')
+      expect(washingMachineBest).toBeLessThanOrEqual(ECONOMY_7_OFF_PEAK_SLOT_RANGE.max) // sanity check: it did move overnight
+
+      const dryerBest = cheapestStartSlotForEvent(
+        TUMBLE_DRYER_ID,
+        { [WASHING_MACHINE_ID]: washingMachineBest },
+        'economy-7',
+      )
+      expect(dryerBest).toBe(tumbleDryerDefinition.validStartSlotRange.min)
+      expect(dryerBest).toBeGreaterThan(ECONOMY_7_OFF_PEAK_SLOT_RANGE.max)
     })
   })
 })

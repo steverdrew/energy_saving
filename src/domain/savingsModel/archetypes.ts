@@ -8,25 +8,16 @@
  */
 
 import { requireVerifiedOrPlausible } from './assumptions'
+import type { ApplianceEvent } from '../applianceEvents'
+import { FAMILY_TYPICAL_APPLIANCE_EVENTS, isRealApplianceEvent } from '../applianceEvents'
 
 /** 48 half-hour clock slots per day, per OA-118's explicit rule. */
 export const SLOTS_PER_DAY = 48
 
-export interface ApplianceEvent {
-  id: string
-  label: string
-  kwhPerSlot: number
-  /** Contiguous half-hour slots this event occupies -- fixed; only its start slot can move. */
-  slotCount: number
-  /** This archetype's typical/actual start slot, before any optimisation. */
-  actualStartSlot: number
-  validStartSlotRange: { min: number; max: number }
-  occurrencesPerWeek: number
-  movable: boolean
-  dependsOnEventId?: string
-  /** Informed by CREST-class evidence per OA-119's crest-domestic-demand-model-methodology entry, but not a literal CREST-extracted figure -- see that assumption's notes. */
-  evidenceBasis: 'crest-informed' | 'modelled-assumption'
-}
+// OA-160: `ApplianceEvent` now lives in `../applianceEvents.ts`, shared with
+// the landing-page demo fixture -- re-exported here so existing importers
+// of `archetypes.ts` need no changes.
+export type { ApplianceEvent }
 
 export interface HouseholdArchetype {
   id: string
@@ -73,7 +64,7 @@ export const HOUSEHOLD_ARCHETYPES: readonly HouseholdArchetype[] = [
       {
         id: 'washing_machine',
         label: 'Washing machine',
-        kwhPerSlot: 0.3,
+        kwhShape: [0.3, 0.3],
         slotCount: 2,
         actualStartSlot: 38, // 19:00 -- typical post-work evening wash
         validStartSlotRange: { min: 14, max: 44 },
@@ -84,7 +75,7 @@ export const HOUSEHOLD_ARCHETYPES: readonly HouseholdArchetype[] = [
       {
         id: 'dishwasher',
         label: 'Dishwasher',
-        kwhPerSlot: 0.4,
+        kwhShape: [0.4, 0.4],
         slotCount: 2,
         actualStartSlot: 40, // 20:00
         validStartSlotRange: { min: 36, max: 46 },
@@ -97,57 +88,11 @@ export const HOUSEHOLD_ARCHETYPES: readonly HouseholdArchetype[] = [
   {
     id: 'family-typical',
     label: 'Family household (typical)',
-    description: 'OA-99\'s Typical household shape, reused as this model\'s central archetype -- see src/domain/landingDemoFixture.ts for the identical event set backing the landing-page demo.',
+    description: 'OA-99\'s Typical household shape, reused as this model\'s central archetype -- OA-160: the exact same event list (`FAMILY_TYPICAL_APPLIANCE_EVENTS`) also backs the landing-page demo in src/domain/landingDemoFixture.ts, so the two are no longer independently-authored copies of "the same household".',
     annualKwh: MEDIUM_TDCV_KWH,
     hasEv: false,
     standbyAnnualCostGbp: scaledStandbyRange(1),
-    events: [
-      {
-        id: 'washing_machine',
-        label: 'Washing machine',
-        kwhPerSlot: 0.35,
-        slotCount: 2,
-        actualStartSlot: 14,
-        validStartSlotRange: { min: 14, max: 36 },
-        occurrencesPerWeek: 3,
-        movable: true,
-        evidenceBasis: 'crest-informed',
-      },
-      {
-        id: 'tumble_dryer',
-        label: 'Tumble dryer',
-        kwhPerSlot: 0.45,
-        slotCount: 3,
-        actualStartSlot: 16,
-        validStartSlotRange: { min: 16, max: 44 },
-        occurrencesPerWeek: 3,
-        movable: true,
-        dependsOnEventId: 'washing_machine',
-        evidenceBasis: 'crest-informed',
-      },
-      {
-        id: 'dishwasher',
-        label: 'Dishwasher',
-        kwhPerSlot: 0.45,
-        slotCount: 2,
-        actualStartSlot: 36,
-        validStartSlotRange: { min: 36, max: 46 },
-        occurrencesPerWeek: 4,
-        movable: true,
-        evidenceBasis: 'crest-informed',
-      },
-      {
-        id: 'oven_cooking',
-        label: 'Oven',
-        kwhPerSlot: 0.45,
-        slotCount: 2,
-        actualStartSlot: 35,
-        validStartSlotRange: { min: 35, max: 35 },
-        occurrencesPerWeek: 7,
-        movable: false,
-        evidenceBasis: 'modelled-assumption',
-      },
-    ],
+    events: FAMILY_TYPICAL_APPLIANCE_EVENTS,
   },
   {
     id: 'family-large',
@@ -160,7 +105,7 @@ export const HOUSEHOLD_ARCHETYPES: readonly HouseholdArchetype[] = [
       {
         id: 'washing_machine',
         label: 'Washing machine',
-        kwhPerSlot: 0.35,
+        kwhShape: [0.35, 0.35],
         slotCount: 2,
         actualStartSlot: 14,
         validStartSlotRange: { min: 14, max: 36 },
@@ -171,7 +116,7 @@ export const HOUSEHOLD_ARCHETYPES: readonly HouseholdArchetype[] = [
       {
         id: 'tumble_dryer',
         label: 'Tumble dryer',
-        kwhPerSlot: 0.45,
+        kwhShape: [0.45, 0.45, 0.45],
         slotCount: 3,
         actualStartSlot: 16,
         validStartSlotRange: { min: 16, max: 44 },
@@ -183,7 +128,7 @@ export const HOUSEHOLD_ARCHETYPES: readonly HouseholdArchetype[] = [
       {
         id: 'dishwasher',
         label: 'Dishwasher',
-        kwhPerSlot: 0.45,
+        kwhShape: [0.45, 0.45],
         slotCount: 2,
         actualStartSlot: 36,
         validStartSlotRange: { min: 36, max: 46 },
@@ -204,7 +149,7 @@ export const HOUSEHOLD_ARCHETYPES: readonly HouseholdArchetype[] = [
       {
         id: 'ev_charging',
         label: 'EV charging',
-        kwhPerSlot: 0.3,
+        kwhShape: [0.3, 0.3, 0.3, 0.3],
         slotCount: 4,
         actualStartSlot: 2,
         validStartSlotRange: { min: 0, max: 10 },
@@ -215,7 +160,7 @@ export const HOUSEHOLD_ARCHETYPES: readonly HouseholdArchetype[] = [
       {
         id: 'washing_machine',
         label: 'Washing machine',
-        kwhPerSlot: 0.35,
+        kwhShape: [0.35, 0.35],
         slotCount: 2,
         actualStartSlot: 14,
         validStartSlotRange: { min: 14, max: 36 },
@@ -226,7 +171,7 @@ export const HOUSEHOLD_ARCHETYPES: readonly HouseholdArchetype[] = [
       {
         id: 'dishwasher',
         label: 'Dishwasher',
-        kwhPerSlot: 0.45,
+        kwhShape: [0.45, 0.45],
         slotCount: 2,
         actualStartSlot: 36,
         validStartSlotRange: { min: 36, max: 46 },
@@ -255,7 +200,7 @@ export const HOUSEHOLD_ARCHETYPES: readonly HouseholdArchetype[] = [
       {
         id: 'immersion_heater',
         label: 'Immersion heater / hot-water boost',
-        kwhPerSlot: 1.2, // immersion heaters typically draw ~3kW -- 1.2kWh/slot approximates a part-cycle duty, not a full continuous 3kW draw across the whole event
+        kwhShape: [1.2, 1.2, 1.2], // immersion heaters typically draw ~3kW -- 1.2kWh/slot approximates a part-cycle duty, not a full continuous 3kW draw across the whole event
         slotCount: 3, // 1.5 hours
         actualStartSlot: 36, // 18:00 -- evening hot-water top-up, a plausible unexamined habit
         validStartSlotRange: { min: 0, max: 44 }, // genuinely flexible: no occupancy/safety constraint comparable to a washing machine
@@ -266,7 +211,7 @@ export const HOUSEHOLD_ARCHETYPES: readonly HouseholdArchetype[] = [
       {
         id: 'washing_machine',
         label: 'Washing machine',
-        kwhPerSlot: 0.35,
+        kwhShape: [0.35, 0.35],
         slotCount: 2,
         actualStartSlot: 14,
         validStartSlotRange: { min: 14, max: 36 },
@@ -277,7 +222,7 @@ export const HOUSEHOLD_ARCHETYPES: readonly HouseholdArchetype[] = [
       {
         id: 'tumble_dryer',
         label: 'Tumble dryer',
-        kwhPerSlot: 0.45,
+        kwhShape: [0.45, 0.45, 0.45],
         slotCount: 3,
         actualStartSlot: 16,
         validStartSlotRange: { min: 16, max: 44 },
@@ -296,7 +241,6 @@ export function getArchetype(id: string): HouseholdArchetype {
   return found
 }
 
-/** OA-106-style guard, reused from landingDemoFixture's isRealHouseholdEvent convention: an event overlay must correspond to a real, non-zero modelled load. */
-export function isRealApplianceEvent(event: ApplianceEvent): boolean {
-  return event.id.trim().length > 0 && event.label.trim().length > 0 && event.slotCount > 0 && event.kwhPerSlot > 0
-}
+// OA-160: `isRealApplianceEvent` now lives in `../applianceEvents.ts`,
+// re-exported here so existing importers of `archetypes.ts` need no changes.
+export { isRealApplianceEvent }

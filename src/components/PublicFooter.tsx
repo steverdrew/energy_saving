@@ -21,7 +21,9 @@ function PublicFooter() {
     <footer className="landing-footer landing-section-band" id="footer">
       <nav className="landing-footer__links" aria-label="More about Shift & Save">
         <Link to="/how-it-works">How it works</Link>
+        <Link to="/vision">Vision</Link>
         <Link to="/about">About</Link>
+        <Link to="/why-octopus">Why Octopus?</Link>
         <Link to="/privacy">Privacy</Link>
         <Link to="/terms">Terms</Link>
         <Link to="/contact">Contact</Link>

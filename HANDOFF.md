@@ -1,10 +1,216 @@
 # HANDOFF
 
-_Last updated: 2026-10-03 13:40 BST_
+_Last updated: 2026-10-03 19:20 BST_
 
 _Note: detailed history before 2026-10-03 lives in `git log` and the Jira
 tickets themselves (project `OA`, `altitudeconsulting.atlassian.net`), not
 here — keep this file under one page._
+
+## Most recent session: chart redesign to match a user-supplied mockup (OA-165/OA-167 follow-on; not yet a numbered ticket; built, verified, not committed)
+
+Steve pasted a visual mockup of the time-profile chart and asked for a
+redesign to match it. Confirmed scope with him first (three clarifying
+questions) before building:
+
+- **Events merge into grouped cards, dropping the old per-event lane
+  system.** `LandingTimeProfile.tsx`'s new `groupOverlappingEvents()`
+  merges events whose spans overlap, *or* start within
+  `EVENT_GROUP_MERGE_BUFFER_SLOTS` (2 half-hour slots / 1 hour) of each
+  other, into one floating annotation card (clock icon + time range +
+  either one bold name or a `<ul>` of names) above the chart, connected to
+  its time position by a thin drop-line. The merge-buffer was added after
+  live-verifying the first (strict-overlap-only) version: three adjacent-
+  but-technically-non-overlapping morning events (washing machine → tumble
+  dryer → dehumidifier) rendered as three cards fighting for the same few
+  dozen pixels. No real text-width measurement or lane-stacking fallback
+  (the old OA-107 system) -- just this buffer plus a simple left/right
+  edge clamp (`EVENT_CARD_EDGE_CLAMP_PERCENT`) -- a deliberate
+  simplification, see Decisions below.
+- **Dragging removed entirely.** Steve's explicit answer to "how should
+  dragging work after the redesign?" was "nothing is draggable on the
+  chart" -- `LandingTimeProfileEventOverlay` lost its `movable`/`onMove`/
+  `minStartSlot`/`maxStartSlot` variant (now one plain shape:
+  id/label/startSlot/slotCount/`safetyConstraintNote`/`savingText`).
+  `LandingDemo.tsx`: removed `moveEvent`, the `setOptimiseEventStartSlots`
+  setter (now a plain `useMemo` derived from `chosenTariffId` -- there's
+  no more manual override to layer on top of the auto-optimised schedule),
+  `effectiveValidStartSlotRange`/`clampEventStartSlot` imports (drag-only).
+  The OA-108 contextual saving popover (shown only on hover/focus/drag) is
+  now a `savingText` field always rendered inline in a single-event card
+  once Optimise has a genuine opportunity -- no more conditional
+  hover/focus gating, since there's no interaction left to gate on.
+- **Rate bar + legend redesign, per tariff shape** (Steve: "use the new
+  bar style everywhere, adapted per tariff shape"): `'two-rate'` (Economy
+  7) gets the mockup's exact look -- a plain muted track with one
+  highlighted (`--accent` purple) off-peak segment, plus a dot-legend ("○
+  Day rate ● **Off-peak** `<real time range>`"). `'flat'` gets a single
+  evenly-filled segment + one dot ("Flat rate — the same price all day").
+  `'dynamic'` (Agile) keeps its real 48-segment colour ramp (unchanged
+  functionally) but now sits inside the same `.landing-time-profile__rate-bar`
+  container, with a small gradient swatch in its legend built from the
+  same `RATE_COLOR_STEPS_DARK` array the track itself paints with (one
+  source of truth, never a hand-picked approximation). A new
+  `.landing-time-profile__offpeak-band` subtly tints the chart's own
+  background across the same off-peak window (same `--accent-bg` hue as
+  the legend dot/bar highlight, kept at low opacity, specifically so the
+  two treatments "feel more obviously related" per Steve's own feedback).
+- **Usage line restyled** from a white, `mix-blend-mode: overlay` fill
+  (read as "washed out" per Steve) to a clear purple edge
+  (`stroke: var(--accent)`, `vector-effect: non-scaling-stroke`) over a
+  darker purple fill (`rgba(168, 85, 247, 0.3)`).
+- **Drop-lines toned down** per Steve's feedback ("now the loudest thing
+  in the chart") -- lower opacity (0.35, was 0.6-0.75), thinner (1px, was
+  3px), finer dash, so the purple usage line stays primary.
+- **Every event card shares one quiet border/weight** (`1px solid
+  rgba(255,255,255,0.1)`) per Steve's feedback that the grouped card was
+  "too dominant" -- single-event and grouped cards are now the same
+  component family, differing only in body content (one bold name vs. a
+  bullet list).
+- Track height no longer scales with an `--event-lanes` CSS variable (that
+  system is gone -- grouping means there's only ever one row of cards now).
+- **Verified**: `npx tsc --noEmit` (clean), `npm run lint` (clean, same
+  pre-existing unrelated warnings), `npm test` (256/256 -- large rewrite of
+  `LandingTimeProfile.test.tsx`'s and `LandingDemo.test.tsx`'s event-overlay
+  coverage: dropped all slider/drag/lane assertions, added grouping/
+  merge-buffer/card-family coverage). Confirmed live in the browser on
+  Baseline (Standard Variable), Compare (Economy 7 -- off-peak bar/band/
+  legend all correct via DOM/computed-style inspection, not just
+  eyeballing a screenshot), and Optimise (Agile, grouped cards render
+  correctly, tumble dryer's safety info icon still opens/closes
+  correctly inside a grouped card, no leftover drag behaviour).
+
+### Decisions made this session
+
+- `EVENT_GROUP_MERGE_BUFFER_SLOTS = 2` (1 hour) was chosen empirically
+  after live-verifying the strict-overlap-only version visibly collided --
+  not from a ticket figure. Revisit if a future household archetype's
+  events are spaced in a way that merges things that shouldn't be, or
+  fails to merge things that still collide.
+- No real collision-avoidance/text-measurement pass for event cards (the
+  old OA-107 lane system is gone, replaced only by the merge buffer above
+  plus a simple edge clamp) -- judged acceptable because grouping already
+  resolves the realistic case (a handful of household events, several
+  landing in the same cheap window), and this demo never has enough
+  concurrent events for a left-to-right collision pass to earn its added
+  complexity back.
+- Dropped the OA-108 hover/focus-gated saving popover in favour of always
+  showing `savingText` inline in a single-event card -- a direct
+  consequence of removing dragging (there's no interaction left to gate
+  visibility on), not a separate product decision. Grouped (multi-event)
+  cards deliberately don't show per-event saving text, to keep the bullet
+  list from getting cluttered -- not requested either way, simplest option
+  taken.
+- Dynamic (Agile)'s rate bar keeps its real per-slot gradient coloring
+  unchanged (just re-housed in the new shared `.rate-bar` container) --
+  the mockup was specifically an Economy 7 example; adapting Agile's
+  already-correct-for-its-own-shape treatment to look more like the
+  two-rate highlight would have misrepresented it as having a single
+  off-peak window when it doesn't.
+
+### Possible follow-up (not actioned, flagged only)
+
+- No automated visual-regression test for the chart's actual rendered
+  colours/positions -- verification here was computed-style/DOM assertion
+  (jsdom) plus live browser screenshots, not a pixel-diff tool. Worth
+  adding if this chart keeps getting redesigned.
+- The merge buffer is a single global constant, not responsive to the
+  chart's actual rendered width (narrow viewports could still collide,
+  or over-merge on very wide ones). Flagged, not actioned -- no mobile
+  screenshot verification was done this session.
+
+## Most recent session: OA-166, OA-167, OA-168, OA-169 (built, verified, not committed)
+
+Ran concurrently in the same working tree as another active session (which
+was mid-edit on `LandingDemo.tsx`/`LandingTimeProfile.tsx` throughout --
+tariff-label renames, Economy 7 fix -- confirmed no conflicts with this
+session's own edits each time the file changed under me).
+
+- **OA-166 ("More info" dialog for the Typical household model)**: new
+  reusable `src/components/Dialog.tsx`/`.css` -- this codebase's first
+  accessible dialog (none existed; confirmed no `role="dialog"` anywhere
+  before this). Hand-rolled rather than native `<dialog>`/`showModal()`
+  (jsdom, this repo's test environment, doesn't implement its focus
+  trap/backdrop behaviour). Focus moves in on open, Tab/Shift+Tab cycles
+  within it, Escape closes it, focus returns to the trigger on close.
+  `LandingDemo.tsx`'s header: the old source-heavy inline `<details>` is
+  replaced with a calm one-line statement ("A representative household
+  model — not your own usage") plus a **More info** button opening the
+  dialog (what the model means / what it's based on / what assumptions
+  it includes / a route to "How we calculated this" at Optimise /
+  sources, reusing the exact source links the old `<details>` had).
+- **OA-167 (appliance safety warnings)**: new `safetyNote` prop on
+  `LandingTimeProfileProps`, rendered in `__below-chart` (always visible,
+  not collapsed behind the methodology disclosure -- it's a safety
+  message, not secondary methodology). Set in both Optimise branches in
+  `LandingDemo.tsx` (genuine-opportunity and no-opportunity) to the same
+  short note + a **Safety information** link opening a second `Dialog`
+  with the fuller manufacturer-instructions/unattended-operation/
+  ventilation/damaged-appliance guidance and responsibility wording from
+  the ticket. Never shown on Baseline/Compare (nothing moves there).
+- **OA-168 (homepage hero copy)**: replaced OA-111's "Hunt the energy
+  vampires in your home" hook with the exact new copy
+  ("Small changes. Bigger consequences." / the new subhead) -- the same
+  headline `VisionPage.tsx` (OA-151) already uses as its own title, so
+  the hero and vision page now open with one shared statement instead of
+  two competing ones. Added a visually quieter secondary CTA ("Try a
+  typical household", `.landing-hero__cta-secondary`) alongside the
+  unchanged primary "See how it works" -- both jump to the same
+  `#comparison-demo` anchor (no separate non-interactive explanation
+  section exists on this page to send the secondary CTA to instead;
+  flagged as a decision below). Removed the now-unused
+  `.landing-hero__line--gradient` CSS (only the vampire span used it).
+  The vampire phrase itself moved to `VisionPage.tsx`'s waste section as
+  that section's own `<h2>`, per the ticket's "repositioned as
+  feature-level copy for the waste section".
+- **OA-169 ("Why Octopus?" page)**: new `src/pages/WhyOctopusPage.tsx`/
+  `.css`, matching `VisionPage.tsx`'s long-form editorial treatment
+  (same `public-page__title`/`landing-chapter-cta` shell, own prose
+  class). Covers the ticket's full structure (we use Octopus ourselves /
+  we like the open customer-data+developer-tooling approach, "Long may
+  that continue" kept verbatim / that openness exposed a bigger problem /
+  why we start with Octopus, explicitly not an Octopus companion app /
+  what we do differently / independence statement). Routed at
+  `/why-octopus`, added to `PUBLIC_SITE_PATHS` and `PublicFooter.tsx`'s
+  link row (footer-only, like Privacy/Terms/Contact -- not added to the
+  top header nav, to keep it uncluttered).
+- **Verified**: `npx tsc -b` (clean), `npm run lint` (clean, same
+  pre-existing unrelated warnings), `npm run build` (clean), `npm run
+  check-bundle` (passed), `npm test` (263/263 -- new tests added in
+  `LandingDemo.test.tsx` for both dialogs, plus new
+  `src/pages/LandingPage.test.tsx` and `src/pages/WhyOctopusPage.test.tsx`,
+  neither of which existed before this session). Confirmed live in the
+  browser: both dialogs open/close correctly (Escape + close button),
+  focus returns to the trigger, the hero and `/why-octopus` page render
+  as expected.
+
+### Decisions made this session
+
+- OA-168's secondary CTA ("Try a typical household") scrolls to the same
+  `#comparison-demo` anchor as the primary CTA, rather than a distinct
+  destination -- the ticket doesn't specify one, and there's no separate
+  non-interactive "how it works" content on this page to send it to
+  instead.
+- OA-166's dialog "See how we calculated the savings" link jumps to the
+  Optimise step (`setProgress(2)`) when reachable, rather than deep-linking
+  into the "How we calculated this" `<details>` itself opened -- simplest
+  option that still gives a real route there without new plumbing to
+  force a collapsed disclosure open from outside its own component.
+- Built a hand-rolled `Dialog` rather than native `<dialog>`/`showModal()`
+  specifically because jsdom (this repo's test environment) doesn't
+  implement the native focus-trap/backdrop behaviour -- a hand-rolled
+  version is both directly testable here and has no browser-support gap.
+
+### Possible follow-up (not actioned, flagged only)
+
+- OA-169's page isn't linked from the top header nav (How it works/
+  Vision/About are) -- footer-only for now, same tier as Privacy/Terms/
+  Contact. Worth a product decision on whether it deserves header
+  placement.
+- OA-166's "How the savings are calculated" link only jumps to Optimise;
+  it doesn't also auto-expand the "How we calculated this" `<details>`
+  once there (the visitor still has to click it) -- `<details>` has no
+  React-friendly imperative open API without adding a ref/controlled-open
+  pattern to `LandingTimeProfile.tsx`, judged out of scope for this pass.
 
 ## Most recent session: OA-135, OA-136, OA-137 (built, verified, not committed)
 

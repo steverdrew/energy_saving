@@ -59,8 +59,16 @@ describe('OA-130: real household snapshot sanity check', () => {
   })
 
   it('does not change the canonical landing-page figures', () => {
+    // OA-160: `family-typical`'s events were replaced with the landing
+    // demo's own event data (now the one shared source for both), so this
+    // figure moved from its prior value -- expected, not a regression.
+    // OA-165: the washing machine and dishwasher's scheduling windows were
+    // widened to the full day (previously daytime/evening-only, which made
+    // it impossible for either to ever be optimised into an overnight
+    // off-peak window) -- this genuinely raises the combined opportunity,
+    // another expected move, not a regression.
     const report = buildEvidenceReport('2026-10-03')
-    expect(report.canonicalLandingPageFigures.combinedAnnualOpportunityGbp).toBeCloseTo(144.89, 1)
+    expect(report.canonicalLandingPageFigures.combinedAnnualOpportunityGbp).toBeCloseTo(169.86, 1)
   })
 
   it('renders the sanity-check section in the markdown report', () => {

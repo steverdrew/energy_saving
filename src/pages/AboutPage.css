@@ -1,0 +1,57 @@
+/* OA-145: polish pass bringing About up to the visual hierarchy introduced
+   on the How it works page (HowItWorksPage.css) -- same [data-landing]
+   tokens and .landing-card glass treatment from publicContent.css, with
+   About's own layout: a single lead statement, a two-panel "why/what"
+   grid, and a standalone trust/independence callout, rather than How it
+   works' numbered 3-step sequence (different content shape, same system). */
+
+.about__lead {
+  max-width: 640px;
+}
+
+.about__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  max-width: 1080px;
+  margin: 24px auto 0;
+  padding: 0 24px;
+}
+
+@media (max-width: 860px) {
+  .about__grid {
+    grid-template-columns: 1fr;
+    max-width: 640px;
+  }
+}
+
+.about__panel {
+  margin: 0;
+}
+
+/* OA-145: the independence/evidence-led statement is the page's most
+   load-bearing line (ticket: "trust / independence / evidence-led ethos
+   is clearly expressed") -- raised out of the card stack into its own
+   quieter-bordered, accent-toned callout so it reads as a standalone
+   statement rather than one more paragraph among several. */
+.about__trust {
+  max-width: 640px;
+  margin: 40px auto 0;
+  padding: 24px 32px;
+  text-align: center;
+  border: 1px solid var(--accent-border);
+  border-radius: 16px;
+  background: var(--accent-bg);
+}
+
+.about__trust-statement {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-h);
+}
+
+.about__trust-note {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--text);
+}

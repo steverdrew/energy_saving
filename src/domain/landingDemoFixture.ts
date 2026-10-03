@@ -1,4 +1,6 @@
 import type { HeatMapDay, HeatMapSlot } from '../components/heatMapMath'
+import type { ApplianceEvent } from './applianceEvents'
+import { FAMILY_TYPICAL_APPLIANCE_EVENTS, isRealApplianceEvent, totalEventKwh } from './applianceEvents'
 
 /**
  * OA-99: fixture data for the logged-out "Typical household" comparison
@@ -35,136 +37,15 @@ const TYPICAL_DAILY_KWH = OFGEM_TDCV_ELECTRICITY_KWH_PER_YEAR / 365 // ~6.85 kWh
 // unidentified background/base load (BASE_LOAD_KWH below) -- never
 // silently folded into one of these, per OA-73's "ambiguous usage is
 // never silently treated as shiftable".
-export interface HouseholdEventDefinition {
-  id: string
-  label: string
-  /**
-   * OA-128: "do not model appliance events as generic smooth Gaussian/
-   * bell-shaped humps -- use appliance-appropriate shapes at half-hour
-   * resolution." One kWh figure per half-hour slot this event occupies
-   * (length always equals `slotCount`), e.g. a washing machine's heating
-   * peak followed by lower-power wash/rinse/spin periods, rather than one
-   * flat `kwhPerSlot` repeated across the whole event. Moving the event
-   * (drag/Optimise) carries this exact shape along with it -- only which
-   * slot(s) it starts at changes, never the per-stage values themselves.
-   */
-  kwhShape: number[]
-  /** How many contiguous half-hour slots this event occupies -- fixed (equal to `kwhShape.length`); moving it changes only which slot(s) it starts at (OA-105: "duration and kWh stay constant"). */
-  slotCount: number
-  /** The slot this event actually ran at -- shown fixed on Baseline/Compare, and Optimise's starting position before any drag (OA-105: "no event appears for the first time on Tab 3"). */
-  actualStartSlot: number
-  /** Per OA-73's valid-time-window rules: a dishwasher has no `requiresAwakeHome` constraint (any half-hour that day); a washing machine does (07:00-23:00 local). This is the event's own static window -- OA-107's `dependsOnEventId` below can narrow the effective minimum further, dynamically. */
-  validStartSlotRange: { min: number; max: number }
-  /** OA-104: deterministic, documented recurrence assumption -- not a published figure, not the visitor's own usage. */
-  occurrencesPerWeek: number
-  /** OA-107: false for an identified-but-fixed load (e.g. the oven) -- shown as an annotation on every tab, same as a movable event, but never draggable and never touched by "Optimise all". */
-  movable: boolean
-  /** OA-107: "tumble dryer cannot start before the washing machine finishes" -- this event's effective earliest start is the referenced event's *current* end slot (its override if moved, else its `actualStartSlot`), not just this event's own static `validStartSlotRange.min`. Only one dependency level is modelled (the one the ticket asks for), resolved via `effectiveValidStartSlotRange`/`dependencyMinStartSlot` below. */
-  dependsOnEventId?: string
-}
-
-/** OA-128: this event's total kWh across its whole shape -- the one place that sums `kwhShape` rather than every caller doing it inline. */
-export function totalEventKwh(event: HouseholdEventDefinition): number {
-  return event.kwhShape.reduce((sum, v) => sum + v, 0)
-}
-
-/** OA-106/OA-128: "an event overlay must never appear unless it corresponds to a real modelled load" -- the single guard both LandingDemo.tsx (building `eventOverlays`) and LandingTimeProfile.tsx (rendering them) apply, so a malformed or zero-energy event definition can never reach the chart as an empty/orphan outlined block. OA-128 extends this to the per-slot shape: every event's shape must actually have one value per slot it claims to occupy, and every one of those values must be real (positive) energy -- a shape that's too short/long for its own `slotCount`, or that has a zero/negative stage, is never treated as real either. */
-export function isRealHouseholdEvent(event: HouseholdEventDefinition): boolean {
-  return (
-    event.id.trim().length > 0 &&
-    event.label.trim().length > 0 &&
-    event.slotCount > 0 &&
-    event.kwhShape.length === event.slotCount &&
-    event.kwhShape.every((kwh) => kwh > 0)
-  )
-}
-
-// OA-107/OA-128: "do not invent arbitrary appliances purely to fill the
-// chart" -- a representative set of recognisable movable loads plus one
-// identified-but-fixed load (the oven), each with its own realistic
-// scheduling window (and, for the tumble dryer, a same-day dependency).
-// OA-128: "the default Typical household must not include EV charging" --
-// removed from this demo fixture entirely (EV remains its own archetype
-// in `src/domain/savingsModel/archetypes.ts`'s `ev-owning-family`, a
-// deliberately separate model -- see that file's own header comment).
-// Each event's per-slot shape is also a modelled assumption (OA-73/76/
-// OA-128), not a published figure -- an appliance-appropriate multi-stage
-// profile (heating peak, lower-power wash/spin, sharp step up/down, etc.)
-// rather than a flat kWh repeated across the event's slots, kept modest
-// enough that the sum still fits under `TYPICAL_DAILY_KWH` with a sensible
-// residual base/background load left over (see `BASE_LOAD_KWH` below).
-export const LANDING_DEMO_EVENTS: readonly HouseholdEventDefinition[] = [
-  {
-    id: 'washing_machine',
-    // OA-116: "cycle" dropped -- redundant wording that only added to the
-    // chip's label footprint without adding meaning.
-    label: 'Washing machine',
-    // OA-128: heating the water draws the most, then a lower-power wash/
-    // rinse period, then a smaller spin-dry uptick -- not one flat draw
-    // for the whole cycle.
-    kwhShape: [0.5, 0.15, 0.2],
-    slotCount: 3, // 1.5 hours
-    actualStartSlot: 14, // 07:00 -- a plausible morning wash
-    validStartSlotRange: { min: 14, max: 35 }, // daytime window: 07:00-19:00 (last start that still ends by 19:00)
-    occurrencesPerWeek: 3,
-    movable: true,
-  },
-  {
-    id: 'tumble_dryer',
-    label: 'Tumble dryer',
-    // OA-128: "relatively sustained high draw with possible cycling" --
-    // stays high throughout rather than one flat value, tapering slightly
-    // as the load dries out.
-    kwhShape: [0.5, 0.42, 0.3],
-    slotCount: 3, // 1.5 hours
-    actualStartSlot: 17, // 08:30 -- immediately after the washing machine's own (now 1.5-hour) actual cycle
-    // OA-107: "cannot start before the washing machine finishes" -- the
-    // static min here is only the fallback used if the dependency can't be
-    // resolved; the real constraint is `dependsOnEventId` below, resolved
-    // dynamically against the washing machine's *current* position.
-    validStartSlotRange: { min: 17, max: 44 }, // outer window: same day, finished by 22:00
-    occurrencesPerWeek: 3,
-    movable: true,
-    dependsOnEventId: 'washing_machine',
-  },
-  {
-    id: 'dishwasher',
-    label: 'Dishwasher',
-    // OA-128: multi-stage -- a heating phase, a lower-demand wash/rinse
-    // period, then a second, shorter heating phase (final rinse/dry).
-    kwhShape: [0.6, 0.2, 0.45],
-    slotCount: 3, // 1.5 hours
-    actualStartSlot: 36, // 18:00-19:30 -- the representative day's most expensive slots (see AGILE_REPRESENTATIVE_RATE_PENCE below)
-    validStartSlotRange: { min: 36, max: 45 }, // evening/overnight window: 18:00 through the end of this day (last start that still ends by 24:00)
-    occurrencesPerWeek: 4,
-    movable: true,
-  },
-  {
-    id: 'dehumidifier',
-    label: 'Dehumidifier',
-    // OA-128: "sustained moderate load, flatter block/cycling profile" --
-    // close to flat, with only a small cycling dip, not a sharp shape.
-    kwhShape: [0.15, 0.17, 0.13],
-    slotCount: 3, // 1.5 hours
-    actualStartSlot: 20, // 10:00
-    validStartSlotRange: { min: 0, max: 44 }, // broad, flexible window: anywhere that finishes by 22:00
-    occurrencesPerWeek: 5,
-    movable: true,
-  },
-  {
-    id: 'oven_cooking',
-    label: 'Oven',
-    // OA-128: "sharp step-up, cycling/sustained heating, sharp reduction
-    // at end" -- preheat/initial heat draws more than the lower-power
-    // thermostat-cycling second half.
-    kwhShape: [0.55, 0.35],
-    slotCount: 2, // 1 hour
-    actualStartSlot: 35, // 17:30 -- identified but fixed: never draggable, never touched by "Optimise all"
-    validStartSlotRange: { min: 35, max: 35 },
-    occurrencesPerWeek: 7,
-    movable: false,
-  },
-]
+// OA-160: the event type and "typical household" event list now live in
+// `./applianceEvents.ts`, shared with the canonical savings model's
+// `family-typical` archetype -- re-exported here under their established
+// names so this module's own consumers (LandingDemo.tsx,
+// LandingTimeProfile.tsx) need no changes.
+export type HouseholdEventDefinition = ApplianceEvent
+export { totalEventKwh }
+export const isRealHouseholdEvent = isRealApplianceEvent
+export const LANDING_DEMO_EVENTS: readonly HouseholdEventDefinition[] = FAMILY_TYPICAL_APPLIANCE_EVENTS
 
 const TOTAL_EVENTS_KWH = LANDING_DEMO_EVENTS.reduce((sum, e) => sum + totalEventKwh(e), 0)
 
@@ -338,7 +219,7 @@ export const TARIFF_IDS: readonly TariffId[] = ['standard-variable', 'fixed', 'e
 export const TARIFF_LABELS: Record<TariffId, string> = {
   'standard-variable': 'Standard Variable',
   fixed: 'Octopus 12M Fixed',
-  'economy-7': 'Economy 7',
+  'economy-7': 'Octopus Economy 7',
   agile: 'Octopus Agile',
 }
 

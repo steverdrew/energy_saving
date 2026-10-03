@@ -64,51 +64,37 @@
   }
 }
 
-/* OA-99: a quiet, discoverable "Sources" disclosure -- native <details>
-   needs no extra JS/state, and keeps the provenance one click away
-   without cluttering the main eyebrow line. */
-.landing-demo__sources {
+/* OA-166: the calm one-line statement replacing the old source-heavy
+   inline <details> -- "More info" opens the full explanation/sources in
+   a dialog instead, so this stays a single quiet line. */
+.landing-demo__subheading {
+  margin: 0;
   font-size: 11px;
+  text-align: center;
   color: var(--text);
   opacity: 0.6;
 }
 
-.landing-demo__sources summary {
+.landing-demo__more-info-link {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  background: none;
+  border: none;
   cursor: pointer;
-  text-align: center;
-  list-style: none;
 }
 
-.landing-demo__sources summary::-webkit-details-marker {
-  display: none;
-}
-
-.landing-demo__sources summary:hover,
-.landing-demo__sources summary:focus-visible {
+.landing-demo__more-info-link:hover,
+.landing-demo__more-info-link:focus-visible {
   opacity: 1;
 }
 
-.landing-demo__sources ul {
-  margin: 6px 0 0;
-  padding: 0;
-  list-style: none;
-  text-align: center;
-}
-
-.landing-demo__sources li {
-  margin: 2px 0;
-}
-
-.landing-demo__sources a {
-  color: inherit;
-  text-decoration: underline;
-}
-
-/* OA-99: the representative-day aggregation method itself, distinct from
-   the raw source links above it. */
-.landing-demo__sources-method {
-  margin: 8px 0 0;
-  text-align: center;
+.landing-demo__more-info-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* OA-80/OA-83: a compact segmented control, not three separate buttons
@@ -146,6 +132,34 @@
 }
 
 .landing-demo__tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* OA-167: the short, always-visible appliance-safety note shown alongside
+   Optimise's results -- quieter than the result itself, but never
+   collapsed behind a disclosure the way the methodology detail is,
+   since this is a safety message, not secondary methodology. */
+.landing-demo__safety-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.85;
+}
+
+.landing-demo__safety-link {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.landing-demo__safety-link:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -208,6 +222,59 @@
   font-size: 13px;
   color: var(--text);
   opacity: 0.8;
+}
+
+/* OA-155: the "already on a smart tariff?" secondary exit -- deliberately
+   plain-text, not a second pill button, so it doesn't compete with the
+   primary "Sign up free" CTA above it. Generic placement for now (see the
+   usage site's comment); just needs to read as a quiet alternative, not a
+   duplicate call to action. */
+.landing-demo__cta--secondary {
+  margin-top: 12px;
+}
+
+.landing-demo__cta--secondary .landing-demo__cta-note {
+  margin-top: 0;
+}
+
+.landing-demo__cta--secondary .landing-demo__cta-link {
+  display: inline;
+  padding: 0;
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  box-shadow: none;
+  text-decoration: underline;
+}
+
+/* OA-155: the "already on a smart tariff?" prompt that replaces the
+   step nav's own slot (steps + Back/Next) once the current tariff is
+   Smart -- there's no genuine Next step to show controls for, so this
+   takes that same spot rather than sitting disabled next to it. Matches
+   the step nav's own left-aligned, tabs-width box (see
+   `.landing-step-nav` in LandingStepNav.css) so it reads as occupying
+   the same place, not a new block with its own layout. Only "Sign up"
+   itself is underlined, not the whole sentence. */
+.landing-demo__smart-gate {
+  width: 100%;
+  max-width: 420px;
+  /* Negative top margin: the shared `.landing-time-profile__narrative`
+     bottom margin plus the (taller) result column on the right push this
+     slot further down than the Economy 7/Agile row's own visual bottom
+     edge on the left -- pulled back up so it sits close under that row
+     rather than leaving a wide gap. */
+  margin: -26px 0 16px;
+  font-size: var(--demo-secondary-metric-size, 14px);
+  color: var(--text);
+  opacity: 0.9;
+}
+
+.landing-demo__smart-gate-link {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: underline;
 }
 
 @media (max-width: 480px) {

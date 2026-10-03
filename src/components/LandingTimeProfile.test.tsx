@@ -4,7 +4,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { buildLandingDemoFixture } from '../domain/landingDemoFixture'
 import LandingTimeProfile, { type LandingTimeProfileEventOverlay } from './LandingTimeProfile'
 
@@ -95,10 +95,10 @@ describe('LandingTimeProfile', () => {
       })
       expect(screen.getByText('4–7pm peak period')).toBeInTheDocument()
 
-      // OA-131: price is now encoded on the dedicated price strip's own
+      // OA-131: price is now encoded on the dedicated rate bar's own
       // segments, not on `.landing-time-profile__column` (the usage track
       // below it is deliberately a flat, uncoloured background).
-      const segments = container.querySelectorAll('.landing-time-profile__price-segment')
+      const segments = container.querySelectorAll('.landing-time-profile__rate-bar-segment')
       const colorsInWindow = new Set(
         Array.from(segments)
           .slice(32, 38)
@@ -118,57 +118,63 @@ describe('LandingTimeProfile', () => {
     })
   })
 
-  // OA-131: the dedicated price strip above the chart -- shaped per
-  // tariff rather than always showing 48 independent segments.
-  describe('price strip (OA-131)', () => {
+  // OA-131/OA-168: the dedicated rate bar above the chart -- shaped per
+  // tariff rather than always showing 48 independent segments, and (since
+  // the redesign) a plain track that only highlights the genuinely
+  // distinct 'two-rate' off-peak segment, rather than colouring every
+  // segment.
+  describe('rate bar (OA-131/OA-168)', () => {
     it('renders a flat tariff as a single strip segment, not 48', () => {
       const { container } = renderProfile({ priceStripShape: 'flat' })
-      const segments = container.querySelectorAll('.landing-time-profile__price-segment')
+      const segments = container.querySelectorAll('.landing-time-profile__rate-bar-segment')
       expect(segments).toHaveLength(1)
     })
 
-    it('renders a two-rate tariff (Economy 7) as its real day/night runs, never 48 independent segments', () => {
+    it('renders a two-rate tariff (Economy 7) as its real day/night runs, with only the off-peak run highlighted', () => {
       const economy7Fixture = buildLandingDemoFixture(undefined, 'economy-7')
       const { container } = renderProfile({ day: economy7Fixture.compare.day, priceStripShape: 'two-rate' })
-      const segments = container.querySelectorAll('.landing-time-profile__price-segment')
+      const segments = container.querySelectorAll('.landing-time-profile__rate-bar-segment')
       // Economy 7 has exactly two distinct rates (day/night) -- the off-
       // peak window sits inside the day, so it renders as day-night-day
       // (3 runs), never one run per half-hour slot.
       expect(segments.length).toBeGreaterThan(1)
       expect(segments.length).toBeLessThan(economy7Fixture.compare.day.slots.length)
-      const distinctColors = new Set(Array.from(segments, (el) => (el as HTMLElement).style.backgroundColor))
-      expect(distinctColors.size).toBe(2)
+      const offPeakSegments = container.querySelectorAll('.landing-time-profile__rate-bar-segment[data-offpeak]')
+      expect(offPeakSegments).toHaveLength(1)
     })
 
     it('renders a dynamic tariff (Agile) as 48 distinct segments', () => {
       const { container } = renderProfile({ day: fixture.compare.day, priceStripShape: 'dynamic' })
-      expect(container.querySelectorAll('.landing-time-profile__price-segment')).toHaveLength(48)
+      expect(container.querySelectorAll('.landing-time-profile__rate-bar-segment')).toHaveLength(48)
     })
 
-    it('shows a legend describing the strip itself, not the whole chart background', () => {
+    it('shows a legend describing the bar itself, not the whole chart background', () => {
       renderProfile({ priceStripShape: 'flat' })
       expect(screen.getByText(/flat rate/i)).toBeInTheDocument()
     })
 
-    it('exposes the exact rate for a strip segment via its accessible name, reachable without hover', () => {
+    it('exposes the exact rate for a bar segment via its accessible name, reachable without hover', () => {
       const { container } = renderProfile({ day: fixture.compare.day, priceStripShape: 'dynamic' })
-      const firstSegment = container.querySelector('.landing-time-profile__price-segment') as HTMLElement
+      const firstSegment = container.querySelector('.landing-time-profile__rate-bar-segment') as HTMLElement
       expect(firstSegment.tagName.toLowerCase()).toBe('button')
       expect(firstSegment.getAttribute('aria-label')).toMatch(/p\/kWh/)
     })
   })
 
-  // OA-133: Economy 7 must read as two explicit states, never a
+  // OA-133/OA-168: Economy 7 must read as two explicit states, never a
   // continuous cheaper -> more-expensive gradient, and the off-peak
-  // window shown must be the real 7-hour one from the data.
-  describe('Economy 7 binary visual (OA-133)', () => {
+  // window shown (both the legend and the chart's own background tint)
+  // must be the real 7-hour one from the data.
+  describe('Economy 7 off-peak highlight (OA-133/OA-168)', () => {
     const economy7Fixture = buildLandingDemoFixture(undefined, 'economy-7')
 
     it('shows the legend as explicit day-rate/off-peak states with the real off-peak time range, not a gradient', () => {
-      renderProfile({ day: economy7Fixture.compare.day, priceStripShape: 'two-rate' })
-      expect(screen.getByText(/day rate/i)).toBeInTheDocument()
-      expect(screen.getByText(/off-peak 1:30–8:30/i)).toBeInTheDocument()
-      expect(screen.queryByText(/cheaper.*more expensive/i)).not.toBeInTheDocument()
+      const { container } = renderProfile({ day: economy7Fixture.compare.day, priceStripShape: 'two-rate' })
+      const legend = container.querySelector('.landing-time-profile__price-legend')!
+      expect(legend.textContent).toMatch(/day rate/i)
+      expect(legend.textContent).toMatch(/off-peak/i)
+      expect(legend.textContent).toMatch(/1:30–8:30/)
+      expect(legend.textContent).not.toMatch(/cheaper.*more expensive/i)
     })
 
     it('covers the full 7-hour off-peak period, not a shorter convenient block', () => {
@@ -179,18 +185,27 @@ describe('LandingTimeProfile', () => {
       expect(offPeakSlotCount).toBe(14) // 14 half-hour slots = 7 hours
       // Day (0-2) -> off-peak (3-16) -> day (17-47): three runs, not one
       // segment per slot and not a shorter hard-coded block.
-      const segments = container.querySelectorAll('.landing-time-profile__price-segment')
+      const segments = container.querySelectorAll('.landing-time-profile__rate-bar-segment')
       expect(segments.length).toBe(3)
     })
 
-    it('renders exactly two distinct tones, not a sample from the continuous ramp', () => {
+    it('highlights exactly the middle (off-peak) run, not the day-rate runs either side of it', () => {
       const { container } = renderProfile({ day: economy7Fixture.compare.day, priceStripShape: 'two-rate' })
-      const segments = Array.from(container.querySelectorAll('.landing-time-profile__price-segment')) as HTMLElement[]
-      const colors = segments.map((el) => el.style.backgroundColor)
-      // Day-rate segments (first and last) share one tone; the off-peak
-      // segment (middle) has the other.
-      expect(colors[0]).toBe(colors[2])
-      expect(colors[0]).not.toBe(colors[1])
+      const segments = Array.from(container.querySelectorAll('.landing-time-profile__rate-bar-segment'))
+      expect(segments.map((el) => el.hasAttribute('data-offpeak'))).toEqual([false, true, false])
+    })
+
+    it('shades the chart background across the same off-peak window the legend/bar highlight', () => {
+      const { container } = renderProfile({ day: economy7Fixture.compare.day, priceStripShape: 'two-rate' })
+      expect(container.querySelector('.landing-time-profile__offpeak-band')).toBeInTheDocument()
+    })
+
+    it('shows no off-peak background band for a flat or dynamic tariff', () => {
+      const { container: flatContainer } = renderProfile({ priceStripShape: 'flat' })
+      expect(flatContainer.querySelector('.landing-time-profile__offpeak-band')).not.toBeInTheDocument()
+
+      const { container: dynamicContainer } = renderProfile({ day: fixture.compare.day, priceStripShape: 'dynamic' })
+      expect(dynamicContainer.querySelector('.landing-time-profile__offpeak-band')).not.toBeInTheDocument()
     })
   })
 
@@ -264,262 +279,216 @@ describe('LandingTimeProfile', () => {
     })
   })
 
-  // OA-105: every household event overlays the track on every tab -- fixed
-  // annotations when not movable, a draggable slider (Optimise only) when
-  // movable.
+  // OA-105/OA-168: every household event overlays the track on every tab,
+  // as a plain, non-interactive annotation card -- overlapping/adjacent
+  // events merge into one grouped card (see `groupOverlappingEvents` in
+  // the component) rather than needing separate lanes, now that nothing
+  // here is draggable.
   describe('event overlays', () => {
-    function movableEvent(
-      overrides: Partial<Extract<LandingTimeProfileEventOverlay, { movable: true }>> = {},
-    ): LandingTimeProfileEventOverlay {
+    function plainEvent(overrides: Partial<LandingTimeProfileEventOverlay> = {}): LandingTimeProfileEventOverlay {
       return {
         id: 'dishwasher',
         label: 'Dishwasher cycle',
         startSlot: 4,
         slotCount: 2,
-        movable: true,
-        minStartSlot: 0,
-        maxStartSlot: 46,
-        onMove: () => {},
         ...overrides,
       }
     }
 
-    it('renders no overlay when no events are given', () => {
-      renderProfile()
-      expect(screen.queryByRole('slider')).not.toBeInTheDocument()
+    it('renders no card when no events are given', () => {
+      const { container } = renderProfile()
+      expect(container.querySelector('.landing-time-profile__event-card')).not.toBeInTheDocument()
       expect(screen.queryByText(/dishwasher cycle/i)).not.toBeInTheDocument()
     })
 
-    it('renders a fixed, non-interactive annotation for a non-movable event', () => {
+    it('renders a single event as its own card, naming it and its time range', () => {
+      renderProfile({ events: [plainEvent()] })
+      expect(screen.getByText('Dishwasher cycle')).toBeInTheDocument()
+      // An en dash only appears in a time range.
+      const card = screen.getByText('Dishwasher cycle').closest('.landing-time-profile__event-card')!
+      expect(card.textContent).toMatch(/–/)
+    })
+
+    it('renders two non-overlapping events as two separate cards', () => {
       const { container } = renderProfile({
-        day: fixture.baseline.day,
-        heading: 'Baseline',
-        events: [{ id: 'dishwasher', label: 'Dishwasher cycle', startSlot: 4, slotCount: 2, movable: false }],
-      })
-      expect(screen.queryByRole('slider')).not.toBeInTheDocument()
-      expect(container.querySelector('.landing-time-profile__event-chip[data-fixed]')).toBeInTheDocument()
-      expect(screen.getByText(/dishwasher cycle/i)).toBeInTheDocument()
-    })
-
-    it('renders a slider positioned and labelled at its current slot for a movable event', () => {
-      renderProfile({ day: fixture.optimise.day, heading: 'Optimise', events: [movableEvent()] })
-      const slider = screen.getByRole('slider', { name: /dishwasher cycle/i })
-      expect(slider).toHaveAttribute('aria-valuenow', '4')
-      expect(slider).toHaveAttribute('aria-valuemin', '0')
-      expect(slider).toHaveAttribute('aria-valuemax', '46')
-      expect(screen.getByText(/dishwasher cycle/i)).toBeInTheDocument()
-    })
-
-    it('renders several events at once, each independently', () => {
-      renderProfile({
-        day: fixture.optimise.day,
-        heading: 'Optimise',
         events: [
-          movableEvent(),
-          movableEvent({ id: 'washing_machine', label: 'Washing machine cycle', startSlot: 14, minStartSlot: 14, maxStartSlot: 44 }),
+          plainEvent({ id: 'dishwasher', label: 'Dishwasher cycle', startSlot: 4, slotCount: 2 }),
+          plainEvent({ id: 'washing_machine', label: 'Washing machine cycle', startSlot: 20, slotCount: 2 }),
         ],
       })
-      expect(screen.getByRole('slider', { name: /dishwasher cycle/i })).toBeInTheDocument()
-      expect(screen.getByRole('slider', { name: /washing machine cycle/i })).toBeInTheDocument()
+      expect(screen.getByText('Dishwasher cycle')).toBeInTheDocument()
+      expect(screen.getByText('Washing machine cycle')).toBeInTheDocument()
+      expect(container.querySelectorAll('.landing-time-profile__event-card')).toHaveLength(2)
     })
 
-    // OA-107: "if multiple events overlap in time, place them in separate
-    // visual lanes/rows so both remain legible" -- two overlays that
-    // share a half-hour get different `top` offsets, rather than both
-    // sitting at the same position (which is what made labels collide).
-    describe('collision-safe lanes (OA-107)', () => {
-      it('places two time-overlapping events in different lanes (different top offsets)', () => {
+    // OA-168: replaces the old per-event lane system -- two events whose
+    // time spans overlap (or sit close enough to be adjacent) now merge
+    // into one card with a bullet list, rather than each getting its own
+    // lane.
+    describe('grouping overlapping/adjacent events (OA-168)', () => {
+      it('merges two time-overlapping events into a single card listing both names', () => {
         const { container } = renderProfile({
-          day: fixture.optimise.day,
-          heading: 'Optimise',
           events: [
-            movableEvent({ id: 'dishwasher', label: 'Dishwasher cycle', startSlot: 10, slotCount: 4 }),
-            movableEvent({ id: 'ev_charging', label: 'EV charging', startSlot: 12, slotCount: 4 }),
+            plainEvent({ id: 'dishwasher', label: 'Dishwasher cycle', startSlot: 10, slotCount: 4 }),
+            plainEvent({ id: 'ev_charging', label: 'EV charging', startSlot: 12, slotCount: 4 }),
           ],
         })
-        const dishwasher = screen.getByRole('slider', { name: /dishwasher cycle/i })
-        const ev = screen.getByRole('slider', { name: /ev charging/i })
-        expect(dishwasher.getAttribute('style')).not.toEqual(null)
-        expect((dishwasher as HTMLElement).style.top).not.toBe((ev as HTMLElement).style.top)
-        // Both still render -- lanes solve the label collision without
-        // hiding either overlapping, individually-valid event.
-        expect(container.querySelectorAll('.landing-time-profile__event-chip:not([data-fixed])')).toHaveLength(2)
+        const cards = container.querySelectorAll('.landing-time-profile__event-card')
+        expect(cards).toHaveLength(1)
+        expect(cards[0].textContent).toMatch(/dishwasher cycle/i)
+        expect(cards[0].textContent).toMatch(/ev charging/i)
+        expect(cards[0].querySelector('.landing-time-profile__event-card-list')).toBeInTheDocument()
       })
 
-      it('keeps two non-overlapping events in the same lane (same top offset)', () => {
-        renderProfile({
-          day: fixture.optimise.day,
-          heading: 'Optimise',
-          events: [
-            movableEvent({ id: 'dishwasher', label: 'Dishwasher cycle', startSlot: 10, slotCount: 2 }),
-            movableEvent({ id: 'washing_machine', label: 'Washing machine cycle', startSlot: 20, slotCount: 2 }),
-          ],
-        })
-        const dishwasher = screen.getByRole('slider', { name: /dishwasher cycle/i })
-        const washingMachine = screen.getByRole('slider', { name: /washing machine cycle/i })
-        expect((dishwasher as HTMLElement).style.top).toBe((washingMachine as HTMLElement).style.top)
-      })
-
-      it('gives a third, simultaneously time-overlapping event its own third lane', () => {
-        renderProfile({
-          day: fixture.optimise.day,
-          heading: 'Optimise',
-          events: [
-            movableEvent({ id: 'a', label: 'Event A', startSlot: 10, slotCount: 6 }),
-            movableEvent({ id: 'b', label: 'Event B', startSlot: 10, slotCount: 6 }),
-            movableEvent({ id: 'c', label: 'Event C', startSlot: 10, slotCount: 6 }),
-          ],
-        })
-        const tops = new Set(
-          ['Event A', 'Event B', 'Event C'].map(
-            (name) => (screen.getByRole('slider', { name: new RegExp(name, 'i') }) as HTMLElement).style.top,
-          ),
-        )
-        expect(tops.size).toBe(3)
-      })
-    })
-
-    // OA-107: "when space is constrained, show the event name only" --
-    // below the compact-label threshold, only the bare label is shown
-    // (the full name/time text is still available via a movable event's
-    // own aria-valuetext; no native title tooltip -- removed as UI clutter
-    // since the chip's own label is never truncated).
-    describe('compact labels for narrow events (OA-107)', () => {
-      it('shows the full "name · time" label for a wide-enough event', () => {
-        renderProfile({
-          day: fixture.optimise.day,
-          heading: 'Optimise',
-          events: [movableEvent({ startSlot: 10, slotCount: 4 })],
-        })
-        const slider = screen.getByRole('slider', { name: /dishwasher cycle/i })
-        expect(slider).toHaveTextContent('–') // an en dash only appears in a time range
-      })
-
-      it('shows only the event name for a narrow event, keeping the full detail available via aria', () => {
-        renderProfile({
-          day: fixture.optimise.day,
-          heading: 'Optimise',
-          events: [movableEvent({ startSlot: 10, slotCount: 2 })],
-        })
-        const slider = screen.getByRole('slider', { name: /dishwasher cycle/i })
-        expect(slider.textContent?.trim()).toBe('Dishwasher cycle')
-        expect(slider).toHaveAttribute('aria-valuetext', expect.stringContaining('Dishwasher cycle'))
-      })
-
-      it('applies the same compact-label rule to a fixed annotation', () => {
+      it('keeps two non-overlapping events as two separate single-name cards', () => {
         const { container } = renderProfile({
-          day: fixture.baseline.day,
-          heading: 'Baseline',
-          events: [{ id: 'oven_cooking', label: 'Oven (cooking)', startSlot: 35, slotCount: 2, movable: false }],
-        })
-        const annotation = container.querySelector('.landing-time-profile__event-chip[data-fixed]')!
-        expect(annotation.textContent?.trim()).toBe('Oven (cooking)')
-      })
-    })
-
-    // OA-108: "per-event feedback should appear contextually... in/near
-    // the event block itself when it's selected, focused, or being
-    // dragged" -- replaces the old permanent per-appliance list.
-    describe('contextual saving popover (OA-108)', () => {
-      it('shows the popover only while its own event is focused, and not for a different event', () => {
-        renderProfile({
-          day: fixture.optimise.day,
-          heading: 'Optimise',
           events: [
-            movableEvent(),
-            movableEvent({ id: 'washing_machine', label: 'Washing machine cycle', startSlot: 14, minStartSlot: 14, maxStartSlot: 44 }),
+            plainEvent({ id: 'dishwasher', label: 'Dishwasher cycle', startSlot: 10, slotCount: 2 }),
+            plainEvent({ id: 'washing_machine', label: 'Washing machine cycle', startSlot: 20, slotCount: 2 }),
           ],
-          eventSavingText: (id) => (id === 'dishwasher' ? 'Saves £0.21 this cycle' : undefined),
         })
-
-        expect(screen.queryByRole('status')).not.toBeInTheDocument()
-
-        const dishwasher = screen.getByRole('slider', { name: /dishwasher cycle/i })
-        fireEvent.focus(dishwasher)
-        expect(screen.getByRole('status')).toHaveTextContent('Saves £0.21 this cycle')
-
-        fireEvent.blur(dishwasher)
-        expect(screen.queryByRole('status')).not.toBeInTheDocument()
-
-        // A different event with no saving text never shows a popover,
-        // even while focused.
-        const washingMachine = screen.getByRole('slider', { name: /washing machine cycle/i })
-        fireEvent.focus(washingMachine)
-        expect(screen.queryByRole('status')).not.toBeInTheDocument()
+        const cards = container.querySelectorAll('.landing-time-profile__event-card')
+        expect(cards).toHaveLength(2)
+        for (const card of Array.from(cards)) {
+          expect(card.querySelector('.landing-time-profile__event-card-list')).not.toBeInTheDocument()
+        }
       })
 
-      it('also shows the popover on pointer hover/drag, not only keyboard focus', () => {
+      it('merges three simultaneously time-overlapping events into one card', () => {
+        const { container } = renderProfile({
+          events: [
+            plainEvent({ id: 'a', label: 'Event A', startSlot: 10, slotCount: 6 }),
+            plainEvent({ id: 'b', label: 'Event B', startSlot: 10, slotCount: 6 }),
+            plainEvent({ id: 'c', label: 'Event C', startSlot: 10, slotCount: 6 }),
+          ],
+        })
+        const cards = container.querySelectorAll('.landing-time-profile__event-card')
+        expect(cards).toHaveLength(1)
+        expect(cards[0].textContent).toMatch(/event a/i)
+        expect(cards[0].textContent).toMatch(/event b/i)
+        expect(cards[0].textContent).toMatch(/event c/i)
+      })
+
+      it('shows a small clock mark only on a grouped (multi-event) card, not a single-event one', () => {
+        const { container } = renderProfile({
+          events: [
+            plainEvent({ id: 'dishwasher', label: 'Dishwasher cycle', startSlot: 10, slotCount: 4 }),
+            plainEvent({ id: 'ev_charging', label: 'EV charging', startSlot: 12, slotCount: 4 }),
+            plainEvent({ id: 'oven_cooking', label: 'Oven', startSlot: 35, slotCount: 2 }),
+          ],
+        })
+        const cards = Array.from(container.querySelectorAll('.landing-time-profile__event-card'))
+        const groupedCard = cards.find((c) => /dishwasher cycle/i.test(c.textContent ?? ''))!
+        const singleCard = cards.find((c) => /oven/i.test(c.textContent ?? ''))!
+        expect(groupedCard.querySelector('.landing-time-profile__event-card-clock')).toBeInTheDocument()
+        expect(singleCard.querySelector('.landing-time-profile__event-card-clock')).not.toBeInTheDocument()
+      })
+    })
+
+    // OA-165: a safety-constrained event (e.g. the tumble dryer, kept out
+    // of an overnight window on purpose) gets an info icon explaining why,
+    // distinguishing it from an event whose window is merely narrow
+    // because nothing cheaper was available -- works on hover, focus, and
+    // tap alike, not just a native (hover-only, touch-absent) title.
+    describe('safety constraint info icon (OA-165/OA-167)', () => {
+      it('renders no info icon when an event has no safety constraint note', () => {
+        renderProfile({ events: [plainEvent()] })
+        expect(screen.queryByRole('button', { name: /why is/i })).not.toBeInTheDocument()
+      })
+
+      it('shows the safety-constraint explanation on hover, hides it on unhover', async () => {
+        const user = userEvent.setup()
         renderProfile({
-          day: fixture.optimise.day,
-          heading: 'Optimise',
-          events: [movableEvent()],
-          eventSavingText: () => 'Saves £0.21 this cycle',
+          events: [
+            plainEvent({
+              id: 'tumble_dryer',
+              label: 'Tumble dryer',
+              startSlot: 17,
+              slotCount: 3,
+              safetyConstraintNote: 'Kept in a daytime window for safety.',
+            }),
+          ],
         })
+        const trigger = screen.getByRole('button', { name: /why is tumble dryer kept in this window/i })
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
 
-        const dishwasher = screen.getByRole('slider', { name: /dishwasher cycle/i })
-        fireEvent.pointerEnter(dishwasher)
-        expect(screen.getByRole('status')).toBeInTheDocument()
+        await user.hover(trigger)
+        expect(screen.getByRole('tooltip')).toHaveTextContent('Kept in a daytime window for safety.')
 
-        fireEvent.pointerLeave(dishwasher)
-        expect(screen.queryByRole('status')).not.toBeInTheDocument()
+        await user.unhover(trigger)
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
       })
 
-      it('includes the saving text in aria-valuetext for screen readers, even without hover/focus state', () => {
+      it('shows the safety-constraint explanation on tap/click, closing again on a tap elsewhere', () => {
         renderProfile({
-          day: fixture.optimise.day,
-          heading: 'Optimise',
-          events: [movableEvent()],
-          eventSavingText: () => 'Saves £0.21 this cycle',
+          events: [
+            plainEvent({
+              id: 'tumble_dryer',
+              label: 'Tumble dryer',
+              startSlot: 17,
+              slotCount: 3,
+              safetyConstraintNote: 'Kept in a daytime window for safety.',
+            }),
+          ],
         })
+        const trigger = screen.getByRole('button', { name: /why is tumble dryer kept in this window/i })
 
-        expect(screen.getByRole('slider', { name: /dishwasher cycle/i })).toHaveAttribute(
-          'aria-valuetext',
-          expect.stringContaining('Saves £0.21 this cycle'),
-        )
+        fireEvent.click(trigger)
+        expect(screen.getByRole('tooltip')).toHaveTextContent('Kept in a daytime window for safety.')
+
+        fireEvent.pointerDown(document.body)
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+      })
+
+      it('shows the safety-constraint explanation on keyboard focus', () => {
+        renderProfile({
+          events: [
+            plainEvent({
+              id: 'tumble_dryer',
+              label: 'Tumble dryer',
+              startSlot: 17,
+              slotCount: 3,
+              safetyConstraintNote: 'Kept in a daytime window for safety.',
+            }),
+          ],
+        })
+        const trigger = screen.getByRole('button', { name: /why is tumble dryer kept in this window/i })
+        fireEvent.focus(trigger)
+        expect(screen.getByRole('tooltip')).toHaveTextContent('Kept in a daytime window for safety.')
+
+        fireEvent.blur(trigger)
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+      })
+
+      it('gives each constrained appliance in a grouped card its own info icon', () => {
+        renderProfile({
+          events: [
+            plainEvent({
+              id: 'tumble_dryer',
+              label: 'Tumble dryer',
+              startSlot: 10,
+              slotCount: 4,
+              safetyConstraintNote: 'Kept in a daytime window for safety.',
+            }),
+            plainEvent({ id: 'ev_charging', label: 'EV charging', startSlot: 12, slotCount: 4 }),
+          ],
+        })
+        expect(screen.getByRole('button', { name: /why is tumble dryer kept in this window/i })).toBeInTheDocument()
       })
     })
 
-    it('moves one slot per arrow key press, clamped to that event\'s own valid window', async () => {
-      const user = userEvent.setup()
-      const onMove = vi.fn()
-      renderProfile({ day: fixture.optimise.day, heading: 'Optimise', events: [movableEvent({ onMove })] })
-
-      const slider = screen.getByRole('slider', { name: /dishwasher cycle/i })
-      slider.focus()
-
-      await user.keyboard('{ArrowRight}')
-      expect(onMove).toHaveBeenLastCalledWith(5)
-
-      await user.keyboard('{ArrowLeft}')
-      expect(onMove).toHaveBeenLastCalledWith(3)
-    })
-
-    it('does not move past the minimum start slot', async () => {
-      const user = userEvent.setup()
-      const onMove = vi.fn()
-      renderProfile({
-        day: fixture.optimise.day,
-        heading: 'Optimise',
-        events: [movableEvent({ startSlot: 0, onMove })],
+    // OA-108: a short, quiet per-event saving note -- shown directly in a
+    // single-event card (a grouped card stays a plain bullet list).
+    describe('per-event saving note (OA-108)', () => {
+      it('shows the saving note in a single-event card when given', () => {
+        renderProfile({ events: [plainEvent({ savingText: 'Saves £0.21 this cycle' })] })
+        expect(screen.getByText('Saves £0.21 this cycle')).toBeInTheDocument()
       })
 
-      screen.getByRole('slider', { name: /dishwasher cycle/i }).focus()
-      await user.keyboard('{ArrowLeft}')
-      expect(onMove).toHaveBeenLastCalledWith(0)
-    })
-
-    it('does not move past the maximum start slot', async () => {
-      const user = userEvent.setup()
-      const onMove = vi.fn()
-      renderProfile({
-        day: fixture.optimise.day,
-        heading: 'Optimise',
-        events: [movableEvent({ startSlot: 46, onMove })],
+      it('omits the saving note entirely when none is given', () => {
+        const { container } = renderProfile({ events: [plainEvent()] })
+        expect(container.querySelector('.landing-time-profile__event-card-saving')).not.toBeInTheDocument()
       })
-
-      screen.getByRole('slider', { name: /dishwasher cycle/i }).focus()
-      await user.keyboard('{ArrowRight}')
-      expect(onMove).toHaveBeenLastCalledWith(46)
     })
 
     // OA-106: an overlay must never render unless it has a real id/label,
@@ -527,53 +496,32 @@ describe('LandingTimeProfile', () => {
     // in this day -- the chart's own defence against an empty/orphan
     // outlined block, independent of whatever LandingDemo.tsx passes in.
     describe('empty/orphan overlay guard (OA-106)', () => {
-      it('does not render a fixed annotation with a blank label', () => {
-        const { container } = renderProfile({
-          day: fixture.baseline.day,
-          heading: 'Baseline',
-          events: [{ id: 'ghost', label: '   ', startSlot: 4, slotCount: 2, movable: false }],
-        })
-        expect(container.querySelector('.landing-time-profile__event-chip[data-fixed]')).not.toBeInTheDocument()
+      it('does not render a card with a blank label', () => {
+        const { container } = renderProfile({ events: [plainEvent({ id: 'ghost', label: '   ' })] })
+        expect(container.querySelector('.landing-time-profile__event-card')).not.toBeInTheDocument()
       })
 
       it('does not render an overlay with zero or negative slot count', () => {
-        const { container } = renderProfile({
-          day: fixture.baseline.day,
-          heading: 'Baseline',
-          events: [{ id: 'empty', label: 'Empty load', startSlot: 4, slotCount: 0, movable: false }],
-        })
-        expect(container.querySelector('.landing-time-profile__event-chip[data-fixed]')).not.toBeInTheDocument()
+        const { container } = renderProfile({ events: [plainEvent({ id: 'empty', label: 'Empty load', slotCount: 0 })] })
+        expect(container.querySelector('.landing-time-profile__event-card')).not.toBeInTheDocument()
         expect(screen.queryByText(/empty load/i)).not.toBeInTheDocument()
       })
 
-      it('does not render a movable overlay whose slots fall outside the day', () => {
-        renderProfile({
-          day: fixture.optimise.day,
-          heading: 'Optimise',
-          events: [movableEvent({ startSlot: 47, slotCount: 2 })],
-        })
-        expect(screen.queryByRole('slider')).not.toBeInTheDocument()
+      it('does not render an overlay whose slots fall outside the day', () => {
+        renderProfile({ events: [plainEvent({ startSlot: 47, slotCount: 2 })] })
+        expect(screen.queryByText('Dishwasher cycle')).not.toBeInTheDocument()
       })
 
-      it('renders only one overlay when the events array repeats the same id', () => {
-        renderProfile({
-          day: fixture.optimise.day,
-          heading: 'Optimise',
-          events: [movableEvent(), movableEvent()],
-        })
-        expect(screen.getAllByRole('slider', { name: /dishwasher cycle/i })).toHaveLength(1)
+      it('renders only one card when the events array repeats the same id', () => {
+        renderProfile({ events: [plainEvent(), plainEvent()] })
+        expect(screen.getAllByText('Dishwasher cycle')).toHaveLength(1)
       })
 
       it('still renders every valid overlay alongside a filtered-out invalid one', () => {
         renderProfile({
-          day: fixture.optimise.day,
-          heading: 'Optimise',
-          events: [
-            movableEvent(),
-            { id: 'ghost', label: '', startSlot: 10, slotCount: 2, movable: false },
-          ],
+          events: [plainEvent(), plainEvent({ id: 'ghost', label: '', startSlot: 10, slotCount: 2 })],
         })
-        expect(screen.getByRole('slider', { name: /dishwasher cycle/i })).toBeInTheDocument()
+        expect(screen.getByText('Dishwasher cycle')).toBeInTheDocument()
         expect(screen.queryByText(/ghost/i)).not.toBeInTheDocument()
       })
     })
