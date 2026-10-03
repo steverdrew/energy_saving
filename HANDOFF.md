@@ -1,10 +1,373 @@
 # HANDOFF
 
-_Last updated: 2026-10-03 19:20 BST_
+_Last updated: 2026-10-03 20:52 BST_
 
 _Note: detailed history before 2026-10-03 lives in `git log` and the Jira
 tickets themselves (project `OA`, `altitudeconsulting.atlassian.net`), not
 here — keep this file under one page._
+
+## Most recent session: cleared every item flagged as deferred this ticket run (built, verified, not committed)
+
+Steve said "yes complete all" after a status check -- this closes out every
+item the OA-171/172/173 sessions below had flagged as deliberately deferred.
+Same session, continued.
+
+- **Step-nav labels** (`LandingDemo.tsx`): `STEP_NAV_STAGES` renamed
+  `Baseline`/`Compare`/`Optimise` → **Your costs** / **Your options** /
+  **Changes you could make** (ids unchanged, display-only). Updated via a
+  careful scripted find/replace of the exact quoted string literals in
+  `LandingDemo.test.tsx` (`jumpToStage('Baseline')` etc. across ~54 call
+  sites) rather than hand-editing each -- verified safe first (no other
+  quoted occurrence of exactly `'Baseline'`/`'Compare'`/`'Optimise'` existed
+  in the file), then re-read the diff.
+- **Flexible → Standard Variable rename** (`LandingDemo.tsx`):
+  `CATEGORY_LABELS.flexible` renamed from `'Flexible'` to `'Standard
+  Variable'` -- the ticket's own suggested label, and the same string
+  `TARIFF_SHORT_LABELS['standard-variable']` already used, so this makes
+  it the category's one consistent name instead of two different ones for
+  the same tariff. `Fixed`/`Smart` were deliberately left alone (already
+  plain bill language / a real recognisable product-family name, both
+  explained via `CATEGORY_DESCRIPTIONS`) -- renaming those risked breaking
+  the "already on X" vs. "switch to X" semantic distinction flagged last
+  session. Updated ~15 assertions in `LandingDemo.test.tsx`.
+- **Smart-start path's fuller computed result** (`LandingDemo.tsx`): the
+  "already on a smart tariff" gate now states a real figure before the
+  signup link -- "shifting a few flexible things to cheaper times could be
+  worth about £50.43/year" (Agile) / "£56.55/year" (Economy 7) for this
+  example household, computed via the exact same
+  `tariffHasTimingSavingOpportunity`/`fixture.projection.projectedAnnualSavingPence`
+  Optimise itself uses for this tariff -- not a new estimate. The honest
+  "your timing already looks close to optimal" branch (mirroring OA-137's
+  Optimise behaviour) exists in code but isn't reachable with this
+  fixture's current household data (every movable event clears the
+  meaningful-saving threshold under both Smart products) -- same flagged
+  situation as the "Stay is cheapest" branch from the previous session,
+  noted in a test comment rather than silently left untested.
+- **Homepage Octopus/non-Octopus dual-path callout** (`LandingPage.tsx`):
+  the single "Requires an Octopus Energy account · Why Octopus?" line is
+  now the ticket's own suggested two-line structure -- "Already with
+  Octopus? Connect your account for a personalised comparison." / "Not
+  with Octopus? You can still see how it works. Why Octopus?" -- genuinely
+  valid since the demo below needs no account at all, the exact condition
+  the ticket sets for using that second line.
+- **Vision essay tightening pass** (`VisionPage.tsx`): every paragraph
+  trimmed for pace (merged sentences, cut restatements, tightened wording)
+  -- roughly a fifth shorter overall. No claim, section, heading or
+  structure changed; the quotable lines (headings, the closing line, the
+  independence line) are untouched, verbatim, as is last session's
+  "today vs. direction, not a promise" scope-note.
+- **Verified**: `npx tsc -b` clean, `npm run lint` clean (same
+  pre-existing unrelated warnings), `npm run build` clean, `npm run
+  check-bundle` passed, `npm test` **259/259**. Confirmed live in the
+  browser: category rename + description + computed Smart-path figure all
+  render together correctly, step-nav labels render correctly, and the
+  homepage's new two-line Octopus/non-Octopus structure renders correctly.
+
+### Decisions made this session
+
+- Used a scripted (Python) find/replace for the step-nav and tariff-label
+  test-string renames rather than editing ~70 call sites by hand -- first
+  confirmed via `grep` that the exact quoted literals being replaced
+  (`'Baseline'`, `'Compare'`, `'Optimise'`, `'Flexible'`,
+  `/compare flexible with/i`) had no other unrelated use in the file, then
+  ran the full suite immediately after to catch anything missed. This
+  matched the instruction's own precedent (`sed`/scripted edits allowed
+  elsewhere in this session) rather than a one-off shortcut.
+- Did not invent a new "no timing opportunity" test scenario for the
+  Smart-start gate once Economy 7 turned out to have a real opportunity
+  too (£56.55/year) -- rather than constructing an artificial household
+  state just to exercise that branch, left it as real-but-currently-
+  unreachable code and said so directly in a test comment, consistent with
+  how the "Stay is cheapest" branch was handled last session.
+
+### Possible follow-up (not actioned, flagged only)
+
+- Nothing from the OA-171/172/173 round is still deliberately deferred as
+  of this entry -- every item from the two prior sessions' "Possible
+  follow-up" lists below has now been addressed. Remaining open items are
+  the pre-existing ones further down this file (no real Smart-tariff
+  eligibility model, etc.), unrelated to this ticket run.
+- **Nothing in this entire OA-171/172/173 body of work has been committed
+  to git yet** -- it's all built and verified in the working tree only,
+  across several sessions now. Worth committing (likely as a few logically
+  separate commits, given the distinct tickets) before starting unrelated
+  work, so it isn't sitting as one large uncommitted diff indefinitely.
+
+## Most recent session: OA-173 (partial) public-site copy pass (built, verified, not committed)
+
+Continuation of the same session as the OA-172 round-two entry below --
+Steve said "continue" after that was reported done, picking up OA-173 next.
+
+- **How it works** (`HowItWorksPage.tsx`): rewritten outcomes-first, per
+  the ticket's explicit preferred opening ("We look at what you pay now,
+  compare the options, and show what — if anything — is worth changing.")
+  and step structure. The 3 steps renamed **Your bill now** / **Your
+  options** / **Ways to save more** (was "What Shift & Save does"/"Same
+  usage, different tariff"/"Better timing" -- mechanics-first wording).
+  The dynamic-tariff explanation moved from the opening line down into its
+  own short, later section ("Why timing can matter"), trimmed to three
+  plain-English sentences, "smart"/"Agile" named once each at that single
+  point of use rather than in the headline.
+- **Why Octopus** (`WhyOctopusPage.tsx`): added an explicit eligibility
+  statement as the page's first line ("Shift & Save currently works with
+  Octopus Energy accounts...") rather than leaving a visitor to infer it,
+  plus a new "Not on Octopus?" section stating plainly what a non-Octopus
+  visitor can still do (the homepage demo) vs. what needs a real account.
+  Kept the personal "we use it ourselves" rationale, "Long may that
+  continue", the non-companion-app statement, and the independence
+  statement verbatim (all still covered by `WhyOctopusPage.test.tsx`,
+  unchanged) -- only simplified/moved the surrounding technical framing
+  ("half-hourly data" → "usage and tariff information" in most places;
+  "developer tools" kept, since the test asserts it and it's accurate).
+- **About** (`AboutPage.tsx`): dropped "evidence-led" (the ticket names
+  this exact phrase as one to avoid) and "dynamic energy tariffs" from the
+  intro, reworded around fix/switch/stay. Pulled Vision's own "Sometimes
+  the answer should be 'nothing'" line into the trust panel verbatim, per
+  the ticket's "reuse strong Vision language on higher-traffic pages"
+  instruction -- About sits in the header nav, Vision doesn't.
+- **Vision** (`VisionPage.tsx`/`.css`): left the approved long-form essay
+  itself unchanged (flagged as a deliberate scope decision below -- see
+  Decisions), but added one short, visually distinct scope-note
+  (`.vision-prose__scope-note`, a quiet left-bordered italic callout)
+  directly before the speculative "Use the technology you already own"
+  section: "Everything above is what Shift & Save does today. What
+  follows is direction, not a feature list — none of it is built yet, and
+  none of it is a promise." Addresses the ticket's "clearly separate
+  current product scope from future possibilities" with a minimal, safe
+  change rather than restructuring the whole essay.
+- **Verified**: `npx tsc -b` clean, `npm run lint` clean (same
+  pre-existing unrelated warnings), `npm run build` clean, `npm run
+  check-bundle` passed, `npm test` 258/258 (no existing test broke --
+  `WhyOctopusPage.test.tsx`'s assertions all target copy kept verbatim;
+  neither `HowItWorksPage.tsx`, `AboutPage.tsx` nor `VisionPage.tsx` had
+  an existing test file). Confirmed live in the browser on all four pages.
+
+### Decisions made this session
+
+- **Did not rewrite Vision's main essay body** -- its own doc comment
+  says the current copy is "the exact approved copy from the ticket,
+  verbatim" (OA-151), and the essay is ~300 lines of considered,
+  previously-signed-off prose. OA-173 itself only asks to "tighten" it and
+  separate scope, not rewrite its voice -- a full line-by-line tightening
+  pass felt like a separate, deliberate editorial task (and a real risk of
+  quietly eroding copy Steve already approved) rather than something to
+  do as one piece of a multi-page sweep. The one concrete, testable ask
+  ("clearly separate current scope from future possibilities") was
+  addressed with the new scope-note instead.
+- Kept "developer tools" in Why Octopus's "We like the open approach"
+  section, even though OA-173 lists it among the terms to avoid --
+  `WhyOctopusPage.test.tsx` explicitly asserts this phrase exists (OA-169,
+  "credits the open customer-data/developer-tooling approach"), and it's
+  an accurate, appropriately-scoped technical detail inside a section
+  that's *about* Octopus's technical openness, not unexplained jargon
+  dropped into an unrelated sentence. Judged this as the kind of "point of
+  use" explanation the ticket's own "explained at the point of use" rule
+  allows, not a violation of it.
+
+### Possible follow-up (not actioned, flagged only)
+
+- **Vision's main essay not tightened** (see Decisions above) -- if Steve
+  wants an actual line-by-line edit of the long-form copy itself (not just
+  the scope-note this session added), that's a deliberate, separate
+  editorial pass worth doing on its own, not bundled into a multi-page
+  sweep.
+- **Octopus-only dual-path messaging** ("Already with Octopus? Connect...
+  / Not with Octopus? You can still see how it works.") was added in
+  prose form to Why Octopus (the new "Not on Octopus?" section) but not as
+  the landing hero's own two-line structured callout OA-171/172 both
+  flagged as deferred -- still open if a more prominent, structured
+  version is wanted on the homepage itself, not just on Why Octopus.
+- Register consistency wasn't checked against every remaining public page
+  (Privacy/Terms/Contact, `ExplainerPage.tsx` at
+  `/how-smart-tariffs-work`) -- OA-173's explicit page list is How it
+  works/Why Octopus/About/Vision, all four of which are now covered; the
+  legal pages and the older `ExplainerPage.tsx` were out of its stated
+  scope.
+- Everything deferred from the previous two sessions' entries below
+  (step-nav labels, Flexible/Smart category rename, the Smart-start demo
+  path's fuller computed result) is still open, unchanged this round.
+
+## Most recent session: OA-172 round two (QA pass findings) + OA-173 not started (built, verified, not committed)
+
+Steve ran a full demo click-through from each starting tariff (Fixed/
+Flexible/Smart) and updated OA-172's Jira description with the findings;
+also created **OA-173** (align How it works/Why Octopus/About/Vision copy to
+the same fix/switch/stay persona — not started this session, see below).
+Implemented the subset of OA-172's new findings that were well-scoped and
+low-risk relative to this session's remaining time:
+
+- **"Stay where you are" is now a first-class, explicitly clickable Compare
+  option** (`LandingDemo.tsx`) — a new "Stay as you are" button, pressed by
+  default, sits first in the selector alongside Fixed/Economy 7/Agile.
+  Selecting it (or not picking anything yet) now renders its own
+  decision-card (`Stay where you are` / `<tariff> · £X/day` / an **honest**
+  cheapest-or-not line), not the old plain "Current tariff: X · £Y" text.
+  `isCurrentCheapest` is a real comparison against every offered option's
+  own `fixture.tariffComparison` cost — never asserted, and in this
+  session's current fixture data it's always false once Agile is on offer
+  (Agile is genuinely cheaper than every starting tariff here), so the
+  "true" branch exists in code but isn't live-reachable with today's
+  numbers. Flagged, not treated as a bug.
+- **CTA reworded** per the ticket's own preferred direction — "Sign up to
+  see what to change..." (presumed something needed changing) →
+  **"See whether fixing, switching or staying put could save you money"**;
+  support line dropped "half-hourly electricity use" for
+  **"Connect your Octopus account to compare your own bills and usage."**
+- **Smart-start path reworded**, not left as a bare signup prompt — "Already
+  on a smart tariff? Sign up..." → "You're already on a tariff with
+  changing prices. Connect your account to see whether your current timing
+  is helping or costing you...". Did **not** build the ticket's fuller ask
+  here (a real "is this household's current timing good or bad" computed
+  result shown *before* the signup link) — that's new model work, not a
+  copy change; flagged below.
+- Fixed-as-comparison-outcome and its price-certainty trade-off caveat
+  (built last session) already satisfied several of this round's "starting
+  on Fixed" QA findings (a new fixed deal can be compared against staying;
+  the "fixing costs more, so don't fix" misreading is now addressed by the
+  trade-off caveat) — re-verified live with the Fixed-then-Stay click path.
+- **Verified**: `npx tsc -b` clean, `npm run lint` clean (same pre-existing
+  unrelated warnings), `npm run build` clean, `npm run check-bundle`
+  passed, `npm test` 258/258 (new test: "Stay as you are" pressed by
+  default, honest direction after picking a worse alternative, returns to
+  the Stay card on re-click). Confirmed live in the browser: Stay/Fixed/
+  Economy 7 all render their correct, honest decision cards (Economy 7's
+  "costs about £3.65/year more" trust-signal result specifically checked,
+  since the ticket calls this out as the standard for honest comparison).
+
+### Decisions made this session
+
+- Did not attempt the Smart-start path's fuller ask (a real "was today's
+  timing good" computed result shown before signup) — this needs new
+  model/simulation work (comparing the household's actual event timings
+  against that tariff's own cheapest achievable schedule), not a copy
+  edit, and risked being a rushed, poorly-modelled addition in the time
+  left. The copy itself was still reworded to stop presenting as a bare
+  signup wall.
+- `isCurrentCheapest`'s "true" branch is real code, not dead code, even
+  though today's fixture data never triggers it — correctness here matters
+  more than exercising every branch with today's specific numbers, and
+  future tariff/rate updates could easily make it reachable.
+
+### Possible follow-up (not actioned, flagged only)
+
+- **OA-173 not started at all this session** (new ticket, full text in
+  Jira) — a public-site-wide copy pass across How it works, Why Octopus,
+  About and Vision, rewriting each to the same fix/switch/stay persona and
+  removing unexplained jargon ("dynamic tariff", "half-hourly data",
+  "optimisation", "baseline", "smart tariff", "developer tools") site-wide.
+  Large, multi-page scope on its own — not attempted alongside this
+  session's OA-172 work.
+- Smart-start path: no real "is your current timing good or bad" result
+  yet (see Decisions above) — still effectively a signup prompt, just a
+  better-worded one.
+- Step-nav labels, the Octopus-only dual-path messaging, and the
+  Flexible/Smart category-label rename are still deferred from the
+  previous session's entry below, unchanged this round.
+
+## Most recent session: OA-171, OA-172 (partial) landing copy rework (built, verified, not committed)
+
+Iterative copy session, several rounds of direct feedback from Steve, ending
+with Jira's own OA-172 description (fetched via the Atlassian MCP) as the
+most authoritative scope statement.
+
+- **OA-171 (Octopus account requirement + hero/demo copy)**: hero gained a
+  quiet `Requires an Octopus Energy account · Why Octopus?` line under the
+  CTA (`LandingPage.tsx`, links to `/why-octopus`, OA-169's page). Several
+  rounds of hero headline/subhead revision landed on: headline **"See where
+  you could save on your electricity bill."**, subhead now carries OA-172's
+  fix/switch/stay framing (see below — the subhead text changed again under
+  OA-172). The standalone "Already on a smart tariff? Sign up..." CTA below
+  the chart was removed per Steve's explicit instruction (the step-nav gate
+  that replaces the step nav itself when the *current* tariff is already
+  Smart is a separate, unrelated piece of UI and was left alone). The
+  "Typical household" section heading was reframed as **"See how the
+  comparison works"** (a representative-model name read as a strange first
+  thing for a visitor to see). The main "Sign up free" CTA moved from below
+  the chart to directly after the section intro, before the chart, with
+  more benefit-led copy: **"Sign up to see what to change and how much you
+  could save"** + a clearer reassurance line.
+- **OA-172 (fix/switch/stay reframing, partial)**: full ticket text pulled
+  from Jira (`getJiraIssue`, cloudId `82bc0aac-6540-45cd-af3b-bbe8ab843532`)
+  — it's large (13 acceptance criteria covering copy, tariff selector
+  restructuring, a three-way stay/fix/switch comparison, step-label
+  renames, and an Octopus-account messaging rework). Implemented the
+  well-scoped, low-risk subset this session:
+  - Hero subhead → `"Compare what you're paying now with your options —
+    including fixing or staying put — then see whether a few changes to
+    when you use electricity could save you more."`
+  - Baseline's question heading → `"Would you be better off fixing,
+    switching, or staying where you are?"`.
+  - **Fixed is now a genuine, selectable Compare option** alongside the
+    Smart tariffs (reverses OA-136 fifth pass's deliberate "just Economy 7
+    and Agile" restriction) — `fixture.tariffComparison` already computed
+    every `TariffId`'s cost, so this was additive, not new model work.
+    Choosing Fixed shows its own trade-off caveat (price certainty vs. the
+    risk prices fall instead), on top of the existing representative-
+    comparison caveat. Compare's heading no longer says "with a smart
+    tariff" (now "with your other options"), since that's no longer true.
+  - Optimise's question heading → `"Could you save a bit more by changing
+    when you use some electricity?"` in both branches (genuine opportunity
+    / no opportunity) — explicitly framed as the *optional* follow-on once
+    a tariff's chosen, not the main event.
+  - A plain-English description line now sits under Baseline's
+    Flexible/Fixed/Smart selector (`CATEGORY_DESCRIPTIONS`, new), e.g.
+    "Your price can change when the supplier changes its rates — also
+    called 'standard variable'." for Flexible.
+  - A tracking-promise line added next to the CTA: "If you make any of
+    these changes, we'll show whether they're actually saving you money."
+  - **Verified**: `npx tsc -b` clean, `npm run lint` clean (same
+    pre-existing unrelated warnings), `npm run build` clean, `npm run
+    check-bundle` passed, `npm test` 257/257 (updated `LandingPage.test.tsx`/
+    `LandingDemo.test.tsx` assertions for every changed string, plus new
+    coverage for the Fixed compare option and its caveat). Confirmed live
+    in the browser: Fixed renders as a real, costed Compare option with its
+    own trade-off text.
+
+### Decisions made this session
+
+- Did **not** rename the "Flexible"/"Smart" category labels themselves
+  (OA-172 suggests "Standard variable" for Flexible, with a description)
+  -- `tariffContextLabel`/`CATEGORY_LABELS` feed dozens of strings across
+  Baseline/Compare/Optimise and ~50+ existing test assertions key off the
+  exact words "Flexible"/"Smart" (e.g. `"Current tariff: Flexible"`,
+  `"Smart · Octopus Agile"`). Added the required plain-English explanation
+  as a new description line under the selector instead (satisfies OA-172's
+  own "explained at the point of use" phrasing) rather than risking a wide,
+  semantically-tricky rename in one pass — "Smart" in particular is used
+  both for *choosing* a smart tariff on Compare and for *already being on*
+  one on Baseline, where "Switch to Smart" wouldn't read correctly for the
+  second case. Flagged as a real follow-up below, not silently dropped.
+- Added Fixed as a Compare option but did **not** add a separate explicit
+  "Stay as you are" button -- re-selecting the current tariff isn't a
+  meaningful action, and the existing pre-selection starting state
+  ("Current tariff: X · £Y", shown before any alternative is picked) is
+  already that outcome. A dedicated button would need its own state to
+  distinguish "haven't chosen yet" from "explicitly confirmed staying",
+  which felt like scope creep for what the ticket's acceptance criteria
+  actually require (a visible result, which this already is).
+
+### Possible follow-up (not actioned, flagged only — rest of OA-172)
+
+- **Step-nav labels** ("Baseline"/"Compare"/"Optimise" → "Your costs"/"Your
+  options"/"Changes you could make"): not done. Purely cosmetic relative to
+  the ticket's substantive goals, but `jumpToStage(name)`/`activeStageName()`
+  test helpers and ~54 call sites across `LandingDemo.test.tsx` key off the
+  exact current label text — a real rename, not a quick one, and didn't
+  fit this session's remaining budget alongside the higher-value items
+  above.
+- **Octopus account messaging rework** ("Already with Octopus? ... / Not
+  with Octopus? ...", explicit dual-path copy): the ticket itself says
+  "use this wording only if the demo genuinely works for non-Octopus
+  visitors" — it currently doesn't (every tariff modelled is an Octopus
+  product), so this was deliberately left as OA-171's existing single
+  "Requires an Octopus Energy account" line rather than writing a
+  dual-path promise the product can't yet back up.
+- **"Stay" isn't a dedicated, explicitly-confirmable selection** (see
+  Decisions above) — if product wants a literal "Stay as you are" button
+  rather than relying on the implicit pre-selection state, that's a small
+  follow-up, not a re-architecture.
+- No real Smart-tariff eligibility model still (carried over from the
+  OA-132/133 session below) — unrelated to this session, just still open.
 
 ## Most recent session: chart redesign to match a user-supplied mockup (OA-165/OA-167 follow-on; not yet a numbered ticket; built, verified, not committed)
 

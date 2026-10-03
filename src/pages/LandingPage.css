@@ -84,6 +84,13 @@
   color: var(--text);
 }
 
+/* OA-173: two stacked lines now (Octopus / non-Octopus paths) -- the
+   second sits close under the first so they read as one grouped
+   statement, not two separately-spaced paragraphs. */
+.landing-hero__requirement + .landing-hero__requirement {
+  margin-top: 4px;
+}
+
 .landing-hero__requirement a {
   color: inherit;
   text-decoration: underline;

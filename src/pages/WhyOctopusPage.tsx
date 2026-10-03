@@ -13,6 +13,18 @@ import './WhyOctopusPage.css'
  * is the best supplier" or a suggestion that visitors should switch to
  * them. The independence/non-endorsement statement is explicit, not left
  * implicit.
+ *
+ * OA-173 (copy rewrite): this page previously led with technical detail --
+ * "half-hourly data", "developer tools" -- before saying plainly who it's
+ * actually for. Added an explicit eligibility statement near the top (per
+ * the ticket's "be explicit early... do not make visitors discover
+ * eligibility only after reading multiple pages"), plus a short "Not on
+ * Octopus?" section on what a non-Octopus visitor can still do here (the
+ * homepage demo, which never required a real account). The personal "we
+ * use it ourselves" rationale and the "Long may that continue" line are
+ * kept verbatim -- the ticket's own "retain the personal rationale"
+ * instruction -- only the surrounding technical framing is simplified and
+ * moved lower down the page.
  */
 function WhyOctopusPage() {
   return (
@@ -20,8 +32,8 @@ function WhyOctopusPage() {
       <section className="landing-section-band" aria-label="Why Octopus">
         <h1 className="public-page__title">What is Octopus Energy — and why did we start there?</h1>
         <p className="public-page__intro">
-          Octopus is the electricity supplier we use ourselves. Its open approach to customer data is a big part of
-          what made this product possible — so it&rsquo;s the natural place to start.
+          Shift &amp; Save currently works with Octopus Energy accounts. Octopus is also the electricity supplier
+          we use ourselves — here&rsquo;s why that&rsquo;s where we started.
         </p>
       </section>
 
@@ -34,21 +46,25 @@ function WhyOctopusPage() {
             used electricity would actually make much difference.
           </p>
           <p>
-            Once we started looking at our own half-hourly data and tariff information, we found real opportunities
-            to save money — not huge, dramatic ones, but useful ones.
+            Once we started looking at our own usage and tariff information, we found real opportunities to save
+            money — not huge, dramatic ones, but useful ones.
+          </p>
+
+          <h2>Not on Octopus?</h2>
+          <p>
+            You can still try the interactive example on the homepage and read how the comparison works — none of
+            that needs a real account. Personalising it to your own bills currently needs an Octopus Energy
+            account, since that&rsquo;s the only supplier we&rsquo;ve built and tested this against so far.
           </p>
 
           <h2>We like the open approach</h2>
           <p>
-            One of the things we like most about Octopus is how open it is with customer data. Customers can access
-            their own half-hourly consumption and tariff information, and Octopus provides developer tools that make
-            it possible to build useful things on top of that data.
+            One of the things we like most about Octopus is how openly it shares customer data — each customer can
+            see their own detailed usage and tariff information, and Octopus provides developer tools that make it
+            possible to build useful things on top of that. That openness is a big part of what made this product
+            possible at all.
           </p>
           <p className="why-octopus-prose__quote">Long may that continue.</p>
-          <p>
-            The product exists partly because that openness makes experimentation and independent analysis possible
-            at all.
-          </p>
 
           <h2>That openness exposed a bigger problem</h2>
           <p>
@@ -65,7 +81,7 @@ function WhyOctopusPage() {
 
           <h2>Why we start with Octopus</h2>
           <p>
-            We start with Octopus because it gives its customers a practical route to their own half-hourly energy
+            We start with Octopus because it gives its customers a practical route to their own detailed energy
             and tariff data. That makes it a good place to prove the product properly, using real household
             information rather than generic averages.
           </p>

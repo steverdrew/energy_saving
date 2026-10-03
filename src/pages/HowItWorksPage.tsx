@@ -16,9 +16,7 @@ const COMING_SOON = ['Smart plugs', 'More connected appliances']
  * content that used to sit in a large card on the landing page itself
  * (see LandingPage.tsx before OA-90). Moved here, not deleted, so the
  * landing page can stay focused on Hero -> Comparison -> Sign up while
- * this detail remains reachable via the shared nav/footer. Copy is the
- * landing page's own previously-approved wording, reorganised into the
- * ticket's suggested section structure -- no new product claims.
+ * this detail remains reachable via the shared nav/footer.
  *
  * OA-93: the footer's standalone "How dynamic tariffs work" link
  * (-> ExplainerPage.tsx) is removed; its core idea is folded in here
@@ -28,17 +26,25 @@ const COMING_SOON = ['Smart plugs', 'More connected appliances']
  * per-tariff breakdown (Agile/Go/Intelligent Go) -- linked from here,
  * not deleted, since nothing in OA-93 asks for that.
  *
- * OA-142: Phase One UI mockup pass -- the three core sections (what it
- * does / same usage different tariff / better timing) are the ticket's
- * explicit "3-step logic" and now render as a numbered step grid
- * (HowItWorksPage.css) instead of a flat stack of identical cards, with
- * a "Sign up free" CTA placed right after them per the ticket's "CTA
- * placement" in-scope item. The dynamic-tariffs and compatibility
- * sections are kept (OA-93 content, out of OA-142's literal 3-section
- * scope to remove) but visually de-emphasised below so the 3-step logic
- * stays the obvious focal point, per OA-142's "use visual hierarchy"
- * design direction. Copy is unchanged -- OA-142 explicitly excludes
- * "final copywriting sign-off" from scope.
+ * OA-142: Phase One UI mockup pass -- the three core sections render as
+ * a numbered step grid (HowItWorksPage.css) instead of a flat stack of
+ * identical cards, with a CTA placed right after them. The dynamic-
+ * tariffs and compatibility sections are kept (OA-93 content) but
+ * visually de-emphasised below so the step grid stays the obvious focal
+ * point.
+ *
+ * OA-173 (copy rewrite): this page previously opened with "dynamic
+ * energy tariffs" and described product mechanics (tariff types,
+ * timing) before any user outcome -- exactly the "tech-adjacent" voice
+ * the ticket calls out, inconsistent with the homepage's plain, benefit-
+ * led register. Rewritten outcomes-first, around the same canonical
+ * fix/switch/stay persona the landing demo (OA-172) now uses: "your bill
+ * now" -> "your options" -> "ways to save more", with the (now much
+ * shorter) dynamic-tariff explanation moved down to the point it's
+ * actually needed, not the opening line. "Smart tariff"/"dynamic
+ * tariff" are still named once each, inside that explanation itself
+ * (point-of-use, not the headline), per the ticket's "technical terms
+ * explained only when unavoidable" rule.
  */
 function HowItWorksPage() {
   return (
@@ -46,43 +52,43 @@ function HowItWorksPage() {
       <section className="landing-section-band" aria-label="How Shift & Save works">
         <h1 className="public-page__title">How Shift &amp; Save works</h1>
         <p className="public-page__intro">
-          Here's the 3-step logic: how we use your own energy data to find a saving, step by step.
+          We look at what you pay now, compare the options, and show what — if anything — is worth changing.
         </p>
       </section>
 
       <div className="landing-chapter-cta landing-section-band">
         <div className="how-it-works__steps">
-          <section className="landing-card how-it-works__step" aria-label="What Shift & Save does">
+          <section className="landing-card how-it-works__step" aria-label="Your bill now">
             <span className="how-it-works__step-badge" aria-hidden="true">
               1
             </span>
-            <h2>What Shift &amp; Save does</h2>
+            <h2>Your bill now</h2>
             <p>
-              Shift &amp; Save helps you get more from dynamic energy tariffs without having to watch
-              electricity prices all day. You stay in control — we make the complicated bit simple.
+              We start with what you're actually paying — your real electricity use, not a generic estimate —
+              so every comparison that follows is grounded in your own numbers.
             </p>
           </section>
 
-          <section className="landing-card how-it-works__step" aria-label="Same usage, different tariff">
+          <section className="landing-card how-it-works__step" aria-label="Your options">
             <span className="how-it-works__step-badge" aria-hidden="true">
               2
             </span>
-            <h2>Same usage, different tariff</h2>
+            <h2>Your options</h2>
             <p>
-              We look at your real energy use and compare it against a different tariff — same usage, same
-              times — so you can see what another tariff would actually have cost you, not a generic estimate.
+              Using that same usage, we show what fixing, switching tariff, or simply staying where you are
+              would each actually have cost you — so you can see which one makes sense, including if that's
+              doing nothing at all.
             </p>
           </section>
 
-          <section className="landing-card how-it-works__step" aria-label="Better timing">
+          <section className="landing-card how-it-works__step" aria-label="Ways to save more">
             <span className="how-it-works__step-badge" aria-hidden="true">
               3
             </span>
-            <h2>Better timing</h2>
+            <h2>Ways to save more</h2>
             <p>
-              Beyond switching tariff, we also show what better timing could change too — moving flexible
-              usage (like a dishwasher or washing machine) to cheaper times, without changing your total
-              energy use.
+              Once that's settled, we show whether a few small changes — like running the dishwasher or
+              washing machine at a cheaper time — could save you a bit more. This part's always optional.
             </p>
           </section>
         </div>
@@ -95,12 +101,13 @@ function HowItWorksPage() {
         </p>
 
         <div className="how-it-works__secondary">
-          <section className="landing-card landing-about" aria-label="How dynamic tariffs work">
-            <h2>How dynamic tariffs work</h2>
+          <section className="landing-card landing-about" aria-label="Why timing can matter">
+            <h2>Why timing can matter</h2>
             <p>
-              On a normal tariff, electricity costs the same price whenever you use it. On a dynamic tariff
-              like Octopus Agile, the price moves depending on when you use power — usually cheaper at quiet
-              times, and more expensive at busy times. That's what makes timing matter.
+              On a standard tariff, electricity costs the same whatever time you use it. Some tariffs — Octopus
+              calls theirs "smart" or "Agile" — charge a price that changes through the day instead, usually
+              cheaper at quiet times and more expensive at busy ones. That's the only reason timing ever makes
+              a difference, and it's entirely optional to use one.
             </p>
             <p>
               <Link to="/how-smart-tariffs-work">More on how Agile, Go and Intelligent Go work.</Link>

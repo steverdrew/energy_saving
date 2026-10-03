@@ -52,10 +52,31 @@ const TARIFF_SHORT_LABELS: Record<TariffId, string> = {
 
 // OA-132: the three tariff *types* that are now the primary Compare
 // choice -- "product names come second."
+// OA-172/OA-173 (revised): "Flexible" renamed to "Standard Variable" --
+// the ticket's own suggested label, and the exact wording a real bill
+// uses (`TARIFF_SHORT_LABELS['standard-variable']` already used this same
+// string as the product's full name; this just makes it the category's
+// primary label too, not a second, inconsistent name for the same thing).
+// "Fixed"/"Smart" are left as-is: "Fixed" is already plain bill language,
+// and "Smart" is a real, recognisable Octopus product-family name, not
+// jargon invented for this app -- both are explained via
+// `CATEGORY_DESCRIPTIONS` below (the ticket's "explained at the point of
+// use" allowance) rather than renamed.
 const CATEGORY_LABELS: Record<TariffCategory, string> = {
-  flexible: 'Flexible',
+  flexible: 'Standard Variable',
   fixed: 'Fixed',
   smart: 'Smart',
+}
+
+// OA-172: "where a product name or category is shown, add a short
+// plain-English description" -- a visitor shouldn't have to already know
+// what "Standard Variable" or "Smart" mean on a bill before picking their
+// current tariff. Shown under Baseline's selector, for whichever category
+// is currently selected.
+const CATEGORY_DESCRIPTIONS: Record<TariffCategory, string> = {
+  flexible: 'Your price can change when the supplier changes its rates.',
+  fixed: 'Your unit price is locked for a set period, however prices move in the meantime.',
+  smart: 'Your price changes through the day or night, so when you use electricity can genuinely change the cost.',
 }
 
 // OA-132: "when Smart is selected, show the relevant underlying product as
@@ -89,10 +110,14 @@ const TARIFF_PRICE_STRIP_SHAPES: Record<TariffId, PriceStripShape> = {
 // demo's longest-standing, most-illustrated example.
 const DEFAULT_SMART_TARIFF_ID: TariffId = 'agile'
 
+// OA-172: plain-English step labels, replacing the old product-internal
+// "Baseline / Compare / Optimise" names -- the `id`s (used only for
+// `STAGE_ORDER`/internal state, never rendered) are unchanged, so this is
+// purely a display-label rename.
 const STEP_NAV_STAGES: LandingStepNavStep[] = [
-  { id: 'baseline', label: 'Baseline' },
-  { id: 'compare', label: 'Compare' },
-  { id: 'optimise', label: 'Optimise' },
+  { id: 'baseline', label: 'Your costs' },
+  { id: 'compare', label: 'Your options' },
+  { id: 'optimise', label: 'Changes you could make' },
 ]
 
 // OA-95/98: the stage heading reads as a plain consumer statement, not
@@ -483,13 +508,14 @@ function LandingDemo() {
   )
 
   if (nearestStage === 'baseline') {
-    // OA-135/OA-171 (revised): "Tab 1's primary job is choosing the tariff
-    // this household is on now" -- but the heading itself now states the
-    // visitor's own underlying question ("would another tariff cost
-    // less?") rather than just naming the control action, so it reads as
-    // exactly why they're here rather than a form-field instruction.
-    questionHeading = 'Would another tariff cost less?'
-    supportingCopy = "Choose your current tariff and we'll compare the same electricity use against the alternatives."
+    // OA-135/OA-171/OA-172 (revised): "Tab 1's primary job is choosing the
+    // tariff this household is on now" -- but the heading itself now
+    // states the visitor's own underlying question, in the persona's own
+    // terms (fix, switch or stay), rather than just naming the control
+    // action or narrowing it to "another tariff" (which read as switch-
+    // only and didn't say staying or fixing were genuine answers too).
+    questionHeading = 'Would you be better off fixing, switching, or staying where you are?'
+    supportingCopy = "Choose your current tariff and we'll compare staying as you are, fixing, or switching."
 
     // OA-126/OA-135: previously one combined "6.8 kWh · £1.80" line, which
     // read as a single authoritative "average household spend" figure.
@@ -530,6 +556,7 @@ function LandingDemo() {
             </button>
           ))}
         </div>
+        <p className="landing-demo__tariff-description">{CATEGORY_DESCRIPTIONS[currentCategory]}</p>
         {currentCategory === 'smart' && (
           <div
             className="landing-time-profile__controls landing-time-profile__controls--secondary"
@@ -557,9 +584,27 @@ function LandingDemo() {
     // as the reference, not a table of every tariff's result at once.
     // The heading/result stay in terms of the current tariff until a
     // genuine alternative is picked (see `hasSelectedComparisonTariff`).
-    questionHeading = `Compare ${tariffContextLabel(currentTariffId)} with a smart tariff`
+    // OA-172: "a fixed-tariff option can be compared meaningfully against
+    // staying on the current tariff" -- the heading no longer says "with a
+    // smart tariff" specifically, since Fixed (added to the selector
+    // below) isn't one.
+    questionHeading = `Compare ${tariffContextLabel(currentTariffId)} with your other options`
     supportingCopy = 'Same household. Same usage. Same timings. Only the tariff changes.'
     const currentEntry = fixture.tariffComparison.find((entry) => entry.isCurrentTariff)!
+    // OA-172: "a fixed-tariff option can be compared meaningfully against
+    // staying on the current tariff" -- previously only Smart tariffs
+    // (Economy 7/Agile) were offered here (OA-136 fifth pass: "just
+    // Economy 7 and Agile"); Fixed is now a genuine, equally-selectable
+    // option alongside them, since the underlying fixture already
+    // computes its cost the same way (`fixture.tariffComparison` covers
+    // every `TariffId`, not just Smart ones). Computed once, up here,
+    // since both the "Stay" decision card below (to honestly judge
+    // whether staying is actually cheapest of what's on offer) and the
+    // selector itself need the same list.
+    const compareOptionsForCheapestCheck: TariffId[] = [
+      ...(TARIFF_CATEGORY[currentTariffId] !== 'fixed' ? (['fixed'] as const) : []),
+      ...SMART_TARIFF_IDS,
+    ].filter((tariffId) => tariffId !== currentTariffId)
     if (hasSelectedComparisonTariff) {
       // OA-136 (second pass): "make the annual saving the dominant result
       // ... a dedicated result-block treatment rather than ordinary
@@ -593,14 +638,34 @@ function LandingDemo() {
       )
       payoff = undefined
     } else {
-      // OA-136: "starting state" -- only the fixed current-tariff
-      // reference, before any alternative has been chosen to compare it
-      // against.
-      resultLabel = <>Same usage · {interpolatedTotalKwh.toFixed(1)} kWh</>
+      // OA-172: "stay where you are must be a first-class visible result,
+      // not something that happens accidentally" -- previously this state
+      // (nothing explicitly chosen yet, `chosenTariffId` still equal to
+      // `currentTariffId`) just showed the plain starting fact ("Current
+      // tariff: X · £Y"). Reads as a genuine "Stay" decision now, in the
+      // same decision-card shape Fix/Switch use below, with an honest
+      // claim about whether staying is actually the cheapest of the
+      // options being offered here -- never forced to say "cheapest"
+      // (`isCurrentCheapest` is a real comparison against
+      // `fixture.tariffComparison`, computed the same way every other
+      // tariff's own cost is), and never silently omitted either.
+      const offeredEntries = compareOptionsForCheapestCheck.map(
+        (tariffId) => fixture.tariffComparison.find((entry) => entry.tariffId === tariffId)!,
+      )
+      const isCurrentCheapest = offeredEntries.every((entry) => currentEntry.totalCostPence <= entry.totalCostPence)
+      resultLabel = undefined
       result = (
-        <>
-          Current tariff: {tariffContextLabel(currentTariffId)} · <strong>{formatGbp(currentEntry.totalCostPence)}</strong>
-        </>
+        <span className="landing-time-profile__annual-hero" data-direction={isCurrentCheapest ? 'save' : 'neutral'}>
+          <strong className="landing-time-profile__annual-hero-figure">Stay where you are</strong>
+          <span className="landing-time-profile__compare-row">
+            {tariffContextLabel(currentTariffId)} · <strong>{formatGbp(currentEntry.totalCostPence)}/day</strong>
+          </span>
+          <span className="landing-time-profile__annual-hero-daily">
+            {isCurrentCheapest
+              ? 'Cheapest of the options shown, based on today’s prices.'
+              : 'A cheaper option may be available — compare it below.'}
+          </span>
+        </span>
       )
     }
     // OA-101/OA-127: "representative comparison", not "one example" --
@@ -609,12 +674,27 @@ function LandingDemo() {
     caveat =
       'Representative comparison — which tariff costs less depends on your own usage, region and actual prices on the day.'
 
-    // OA-136 (fifth pass): "just Economy 7 and Agile" -- Flexible and
-    // Fixed are no longer offered as comparison targets at all; the only
-    // thing left to compare the current tariff against is a genuine Smart
-    // tariff, since that's the only comparison this demo's story (Standard
-    // -> Smart -> Optimise) is actually about.
-    const compareSmartTariffOptions = SMART_TARIFF_IDS.filter((tariffId) => tariffId !== currentTariffId)
+    // OA-172: "fix" needs its own plain-English trade-off, separate from
+    // the generic representative-comparison caveat above -- a fixed
+    // tariff isn't simply "cheaper or more expensive today", it trades
+    // today's price for certainty, which the figure alone doesn't convey.
+    if (hasSelectedComparisonTariff && TARIFF_CATEGORY[chosenTariffId] === 'fixed') {
+      caveat = (
+        <>
+          {caveat}{' '}
+          Fixing locks your unit price for the fixed period — it protects you if prices rise, but if prices fall
+          instead you could end up paying more than if you&rsquo;d stayed flexible.
+        </>
+      )
+    }
+
+    // OA-172: "the comparison needs to include all three valid outcomes:
+    // stay where you are, fix, or switch to another suitable tariff" --
+    // "Stay where you are" is now an explicit, clickable first option
+    // (re-selecting the current tariff makes the decision an active
+    // choice, not just the thing that happens if you click nothing), Fixed
+    // is a genuine, equally-selectable option alongside the Smart tariffs
+    // (reverses OA-136 fifth pass's "just Economy 7 and Agile").
     primarySelector = (
       <div className="landing-time-profile__primary-selector-stack">
         <span className="landing-time-profile__primary-selector-label">
@@ -625,7 +705,15 @@ function LandingDemo() {
           role="group"
           aria-label={`Compare ${tariffContextLabel(currentTariffId)} with`}
         >
-          {compareSmartTariffOptions.map((tariffId) => (
+          <button
+            type="button"
+            className="landing-time-profile__segmented-button"
+            aria-pressed={!hasSelectedComparisonTariff}
+            onClick={() => selectChosenTariff(currentTariffId)}
+          >
+            Stay as you are
+          </button>
+          {compareOptionsForCheapestCheck.map((tariffId) => (
             <button
               key={tariffId}
               type="button"
@@ -649,11 +737,16 @@ function LandingDemo() {
     // `explanation` block, which renders below the chart) so it actually
     // sits with the heading on the left -- this also fully replaces the
     // old top-right tariff-context badge, which is removed entirely.
-    questionHeading = 'What could you save in total?'
+    // OA-172: "only introduce this after the tariff decision has been
+    // answered" and "could you save a bit more" -- the previous "what
+    // could you save in total?" framing (still accurate, see the
+    // breakdown below) read as if this were the main event rather than an
+    // optional extra once the real fix/switch/stay decision is settled.
+    questionHeading = 'Could you save a bit more by changing when you use some electricity?'
     supportingCopy = (
       <>
-        Your tariff saving, plus what you could save by moving flexible use. By switching to{' '}
-        {tariffContextLabel(chosenTariffId)} and moving flexible use to cheaper practical times.
+        You&rsquo;ve already chosen {tariffContextLabel(chosenTariffId)}. Here&rsquo;s the optional extra from also
+        moving a few flexible things to cheaper times.
       </>
     )
     // OA-153: `tariffAnnualSavingPence` is the exact same canonical figure
@@ -764,14 +857,16 @@ function LandingDemo() {
     // `__annual-hero` card as the opportunity branch above, with the
     // timing layer explicitly at £0 rather than a different, plainer
     // result shape.
-    questionHeading = 'What could you save in total?'
+    // OA-172: same reframing as the opportunity branch above -- the
+    // timing question is the optional extra, asked only once the tariff
+    // decision is settled.
+    questionHeading = 'Could you save a bit more by changing when you use some electricity?'
     const chosenEntry = fixture.tariffComparison.find((entry) => entry.tariffId === chosenTariffId)!
     const tariffAnnualSavingPence = -chosenEntry.annualDifferencePence
     supportingCopy = (
       <>
-        Your tariff saving, plus what you could save by moving flexible use. By switching to{' '}
-        {tariffContextLabel(chosenTariffId)} — your flexible use is already close to the cheaper periods, so there&rsquo;s
-        no further timing saving available right now.
+        You&rsquo;ve already chosen {tariffContextLabel(chosenTariffId)} — your flexible use is already close to the
+        cheaper periods, so there&rsquo;s no further timing saving available right now.
       </>
     )
     resultLabel = undefined
@@ -910,20 +1005,32 @@ function LandingDemo() {
           to the visitor's own data once connected; what the chart itself
           still only shows is *how much* that could be worth, which the
           chart's own stages exist to answer for someone still deciding
-          whether to read on. Moved to right after that intro, with more
-          benefit-led copy ("what to change and how much you could save",
-          not just "free") -- the chart now supports the signup decision
-          rather than gating it. Still routes to /login: there is no
-          dedicated signup flow yet (AuthContext only has login/
-          resetPassword), so this reuses the existing sign-in/account-
-          creation entry point, matching OA-92's scope of fixing CTA
-          copy/behaviour rather than building new auth. */}
+          whether to read on. Moved to right after that intro -- the chart
+          now supports the signup decision rather than gating it. Still
+          routes to /login: there is no dedicated signup flow yet
+          (AuthContext only has login/resetPassword), so this reuses the
+          existing sign-in/account-creation entry point, matching OA-92's
+          scope of fixing CTA copy/behaviour rather than building new auth.
+          OA-172 (revised): "what to change" presumed there was something
+          to change, which isn't always true (staying is a valid answer)
+          -- reworded to the ticket's own preferred neutral direction. The
+          support line dropped "half-hourly electricity use" (unexplained
+          jargon per the ticket's own register rules) for plain "bills and
+          usage". */}
       <p className="landing-demo__cta">
         <Link to="/login" className="landing-demo__cta-link">
-          Sign up to see what to change and how much you could save
+          See whether fixing, switching or staying put could save you money
         </Link>
         <span className="landing-demo__cta-note">
-          Connect your account to replace this example with your own tariff and half-hourly electricity use.
+          Connect your Octopus account to compare your own bills and usage.
+        </span>
+        {/* OA-172: "make the ongoing product benefit explicit" -- the
+            product's differentiator from a one-off tariff calculator is
+            that it keeps watching after you act, so this is stated
+            plainly alongside the signup decision, not buried after the
+            chart. */}
+        <span className="landing-demo__cta-note">
+          If you make any of these changes, we&rsquo;ll show whether they&rsquo;re actually saving you money.
         </span>
       </p>
 
@@ -976,14 +1083,37 @@ function LandingDemo() {
           // step to show the step nav for, so it's replaced here, not
           // left visible-but-disabled next to an unrelated message
           // elsewhere on the card.
+          // OA-172 (revised, round two): "do not collapse the Smart path
+          // into a signup prompt... show at least one example result
+          // before signup." The Baseline result above already shows this
+          // household's real £/day on its actual Smart product; this
+          // slot now adds the one figure the ticket specifically asks
+          // for -- whether the example household's *timing* on this
+          // tariff is genuinely costing them anything, using the exact
+          // same auto-optimised trial `tariffHasTimingSavingOpportunity`/
+          // `fixture.projection.projectedAnnualSavingPence` Optimise
+          // itself would show for this tariff, not a new estimate. Since
+          // `chosenTariffId` equals `currentTariffId` whenever this path
+          // is showing (nothing else to choose), this is a real,
+          // honest result for the household as actually modelled --
+          // including the honest "already close to optimal" case when
+          // there's nothing worth changing, never forced positive.
           stepNav={
             currentTariffIsSmart ? (
               <p className="landing-demo__smart-gate">
-                Already on a smart tariff?{' '}
+                You&rsquo;re already on a tariff with changing prices.{' '}
+                {tariffHasTimingSavingOpportunity ? (
+                  <>
+                    Based on this example household, shifting a few flexible things to cheaper times could be worth
+                    about {formatGbp(fixture.projection.projectedAnnualSavingPence)}/year.{' '}
+                  </>
+                ) : (
+                  <>Based on this example household, your timing already looks close to optimal — there&rsquo;s little left to gain. </>
+                )}
                 <Link to="/login" className="landing-demo__smart-gate-link">
-                  Sign up
+                  Connect your account
                 </Link>{' '}
-                to start finding what you could save by using it better.
+                to see the real figure for your own home.
               </p>
             ) : (
               <LandingStepNav

@@ -99,35 +99,38 @@ async function setCurrentTariffToSmartAgile(user: ReturnType<typeof userEvent.se
 // since Standard Variable (the default current tariff) is flat and has
 // nothing to optimise.
 async function switchToSmartAgile(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(jumpToStage('Compare'))
-  const selector = screen.getByRole('group', { name: /compare flexible with/i })
+  await user.click(jumpToStage('Your options'))
+  const selector = screen.getByRole('group', { name: /compare standard variable with/i })
   await user.click(within(selector).getByRole('button', { name: 'Octopus Agile' }))
 }
 
 describe('LandingDemo', () => {
   it('starts on Baseline, deterministically, on Standard Variable', () => {
     const { container } = renderDemo()
-    expect(activeStageName()).toBe('Baseline')
-    expect(jumpToStage('Baseline')).toHaveAttribute('aria-current', 'true')
+    expect(activeStageName()).toBe('Your costs')
+    expect(jumpToStage('Your costs')).toHaveAttribute('aria-current', 'true')
     // OA-126/OA-135: "6.8 kWh" is the Typical household's labelled daily
     // usage, not an unlabelled figure -- and the £ result is explicitly
     // "energy cost on <tariff>", with the standing charge disclosed
     // separately alongside it.
     expect(container.querySelector('.landing-time-profile__result-label')).toHaveTextContent('Typical day · 6.8 kWh')
-    expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('£1.80/day on Flexible')
+    expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('£1.80/day on Standard Variable')
     expect(container.querySelector('.landing-time-profile__standing-charge-note')).toHaveTextContent(
       '+ £0.55/day standing charge',
     )
   })
 
-  it('leads Baseline with "Would another tariff cost less?", not the old usage-led or instruction-led headings (OA-135/OA-171)', () => {
+  it('leads Baseline with the fix/switch/stay question, not the old usage-led or narrower headings (OA-135/OA-171/OA-172)', () => {
     renderDemo()
-    expect(screen.getByRole('heading', { name: 'Would another tariff cost less?' })).toBeInTheDocument()
     expect(
-      screen.getByText("Choose your current tariff and we'll compare the same electricity use against the alternatives."),
+      screen.getByRole('heading', { name: 'Would you be better off fixing, switching, or staying where you are?' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText("Choose your current tariff and we'll compare staying as you are, fixing, or switching."),
     ).toBeInTheDocument()
     expect(screen.queryByText('When do you use energy?')).not.toBeInTheDocument()
     expect(screen.queryByText('What Octopus tariff are you on now?')).not.toBeInTheDocument()
+    expect(screen.queryByText('Would another tariff cost less?')).not.toBeInTheDocument()
   })
 
   // OA-135: "add a compact tariff selector within Baseline... Primary
@@ -139,7 +142,7 @@ describe('LandingDemo', () => {
 
       expect(screen.getByText('Your current tariff')).toBeInTheDocument()
       const typeGroup = screen.getByRole('group', { name: /^your current tariff$/i })
-      expect(within(typeGroup).getByRole('button', { name: 'Flexible' })).toHaveAttribute('aria-pressed', 'true')
+      expect(within(typeGroup).getByRole('button', { name: 'Standard Variable' })).toHaveAttribute('aria-pressed', 'true')
       expect(screen.queryByRole('group', { name: /choose your current smart tariff/i })).not.toBeInTheDocument()
 
       // OA-155: picking Smart here replaces the usual £/day result with
@@ -166,7 +169,7 @@ describe('LandingDemo', () => {
       expect(primarySelector).toBeInTheDocument()
       const segmented = within(primarySelector as HTMLElement).getByRole('group', { name: /^your current tariff$/i })
       expect(segmented).toHaveClass('landing-time-profile__segmented')
-      const flexibleButton = within(segmented).getByRole('button', { name: 'Flexible' })
+      const flexibleButton = within(segmented).getByRole('button', { name: 'Standard Variable' })
       expect(flexibleButton).toHaveClass('landing-time-profile__segmented-button')
       expect(flexibleButton).toHaveAttribute('aria-pressed', 'true')
     })
@@ -187,9 +190,10 @@ describe('LandingDemo', () => {
 
       const typeGroup = screen.getByRole('group', { name: /^your current tariff$/i })
       await user.click(within(typeGroup).getByRole('button', { name: 'Fixed' }))
-      await user.click(jumpToStage('Compare'))
+      await user.click(jumpToStage('Your options'))
 
-      expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('Current tariff: Fixed')
+      expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('Stay where you are')
+      expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('Fixed')
     })
 
     // OA-155: "the public demo stays linear, while Smart-tariff users exit
@@ -207,16 +211,45 @@ describe('LandingDemo', () => {
       await setCurrentTariffToSmartAgile(user)
 
       expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('/day on Smart · Octopus Agile')
-      expect(screen.queryByRole('button', { name: 'Baseline' })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: 'Compare' })).not.toBeInTheDocument()
-      // OA-155 (refinement): only "Sign up" itself is the link -- the rest
-      // is plain explanatory text, not one long underlined sentence.
+      expect(screen.queryByRole('button', { name: 'Your costs' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Your options' })).not.toBeInTheDocument()
+      // OA-155 (refinement)/OA-172 (round two): only "Connect your
+      // account" itself is the link. The gate now also states a real,
+      // computed result before the signup link -- "do not collapse the
+      // Smart path into a signup prompt... show at least one example
+      // result before signup" -- using the same auto-optimised trial
+      // figure Optimise itself would show for this tariff.
       const gate = container.querySelector('.landing-demo__smart-gate')!
-      expect(gate).toHaveTextContent(
-        'Already on a smart tariff? Sign up to start finding what you could save by using it better.',
+      expect(gate).toHaveTextContent('You’re already on a tariff with changing prices.')
+      expect(gate).toHaveTextContent(/shifting a few flexible things to cheaper times could be worth about £[\d.]+\/year/)
+      expect(gate).toHaveTextContent('to see the real figure for your own home.')
+      expect(within(gate as HTMLElement).getByRole('link', { name: 'Connect your account' })).toHaveAttribute(
+        'href',
+        '/login',
       )
-      expect(within(gate as HTMLElement).getByRole('link', { name: 'Sign up' })).toHaveAttribute('href', '/login')
     })
+
+    // OA-172 (round two): same real, computed figure for the other Smart
+    // product too -- not a one-off special case for Agile.
+    it('shows the same kind of real computed figure for Economy 7 as the current tariff', async () => {
+      const user = userEvent.setup()
+      const { container } = renderDemo()
+
+      const typeGroup = screen.getByRole('group', { name: /^your current tariff$/i })
+      await user.click(within(typeGroup).getByRole('button', { name: 'Smart' }))
+      const smartRow = screen.getByRole('group', { name: /choose your current smart tariff/i })
+      await user.click(within(smartRow).getByRole('button', { name: 'Octopus Economy 7' }))
+
+      const gate = container.querySelector('.landing-demo__smart-gate')!
+      expect(gate).toHaveTextContent(/shifting a few flexible things to cheaper times could be worth about £[\d.]+\/year/)
+    })
+    // Note: the gate's "your timing already looks close to optimal" honest
+    // no-opportunity branch (mirroring Optimise's own OA-137 behaviour) is
+    // real code, exercised nowhere in this test file -- this fixture's
+    // household always has enough genuinely movable load under either
+    // Smart product to clear the meaningful-saving threshold, so there's
+    // currently no reachable Smart-start scenario that hits it. Flagged in
+    // HANDOFF.md, not silently assumed untested-because-unreachable.
   })
 
   describe('Compare selects one alternative for an A/B comparison (OA-136)', () => {
@@ -224,55 +257,104 @@ describe('LandingDemo', () => {
       const user = userEvent.setup()
       const { container } = renderDemo()
 
-      await user.click(jumpToStage('Compare'))
+      await user.click(jumpToStage('Your options'))
 
-      expect(activeStageName()).toBe('Compare')
-      expect(screen.getByRole('heading', { name: /^Compare Flexible with a smart tariff$/ })).toBeInTheDocument()
-      expect(container.querySelector('.landing-time-profile__result-label')).toHaveTextContent('Same usage · 6.8 kWh')
-      expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('Current tariff: Flexible')
+      expect(activeStageName()).toBe('Your options')
+      expect(screen.getByRole('heading', { name: /^Compare Standard Variable with your other options$/ })).toBeInTheDocument()
+      // OA-172: "stay where you are" is now shown as its own first-class
+      // decision card (not a plain "Current tariff: X · £Y" line), before
+      // any alternative has been explicitly picked.
+      expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('Stay where you are')
+      expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('Standard Variable')
       expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('£1.80')
       // No duplicate all-tariffs results stack any more.
       expect(screen.queryByText(/smart · octopus agile/i)).not.toBeInTheDocument()
     })
 
-    // OA-136 (third pass): "do not include [the current tariff's own
-    // choice] as a large disabled segment if removing it makes the choice
-    // simpler" -- Flexible and Fixed are both dropped from the row
-    // entirely now (OA-136 fifth pass: "just Economy 7 and Agile"), not
-    // shown disabled, since the current tariff is already explicit in the
-    // heading above and there's no non-Smart comparison to offer any more.
-    // There is no generic "Smart" tab either -- Economy 7 and Agile sit
-    // directly in the one row.
-    it("omits Flexible/Fixed entirely and lists Smart tariffs directly (no generic Smart tab)", async () => {
+    // OA-172: "stay where you are must be a first-class visible result" --
+    // an explicit "Stay as you are" button, pressed by default before any
+    // alternative is chosen, and clickable to return to that state after
+    // picking an alternative. Economy 7 is a genuine "don't change" result
+    // here (it costs more than Flexible for this household), so clicking
+    // back to "Stay as you are" after it is a real, honest reversal, not a
+    // contrived example.
+    it('offers "Stay as you are" as an explicit, honest first-class option, including after picking a worse alternative', async () => {
+      const user = userEvent.setup()
+      const { container } = renderDemo()
+      await user.click(jumpToStage('Your options'))
+
+      const selector = screen.getByRole('group', { name: /compare standard variable with/i })
+      expect(within(selector).getByRole('button', { name: 'Stay as you are' })).toHaveAttribute('aria-pressed', 'true')
+
+      await user.click(within(selector).getByRole('button', { name: 'Octopus Economy 7' }))
+      expect(within(selector).getByRole('button', { name: 'Stay as you are' })).toHaveAttribute('aria-pressed', 'false')
+      expect(container.querySelector('.landing-time-profile__annual-hero')).toHaveAttribute('data-direction', 'cost')
+
+      await user.click(within(selector).getByRole('button', { name: 'Stay as you are' }))
+      expect(within(selector).getByRole('button', { name: 'Stay as you are' })).toHaveAttribute('aria-pressed', 'true')
+      const result = container.querySelector('.landing-time-profile__result')!
+      expect(result).toHaveTextContent('Stay where you are')
+      // Honest, not forced: Agile (one of the offered options) genuinely
+      // saves against Flexible for this household (see the "choosing a
+      // Smart tariff" test below), so staying is correctly *not* claimed
+      // as the cheapest option here.
+      expect(result).toHaveTextContent('A cheaper option may be available')
+    })
+
+    // OA-172: "a fixed-tariff option can be compared meaningfully against
+    // staying on the current tariff" -- Fixed is now offered alongside the
+    // Smart tariffs (reversing OA-136 fifth pass's "just Economy 7 and
+    // Agile"); Flexible is still never offered as a comparison target
+    // (the current tariff's own choice -- already named in the heading
+    // above), and there's still no generic "Smart" tab, just the real
+    // products directly.
+    it("omits Flexible entirely but offers Fixed and the Smart tariffs directly (no generic Smart tab)", async () => {
       const user = userEvent.setup()
       renderDemo()
-      await user.click(jumpToStage('Compare'))
+      await user.click(jumpToStage('Your options'))
 
-      const selector = screen.getByRole('group', { name: /compare flexible with/i })
-      expect(within(selector).queryByRole('button', { name: 'Flexible' })).not.toBeInTheDocument()
-      expect(within(selector).queryByRole('button', { name: 'Fixed' })).not.toBeInTheDocument()
+      const selector = screen.getByRole('group', { name: /compare standard variable with/i })
+      expect(within(selector).queryByRole('button', { name: 'Standard Variable' })).not.toBeInTheDocument()
       expect(within(selector).queryByRole('button', { name: 'Smart' })).not.toBeInTheDocument()
+      expect(within(selector).getByRole('button', { name: 'Fixed' })).toBeEnabled()
       expect(within(selector).getByRole('button', { name: 'Octopus Economy 7' })).toBeEnabled()
       expect(within(selector).getByRole('button', { name: 'Octopus Agile' })).toBeEnabled()
     })
 
-    // OA-136 (fourth pass): "drop Flexible from Step 2" -- unlike Fixed
-    // (only dropped when it *is* the current tariff), Flexible is never
-    // offered as a comparison target at all, even when the current tariff
-    // is something else entirely (Fixed here).
-    it('never offers Flexible as a comparison target, even when the current tariff is Fixed', async () => {
+    // OA-136 (fourth pass)/OA-172: Flexible is never offered as a
+    // comparison target at all, even when the current tariff is something
+    // else entirely (Fixed here) -- but since the current tariff here
+    // *is* Fixed, Fixed itself is correctly the one dropped this time
+    // (comparing a tariff against itself isn't a real option).
+    it('never offers Flexible as a comparison target, and drops Fixed when it is already the current tariff', async () => {
       const user = userEvent.setup()
       renderDemo()
 
       const typeGroup = screen.getByRole('group', { name: /^your current tariff$/i })
       await user.click(within(typeGroup).getByRole('button', { name: 'Fixed' }))
-      await user.click(jumpToStage('Compare'))
+      await user.click(jumpToStage('Your options'))
 
       const selector = screen.getByRole('group', { name: /compare fixed with/i })
-      expect(within(selector).queryByRole('button', { name: 'Flexible' })).not.toBeInTheDocument()
+      expect(within(selector).queryByRole('button', { name: 'Standard Variable' })).not.toBeInTheDocument()
+      expect(within(selector).queryByRole('button', { name: 'Fixed' })).not.toBeInTheDocument()
       expect(within(selector).getByRole('button', { name: 'Octopus Economy 7' })).toBeEnabled()
       expect(within(selector).getByRole('button', { name: 'Octopus Agile' })).toBeEnabled()
-      expect(within(selector).getByRole('button', { name: 'Octopus Agile' })).toBeEnabled()
+    })
+
+    // OA-172: choosing Fixed shows the trade-off caveat (price certainty
+    // vs. the risk prices could fall instead), distinct from the generic
+    // representative-comparison caveat every other choice gets.
+    it('choosing Fixed explains the price-certainty trade-off, not just the generic representative-comparison caveat', async () => {
+      const user = userEvent.setup()
+      const { container } = renderDemo()
+      await user.click(jumpToStage('Your options'))
+
+      const selector = screen.getByRole('group', { name: /compare standard variable with/i })
+      await user.click(within(selector).getByRole('button', { name: 'Fixed' }))
+
+      expect(container.querySelector('.landing-time-profile__annual-hero')).toHaveTextContent('Fixed')
+      expect(screen.getByText(/fixing locks your unit price/i)).toBeInTheDocument()
+      expect(screen.getByText(/if prices fall instead you could end up paying more/i)).toBeInTheDocument()
     })
 
     // OA-136 (second pass): the annual saving/cost is now the dominant
@@ -284,20 +366,20 @@ describe('LandingDemo', () => {
     it('choosing a Smart tariff directly shows the annual saving as the dominant headline, with daily/tariff context secondary, and carries into Optimise', async () => {
       const user = userEvent.setup()
       const { container } = renderDemo()
-      await user.click(jumpToStage('Compare'))
+      await user.click(jumpToStage('Your options'))
 
-      const selector = screen.getByRole('group', { name: /compare flexible with/i })
+      const selector = screen.getByRole('group', { name: /compare standard variable with/i })
       await user.click(within(selector).getByRole('button', { name: 'Octopus Agile' }))
 
       const hero = container.querySelector('.landing-time-profile__annual-hero')!
       expect(hero).toHaveAttribute('data-direction', 'save')
       expect(hero.querySelector('.landing-time-profile__annual-hero-figure')).toHaveTextContent(/save about £[\d.]+\/year/i)
       expect(hero).toHaveTextContent('Smart · Octopus Agile')
-      expect(hero).toHaveTextContent('vs Flexible')
+      expect(hero).toHaveTextContent('vs Standard Variable')
       expect(hero.querySelector('.landing-time-profile__annual-hero-daily')).toHaveTextContent(/14p less\/day/)
 
-      await user.click(jumpToStage('Optimise'))
-      expect(screen.getByText(/by switching to smart · octopus agile/i)).toBeInTheDocument()
+      await user.click(jumpToStage('Changes you could make'))
+      expect(screen.getByText(/you.ve already chosen smart · octopus agile/i)).toBeInTheDocument()
       // OA-164: Optimise's own hero headline is the *total* annual saving
       // (tariff + timing combined) -- same wording as Compare's own
       // headline above, just a larger combined figure -- with a
@@ -316,9 +398,9 @@ describe('LandingDemo', () => {
     it('reconciles the secondary daily figure with the dominant annual headline exactly (daily x365 == annual)', async () => {
       const user = userEvent.setup()
       const { container } = renderDemo()
-      await user.click(jumpToStage('Compare'))
+      await user.click(jumpToStage('Your options'))
 
-      const selector = screen.getByRole('group', { name: /compare flexible with/i })
+      const selector = screen.getByRole('group', { name: /compare standard variable with/i })
       await user.click(within(selector).getByRole('button', { name: 'Octopus Agile' }))
 
       const hero = container.querySelector('.landing-time-profile__annual-hero')!
@@ -344,11 +426,11 @@ describe('LandingDemo', () => {
     it('renders the Smart tariff choice as one segmented control, with no secondary subtype row', async () => {
       const user = userEvent.setup()
       const { container } = renderDemo()
-      await user.click(jumpToStage('Compare'))
+      await user.click(jumpToStage('Your options'))
 
       const primarySelector = container.querySelector('.landing-time-profile__primary-selector')
       expect(primarySelector).toBeInTheDocument()
-      const selector = within(primarySelector as HTMLElement).getByRole('group', { name: /compare flexible with/i })
+      const selector = within(primarySelector as HTMLElement).getByRole('group', { name: /compare standard variable with/i })
       expect(selector).toHaveClass('landing-time-profile__segmented')
       expect(within(selector).getByRole('button', { name: 'Octopus Economy 7' })).toHaveClass(
         'landing-time-profile__segmented-button',
@@ -368,14 +450,14 @@ describe('LandingDemo', () => {
     const { container } = renderDemo()
 
     await switchToSmartAgile(user)
-    await user.click(jumpToStage('Optimise'))
+    await user.click(jumpToStage('Changes you could make'))
 
     expect(screen.queryByRole('group', { name: /choose a tariff type to compare/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('group', { name: /choose a smart tariff/i })).not.toBeInTheDocument()
     // OA-152: the old top-right tariff-context badge is gone -- the chosen
     // tariff is now named in the supporting copy instead.
     expect(container.querySelector('.landing-time-profile__tariff-context')).not.toBeInTheDocument()
-    expect(screen.getByText(/by switching to smart · octopus agile/i)).toBeInTheDocument()
+    expect(screen.getByText(/you.ve already chosen smart · octopus agile/i)).toBeInTheDocument()
   })
 
   // OA-117/OA-136: Optimise stays locked until a genuine Smart comparison
@@ -387,32 +469,32 @@ describe('LandingDemo', () => {
     it('renders the Optimise label visibly but disabled while the comparison tariff is Flexible', async () => {
       const user = userEvent.setup()
       renderDemo()
-      await user.click(jumpToStage('Compare'))
+      await user.click(jumpToStage('Your options'))
 
-      expect(jumpToStage('Optimise')).toBeDisabled()
+      expect(jumpToStage('Changes you could make')).toBeDisabled()
     })
 
     it('clicking the disabled Optimise label does not move the nav', async () => {
       const user = userEvent.setup()
       renderDemo()
-      await user.click(jumpToStage('Compare'))
+      await user.click(jumpToStage('Your options'))
 
-      await user.click(jumpToStage('Optimise'))
-      expect(activeStageName()).toBe('Compare')
-      expect(jumpToStage('Optimise')).toBeDisabled()
+      await user.click(jumpToStage('Changes you could make'))
+      expect(activeStageName()).toBe('Your options')
+      expect(jumpToStage('Changes you could make')).toBeDisabled()
     })
 
     it('unlocks and reaches Optimise once a Smart tariff is chosen on Compare', async () => {
       const user = userEvent.setup()
       renderDemo()
-      await user.click(jumpToStage('Compare'))
+      await user.click(jumpToStage('Your options'))
 
-      const selector = screen.getByRole('group', { name: /compare flexible with/i })
+      const selector = screen.getByRole('group', { name: /compare standard variable with/i })
       await user.click(within(selector).getByRole('button', { name: 'Octopus Agile' }))
 
-      expect(jumpToStage('Optimise')).toBeEnabled()
-      await user.click(jumpToStage('Optimise'))
-      expect(activeStageName()).toBe('Optimise')
+      expect(jumpToStage('Changes you could make')).toBeEnabled()
+      await user.click(jumpToStage('Changes you could make'))
+      expect(activeStageName()).toBe('Changes you could make')
     })
 
     // OA-136 (fifth pass) note: Compare's row now only ever offers Smart
@@ -433,9 +515,9 @@ describe('LandingDemo', () => {
       renderDemo()
       await switchToSmartAgile(user)
 
-      await user.click(jumpToStage('Optimise'))
+      await user.click(jumpToStage('Changes you could make'))
 
-      expect(activeStageName()).toBe('Optimise')
+      expect(activeStageName()).toBe('Changes you could make')
       expect(screen.queryByText(/little to save by changing when you use electricity/i)).not.toBeInTheDocument()
       expect(screen.getByText(/save about £[\d.]+\/year/i)).toBeInTheDocument()
       expect(screen.getByText(/\+ £\d+\/year from optimisation/i)).toBeInTheDocument()
@@ -453,7 +535,7 @@ describe('LandingDemo', () => {
       const user = userEvent.setup()
       renderDemo()
       await switchToSmartAgile(user)
-      await user.click(jumpToStage('Optimise'))
+      await user.click(jumpToStage('Changes you could make'))
 
       expect(screen.getByText(/use appliances safely/i)).toBeInTheDocument()
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -468,7 +550,7 @@ describe('LandingDemo', () => {
       const user = userEvent.setup()
       renderDemo()
       await switchToSmartAgile(user)
-      await user.click(jumpToStage('Optimise'))
+      await user.click(jumpToStage('Changes you could make'))
 
       await user.click(screen.getByRole('button', { name: 'Safety information' }))
       const dialog = screen.getByRole('dialog', { name: 'Safety information' })
@@ -493,7 +575,7 @@ describe('LandingDemo', () => {
       const user = userEvent.setup()
       renderDemo()
       await switchToSmartAgile(user)
-      await user.click(jumpToStage('Optimise'))
+      await user.click(jumpToStage('Changes you could make'))
 
       // OA-164: the headline and the tertiary monthly line are both
       // pence-precision (the headline via `describeAnnualOutcomeHeadline`,
@@ -510,7 +592,7 @@ describe('LandingDemo', () => {
       const user = userEvent.setup()
       renderDemo()
       await switchToSmartAgile(user)
-      await user.click(jumpToStage('Optimise'))
+      await user.click(jumpToStage('Changes you could make'))
 
       // Not shown as "£X today · ≈ £Y/month" (implying one derives the
       // other) -- today's figure gets its own explanatory line instead.
@@ -530,25 +612,25 @@ describe('LandingDemo', () => {
     const user = userEvent.setup()
     renderDemo()
 
-    jumpToStage('Compare').focus()
+    jumpToStage('Your options').focus()
     await user.keyboard('{Enter}')
-    expect(activeStageName()).toBe('Compare')
+    expect(activeStageName()).toBe('Your options')
 
-    expect(jumpToStage('Optimise')).toBeDisabled()
-    jumpToStage('Optimise').focus()
+    expect(jumpToStage('Changes you could make')).toBeDisabled()
+    jumpToStage('Changes you could make').focus()
     await user.keyboard('{Enter}')
-    expect(activeStageName()).toBe('Compare')
+    expect(activeStageName()).toBe('Your options')
 
-    const selector = screen.getByRole('group', { name: /compare flexible with/i })
+    const selector = screen.getByRole('group', { name: /compare standard variable with/i })
     await user.click(within(selector).getByRole('button', { name: 'Octopus Agile' }))
 
-    jumpToStage('Optimise').focus()
+    jumpToStage('Changes you could make').focus()
     await user.keyboard('{Enter}')
-    expect(activeStageName()).toBe('Optimise')
+    expect(activeStageName()).toBe('Changes you could make')
 
-    jumpToStage('Compare').focus()
+    jumpToStage('Your options').focus()
     await user.keyboard('{Enter}')
-    expect(activeStageName()).toBe('Compare')
+    expect(activeStageName()).toBe('Your options')
   })
 
   // OA-156: no more continuous drag state -- clicking a step label always
@@ -558,10 +640,10 @@ describe('LandingDemo', () => {
     const user = userEvent.setup()
     renderDemo()
 
-    await user.click(jumpToStage('Compare'))
-    expect(activeStageName()).toBe('Compare')
-    await user.click(jumpToStage('Baseline'))
-    expect(activeStageName()).toBe('Baseline')
+    await user.click(jumpToStage('Your options'))
+    expect(activeStageName()).toBe('Your options')
+    await user.click(jumpToStage('Your costs'))
+    expect(activeStageName()).toBe('Your costs')
   })
 
   it('gives the time profile a text/DOM equivalent of its visual data, not canvas-only state', () => {
@@ -569,12 +651,12 @@ describe('LandingDemo', () => {
     expect(screen.getAllByRole('button', { name: /kWh.*p\/kWh.*£/ }).length).toBe(48)
   })
 
-  it('exposes the benefit-led signup CTA as a real link, placed before the chart (OA-171)', () => {
+  it('exposes the benefit-led signup CTA as a real link, placed before the chart (OA-171/OA-172)', () => {
     const { container } = renderDemo()
-    const link = screen.getByRole('link', { name: 'Sign up to see what to change and how much you could save' })
+    const link = screen.getByRole('link', { name: 'See whether fixing, switching or staying put could save you money' })
     expect(link).toHaveAttribute('href', '/login')
     expect(
-      screen.getByText('Connect your account to replace this example with your own tariff and half-hourly electricity use.'),
+      screen.getByText('Connect your Octopus account to compare your own bills and usage.'),
     ).toBeInTheDocument()
     // OA-171: moved above the chart so a visitor sees the signup decision
     // before reading through all three stages, not after.
@@ -663,7 +745,7 @@ describe('LandingDemo', () => {
       expect(screen.getByText(/dehumidifier/i)).toBeInTheDocument()
       expect(screen.getByText(/oven/i)).toBeInTheDocument()
 
-      await user.click(jumpToStage('Compare'))
+      await user.click(jumpToStage('Your options'))
       expect(screen.queryByRole('slider', { name: /machine|dryer|dishwasher|dehumidifier|oven/i })).not.toBeInTheDocument()
       expect(screen.getByText(/dishwasher/i)).toBeInTheDocument()
     })
@@ -702,7 +784,7 @@ describe('LandingDemo', () => {
       const user = userEvent.setup()
       const { container } = renderDemo()
       await switchToSmartAgile(user)
-      await user.click(jumpToStage('Optimise'))
+      await user.click(jumpToStage('Changes you could make'))
 
       const eventLayer = within(container.querySelector('.landing-time-profile__event-layer')!)
       expect(eventLayer.getByText(/dishwasher/i)).toBeInTheDocument()
@@ -721,7 +803,7 @@ describe('LandingDemo', () => {
       const user = userEvent.setup()
       renderDemo()
       await switchToSmartAgile(user)
-      await user.click(jumpToStage('Optimise'))
+      await user.click(jumpToStage('Changes you could make'))
 
       expect(screen.getByText(/oven/i)).toBeInTheDocument()
     })
@@ -737,7 +819,7 @@ describe('LandingDemo', () => {
       const user = userEvent.setup()
       renderDemo()
       await switchToSmartAgile(user)
-      await user.click(jumpToStage('Optimise'))
+      await user.click(jumpToStage('Changes you could make'))
 
       expect(screen.getAllByText(/this cycle/i).length).toBeGreaterThan(0)
     })
@@ -748,7 +830,7 @@ describe('LandingDemo', () => {
       await switchToSmartAgile(user)
       expect(screen.queryByText(/this cycle/i)).not.toBeInTheDocument()
 
-      await user.click(jumpToStage('Compare'))
+      await user.click(jumpToStage('Your options'))
       expect(screen.queryByText(/this cycle/i)).not.toBeInTheDocument()
     })
   })
@@ -761,7 +843,7 @@ describe('LandingDemo', () => {
       const user = userEvent.setup()
       renderDemo()
       await switchToSmartAgile(user)
-      await user.click(jumpToStage('Optimise'))
+      await user.click(jumpToStage('Changes you could make'))
 
       expect(screen.queryByRole('heading', { name: "What we’ve done" })).not.toBeInTheDocument()
       expect(screen.queryByRole('heading', { name: 'How we calculated it' })).not.toBeInTheDocument()
@@ -773,7 +855,7 @@ describe('LandingDemo', () => {
       const { container } = renderDemo()
       const user = userEvent.setup()
       await switchToSmartAgile(user)
-      await user.click(jumpToStage('Optimise'))
+      await user.click(jumpToStage('Changes you could make'))
 
       // OA-117/OA-146: already auto-optimised on arrival -- a real positive
       // saving, in the dominant `result` line, with a compact monthly
@@ -791,7 +873,7 @@ describe('LandingDemo', () => {
       const user = userEvent.setup()
       renderDemo()
       await switchToSmartAgile(user)
-      await user.click(jumpToStage('Optimise'))
+      await user.click(jumpToStage('Changes you could make'))
 
       const disclosure = screen.getByText('How we calculated this').closest('details')
       expect(disclosure).not.toHaveAttribute('open')
@@ -808,7 +890,7 @@ describe('LandingDemo', () => {
       const { container } = renderDemo()
       await switchToSmartAgile(user)
 
-      await user.click(jumpToStage('Optimise'))
+      await user.click(jumpToStage('Changes you could make'))
       expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Optimise all' })).not.toBeInTheDocument()
       expect(container.querySelectorAll('.landing-time-profile__controls-button')).toHaveLength(0)
@@ -825,7 +907,7 @@ describe('LandingDemo', () => {
       const user = userEvent.setup()
       const { container } = renderDemo()
       await switchToSmartAgile(user)
-      await user.click(jumpToStage('Optimise'))
+      await user.click(jumpToStage('Changes you could make'))
 
       expect(container.querySelector('.landing-time-profile__event-detail')).not.toBeInTheDocument()
       expect(screen.queryByText(/moved to \d{1,2}:\d{2}/i)).not.toBeInTheDocument()
@@ -841,7 +923,7 @@ describe('LandingDemo', () => {
     const user = userEvent.setup()
     renderDemo()
     await switchToSmartAgile(user)
-    await user.click(jumpToStage('Optimise'))
+    await user.click(jumpToStage('Changes you could make'))
 
     expect(screen.queryByRole('slider', { name: /oven/i })).not.toBeInTheDocument()
     expect(screen.getByText(/oven/i)).toBeInTheDocument()
@@ -861,7 +943,7 @@ describe('LandingDemo', () => {
       const user = userEvent.setup()
       const { container } = renderDemo()
 
-      for (const stageName of ['Baseline', 'Compare', 'Optimise']) {
+      for (const stageName of ['Your costs', 'Your options', 'Changes you could make']) {
         await user.click(jumpToStage(stageName))
         const cards = Array.from(container.querySelectorAll('.landing-time-profile__event-card'))
         const names = cards.flatMap((card) => {

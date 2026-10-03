@@ -50,11 +50,18 @@ function LandingPage() {
             comparing tariffs against real usage, *and* finding cheaper
             times to run things, with the saving itself named as the
             payoff of both -- deliberately without jargon like "load
-            shifting" or "optimisation". */}
+            shifting" or "optimisation".
+            OA-172 (third revision): "fix, switch or stay" is the actual
+            decision this persona arrives with, and "compare tariffs" on
+            its own didn't say staying put / fixing were genuine answers,
+            not just switching. Names all three explicitly, in that order,
+            before moving on to the optional timing saving -- matches the
+            ticket's "answer the decision that brought the user here before
+            asking them to change their behaviour" rule. */}
         <h1 className="landing-hero__headline">See where you could save on your electricity bill.</h1>
         <p className="landing-hero__sub">
-          We use your actual electricity use to compare tariffs, find things you could run at cheaper times, and
-          show how much those changes could save you.
+          Compare what you&rsquo;re paying now with your options — including fixing or staying put — then see
+          whether a few changes to when you use electricity could save you more.
         </p>
         <div className="landing-hero__ctas">
           {/* OA-92: hero CTA starts the explanatory journey (Hero -> See
@@ -68,12 +75,27 @@ function LandingPage() {
             See how it works
           </a>
         </div>
-        {/* OA-171: sets the account expectation right under the CTA so
-            visitors aren't surprised by it during onboarding, without
-            cluttering the hero with the Smart tariff / smart meter
-            detail -- that stays in onboarding where it's actionable. */}
+        {/* OA-171/OA-173 (revised): sets the account expectation right
+            under the CTA so visitors aren't surprised by it during
+            onboarding, without cluttering the hero with the Smart tariff
+            / smart meter detail -- that stays in onboarding where it's
+            actionable. OA-173: "be explicit early... do not make
+            visitors discover eligibility only after reading multiple
+            pages" -- the old single line only said an account was
+            required, not what a visitor without one could still do here.
+            Replaced with the ticket's own suggested two-line structure;
+            the "Not with Octopus?" line is only included because it's
+            genuinely true -- the demo below needs no account at all,
+            exactly the condition the ticket sets for using that wording. */}
         <p className="landing-hero__requirement">
-          Requires an Octopus Energy account · <Link to="/why-octopus">Why Octopus?</Link>
+          Already with Octopus? <Link to="/login">Connect your account</Link> for a personalised comparison.
+        </p>
+        <p className="landing-hero__requirement">
+          Not with Octopus? You can still{' '}
+          <a href="#comparison-demo" onClick={handleSeeHowItWorksClick}>
+            see how it works
+          </a>
+          . <Link to="/why-octopus">Why Octopus?</Link>
         </p>
       </section>
 

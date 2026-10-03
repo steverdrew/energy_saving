@@ -224,6 +224,17 @@
   opacity: 0.8;
 }
 
+/* OA-172: the plain-English "what this tariff type means" line under
+   Baseline's Flexible/Fixed/Smart selector -- quiet, secondary text, not
+   competing with the selector itself. */
+.landing-demo__tariff-description {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+  opacity: 0.75;
+}
+
 /* OA-155: the "already on a smart tariff?" prompt that replaces the
    step nav's own slot (steps + Back/Next) once the current tariff is
    Smart -- there's no genuine Next step to show controls for, so this

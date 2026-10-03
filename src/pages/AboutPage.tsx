@@ -13,10 +13,18 @@ import './AboutPage.css'
  * OA-145: polish pass to match How it works' (HowItWorksPage.tsx) visual
  * hierarchy -- intro line under the title, a single lead statement, a
  * "why/what" panel grid instead of three equal-weight cards, and the
- * independence/evidence-led line raised into its own callout (About.css)
- * so it reads as the page's trust statement rather than one more
- * paragraph. Copy is condensed per the ticket's "shorter sections,
- * stronger subheads" request -- same claims, no new ones.
+ * independence line raised into its own callout (About.css) so it reads
+ * as the page's trust statement rather than one more paragraph.
+ *
+ * OA-173 (copy rewrite): dropped "evidence-led" -- the ticket names it
+ * directly as a stiff phrase to avoid where simpler wording works -- and
+ * reworded the intro around the same fix/switch/stay decision the rest of
+ * the public site now leads with, rather than "dynamic energy tariffs".
+ * Reuses Vision's own "Sometimes the answer should be 'nothing'" line
+ * verbatim in the trust panel, per the ticket's "pull a small number of
+ * the strongest Vision ideas onto higher-traffic pages" instruction --
+ * About, reachable from the header nav, gets far more traffic than Vision
+ * itself.
  */
 function AboutPage() {
   return (
@@ -24,7 +32,8 @@ function AboutPage() {
       <section className="landing-section-band" aria-label="About Shift & Save">
         <h1 className="public-page__title">About Shift &amp; Save</h1>
         <p className="public-page__intro">
-          An independent, evidence-led product helping households get more from dynamic energy tariffs.
+          An independent product helping you work out whether fixing, switching or staying put is worth it —
+          including when the honest answer is nothing.
         </p>
       </section>
 
@@ -32,8 +41,8 @@ function AboutPage() {
         <section className="landing-card about__lead" aria-label="Who we are">
           <h2>Who we are</h2>
           <p>
-            Shift &amp; Save is an independent UK product that makes dynamic energy tariffs easier to
-            understand and use.
+            Shift &amp; Save is an independent UK product that makes it easier to work out what, if anything,
+            is worth changing about your electricity.
           </p>
         </section>
 
@@ -42,7 +51,7 @@ function AboutPage() {
             <h2>Why we built it</h2>
             <p>
               Cheaper electricity is often available at different times of day — but no one should have to
-              study 48 prices a day to benefit from it.
+              study dozens of prices a day to benefit from it.
             </p>
           </section>
 
@@ -58,7 +67,8 @@ function AboutPage() {
           </p>
           <p className="about__trust-note">
             Every comparison is based on your own real usage and published tariff prices — not estimates or
-            guesswork.
+            guesswork. Sometimes the answer should be &ldquo;nothing&rdquo;, and we&rsquo;d rather tell you that
+            than manufacture a reason for you to change.
           </p>
         </section>
       </div>
