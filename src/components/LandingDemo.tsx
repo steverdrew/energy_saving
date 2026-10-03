@@ -44,10 +44,12 @@ function describeDifference(pence: number, moreLabel: string, lessLabel: string,
   return `no different from ${referenceTariffName}`
 }
 
+// OA-102: "potential saving from timing", not an achieved saving --
+// language the ticket is explicit about not overstating.
 function describeTimingPotential(pence: number): string {
-  if (pence > 0) return `+ ${formatGbp(pence)} potential`
-  if (pence < 0) return `${formatGbp(-pence)} more`
-  return 'no further difference'
+  if (pence > 0) return `${formatGbp(pence)} potential saving from timing`
+  if (pence < 0) return `${formatGbp(-pence)} more from this timing move`
+  return 'no further difference from timing'
 }
 
 /**
@@ -123,19 +125,30 @@ function LandingDemo() {
       </>
     )
     explanation = 'Only the tariff changes — usage stays exactly the same.'
-    caveat = 'One example comparison, not a guarantee — which tariff costs less depends on your own usage pattern.'
+    // OA-101: "representative comparison", not "one example" -- matches
+    // OA-99's representative-day methodology rather than implying this
+    // was a single arbitrarily-picked example.
+    caveat = 'Representative comparison — which tariff costs less depends on your own usage, region and actual Agile prices.'
   } else {
     summary = (
+      // OA-102: same two-line hierarchy as Compare (OA-101) -- tariff +
+      // price, then the potential timing saving on its own line.
       <>
-        {fixture.compare.tariffName} · <strong>{formatGbp(fixture.optimise.totalCostPence)}</strong> ·{' '}
+        {fixture.compare.tariffName} · <strong>{formatGbp(fixture.optimise.totalCostPence)}</strong>
+        <br />
         <strong className="landing-time-profile__summary-diff">
           {describeTimingPotential(fixture.timingSavingPence)}
         </strong>
       </>
     )
-    explanation = 'Only flexible usage moves; total energy stays the same.'
+    // OA-102: plain language for *what* moves (identify flexible usage,
+    // move only that, everything else stays put) plus the "same tariff /
+    // same total energy / better timing" reinforcement -- not a claim
+    // that the whole household's load was rearranged.
+    explanation =
+      'We identify energy use that can realistically move — like a dishwasher cycle — and shift it to a cheaper half-hour. Everything else stays where it was: same tariff, same total energy, just better timing.'
     caveat =
-      "Illustrative example only. We're not saying your home has this appliance, or that you could achieve this saving."
+      'Illustrative optimisation — your actual opportunities depend on what you use, when it can move, your region and your actual Agile prices.'
   }
 
   return (
@@ -186,7 +199,20 @@ function LandingDemo() {
                 Octopus Energy — Agile tariff rates (API)
               </a>
             </li>
+            <li>
+              <a href={LANDING_DEMO_DATA_SOURCES.sourceUrls.octopusAgilePricing} target="_blank" rel="noreferrer">
+                Octopus Energy — how Agile prices are calculated
+              </a>
+            </li>
           </ul>
+          {/* OA-99: "Agile profile based on median half-hour prices from
+              real published Agile rates over a defined historical
+              period" -- the representative-day methodology itself, not
+              just the raw sources above. */}
+          <p className="landing-demo__sources-method">
+            Agile profile based on median half-hour prices from real published Agile rates,{' '}
+            {LANDING_DEMO_DATA_SOURCES.tariffRegion}, {LANDING_DEMO_DATA_SOURCES.tariffDateRange}.
+          </p>
         </details>
       </div>
 
@@ -227,6 +253,11 @@ function LandingDemo() {
           costNote={COST_BASIS_NOTE}
           caveat={caveat}
           stepKey={step}
+          // OA-99/OA-101: the 16:00-19:00 structural peak is a documented
+          // feature of Agile's pricing specifically -- only Compare/
+          // Optimise are actually on Agile (see LandingTimeProfile.tsx's
+          // prop doc).
+          showStructuralPeakAnnotation={step !== 'baseline'}
         />
       </div>
 

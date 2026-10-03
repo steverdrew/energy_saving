@@ -2,14 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   buildSmoothUsageAreaPath,
   findAnnotations,
-  findPeakWindow,
   formatSlotTime,
   groupSlotsByLondonDay,
+  isStructuralPeakSlot,
   maxUsage,
-  presentRateCategories,
-  rateCategoryIndex,
   rateColorStepIndex,
   rateRange,
+  rateRatio,
   RATE_COLOR_STEPS_LIGHT,
   type HeatMapDay,
 } from './heatMapMath'
@@ -49,34 +48,55 @@ describe('rateColorStepIndex', () => {
   })
 })
 
-describe('rateCategoryIndex', () => {
-  it('maps the lowest third of the range to cheap (0)', () => {
-    expect(rateCategoryIndex(10, 10, 40)).toBe(0)
-    expect(rateCategoryIndex(19, 10, 40)).toBe(0)
+describe('rateRatio', () => {
+  it('maps the minimum rate to 0', () => {
+    expect(rateRatio(10, 10, 30)).toBe(0)
   })
 
-  it('maps the middle third of the range to standard (1)', () => {
-    expect(rateCategoryIndex(20, 10, 40)).toBe(1)
-    expect(rateCategoryIndex(29, 10, 40)).toBe(1)
+  it('maps the maximum rate to 1', () => {
+    expect(rateRatio(30, 10, 30)).toBe(1)
   })
 
-  it('maps the top third of the range to peak (2)', () => {
-    expect(rateCategoryIndex(30, 10, 40)).toBe(2)
-    expect(rateCategoryIndex(40, 10, 40)).toBe(2)
+  it('maps a mid-range rate to 0.5', () => {
+    expect(rateRatio(20, 10, 30)).toBe(0.5)
   })
 
-  it('returns the standard band for a flat tariff where min equals max', () => {
-    expect(rateCategoryIndex(15, 15, 15)).toBe(1)
+  it('returns 0.5 for a flat tariff where min equals max', () => {
+    expect(rateRatio(15, 15, 15)).toBe(0.5)
   })
 
   it('returns null for an unknown or non-finite rate', () => {
-    expect(rateCategoryIndex(null, 10, 40)).toBe(null)
-    expect(rateCategoryIndex(Number.NaN, 10, 40)).toBe(null)
+    expect(rateRatio(null, 10, 30)).toBe(null)
+    expect(rateRatio(Number.NaN, 10, 30)).toBe(null)
   })
 
-  it('clamps rates outside the observed range', () => {
-    expect(rateCategoryIndex(0, 10, 40)).toBe(0)
-    expect(rateCategoryIndex(100, 10, 40)).toBe(2)
+  it('clamps rates outside the observed range into [0, 1]', () => {
+    expect(rateRatio(0, 10, 30)).toBe(0)
+    expect(rateRatio(100, 10, 30)).toBe(1)
+  })
+})
+
+describe('isStructuralPeakSlot', () => {
+  it('is false just before 16:00 London', () => {
+    expect(isStructuralPeakSlot('2026-06-15T14:30:00Z')).toBe(false) // 15:30 BST
+  })
+
+  it('is true for every half-hour from 16:00 up to (not including) 19:00 London', () => {
+    expect(isStructuralPeakSlot('2026-06-15T15:00:00Z')).toBe(true) // 16:00 BST
+    expect(isStructuralPeakSlot('2026-06-15T15:30:00Z')).toBe(true) // 16:30 BST
+    expect(isStructuralPeakSlot('2026-06-15T17:30:00Z')).toBe(true) // 18:30 BST
+  })
+
+  it('is false from 19:00 London onward', () => {
+    expect(isStructuralPeakSlot('2026-06-15T18:00:00Z')).toBe(false) // 19:00 BST
+  })
+
+  it('uses Europe/London local time, not UTC, across the DST boundary', () => {
+    // 2026-01-15T16:00 UTC is 16:00 London in winter (GMT, no DST offset) --
+    // still inside the structural peak window.
+    expect(isStructuralPeakSlot('2026-01-15T16:00:00Z')).toBe(true)
+    // 2026-01-15T19:00 UTC is 19:00 London in winter -- just outside it.
+    expect(isStructuralPeakSlot('2026-01-15T19:00:00Z')).toBe(false)
   })
 })
 
@@ -142,34 +162,6 @@ describe('findAnnotations', () => {
   })
 })
 
-describe('findPeakWindow', () => {
-  it('finds the longest run of peak-band slots', () => {
-    const day: HeatMapDay = {
-      date: '2026-01-01',
-      slots: [
-        slot('2026-01-01T00:00:00Z', 0.1, 10), // cheap
-        slot('2026-01-01T00:30:00Z', 0.1, 40), // peak
-        slot('2026-01-01T01:00:00Z', 0.1, 10), // cheap -- breaks the run
-        slot('2026-01-01T01:30:00Z', 0.1, 35), // peak
-        slot('2026-01-01T02:00:00Z', 0.1, 38), // peak -- longest run: slots 3-4
-      ],
-    }
-    expect(findPeakWindow(day, 10, 40)).toEqual({ startSlot: 3, endSlot: 4 })
-  })
-
-  it('returns null for a flat tariff with no peak band', () => {
-    const day: HeatMapDay = {
-      date: '2026-01-01',
-      slots: [slot('2026-01-01T00:00:00Z', 0.1, 15), slot('2026-01-01T00:30:00Z', 0.1, 15)],
-    }
-    expect(findPeakWindow(day, 15, 15)).toBe(null)
-  })
-
-  it('returns null for an undefined day', () => {
-    expect(findPeakWindow(undefined, 10, 40)).toBe(null)
-  })
-})
-
 describe('formatSlotTime', () => {
   it('formats an ISO timestamp as a London local time', () => {
     expect(formatSlotTime('2026-06-15T13:30:00Z')).toBe('14:30')
@@ -198,26 +190,6 @@ describe('groupSlotsByLondonDay', () => {
 
   it('returns no days for an empty slot list', () => {
     expect(groupSlotsByLondonDay([])).toEqual([])
-  })
-})
-
-describe('presentRateCategories', () => {
-  it('returns only the standard band for a flat-rate tariff', () => {
-    const day: HeatMapDay = { date: '2026-06-15', slots: [slot('2026-06-15T00:00:00Z', 1, 20), slot('2026-06-15T00:30:00Z', 1, 20)] }
-    expect(presentRateCategories([day], 20, 20)).toEqual([1])
-  })
-
-  it('returns every band actually present across a day with cheap/standard/peak rates', () => {
-    const day: HeatMapDay = {
-      date: '2026-06-15',
-      slots: [slot('2026-06-15T00:00:00Z', 1, 9), slot('2026-06-15T00:30:00Z', 1, 30), slot('2026-06-15T01:00:00Z', 1, 50)],
-    }
-    expect(presentRateCategories([day], 9, 55)).toEqual([0, 1, 2])
-  })
-
-  it('ignores slots with an unknown rate', () => {
-    const day: HeatMapDay = { date: '2026-06-15', slots: [slot('2026-06-15T00:00:00Z', 1, null)] }
-    expect(presentRateCategories([day], 0, 0)).toEqual([])
   })
 })
 

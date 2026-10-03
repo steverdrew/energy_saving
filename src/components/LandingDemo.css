@@ -104,6 +104,13 @@
   text-decoration: underline;
 }
 
+/* OA-99: the representative-day aggregation method itself, distinct from
+   the raw source links above it. */
+.landing-demo__sources-method {
+  margin: 8px 0 0;
+  text-align: center;
+}
+
 /* OA-80/OA-83: a compact segmented control, not three separate buttons
    -- active state unmistakable, same visual family as the hero CTA.
    Sits directly above the comparison it controls (tight margin below),

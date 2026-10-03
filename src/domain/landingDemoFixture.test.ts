@@ -88,11 +88,46 @@ describe('buildLandingDemoFixture', () => {
   it('keeps provenance metadata alongside the fixture, testable and inspectable', () => {
     expect(LANDING_DEMO_DATA_SOURCES.annualKwhSource).toMatch(/2,500 kWh\/year/)
     expect(LANDING_DEMO_DATA_SOURCES.tariffRegion).toBe('C (London)')
-    expect(LANDING_DEMO_DATA_SOURCES.tariffDate).toBe('2026-06-15')
+    expect(LANDING_DEMO_DATA_SOURCES.tariffDateRange).toMatch(/2025-10-01.*2026-09-30/)
     expect(LANDING_DEMO_DATA_SOURCES.sourceUrls.ofgemTdcv).toContain('ofgem.gov.uk')
     expect(LANDING_DEMO_DATA_SOURCES.sourceUrls.ofgemPriceCap).toContain('ofgem.gov.uk')
     expect(LANDING_DEMO_DATA_SOURCES.sourceUrls.elexonProfiling).toContain('elexon.co.uk')
     expect(LANDING_DEMO_DATA_SOURCES.sourceUrls.octopusAgileApi).toContain('octopus.energy')
+    expect(LANDING_DEMO_DATA_SOURCES.sourceUrls.octopusAgilePricing).toContain('octopus.energy')
     expect(LANDING_DEMO_DATA_SOURCES.fixtureVersion).toBeTruthy()
+    expect(LANDING_DEMO_DATA_SOURCES.fixtureBuiltAt).toBeTruthy()
+  })
+
+  // OA-99 (second pass): a representative Agile day derived from real
+  // published rates by median-per-slot aggregation, not a single
+  // cherry-picked historical date.
+  it('builds the representative Agile day from 48 distinct median rates, not a 3-band tariff', () => {
+    expect(LANDING_DEMO_DATA_SOURCES.representativeRates48).toHaveLength(48)
+    expect(new Set(LANDING_DEMO_DATA_SOURCES.representativeRates48).size).toBeGreaterThan(40)
+    expect(LANDING_DEMO_DATA_SOURCES.aggregationMethod).toMatch(/median/i)
+  })
+
+  it('documents the real observed rate range (including negatives) even though the representative medians have none', () => {
+    expect(LANDING_DEMO_DATA_SOURCES.observedRateRangePence.min).toBeLessThan(0)
+    expect(LANDING_DEMO_DATA_SOURCES.observedRateRangePence.max).toBeLessThan(100) // within the £1/kWh cap
+    expect(LANDING_DEMO_DATA_SOURCES.negativeRateObservationCount).toBeGreaterThan(0)
+    expect(LANDING_DEMO_DATA_SOURCES.representativeRates48.every((rate) => rate >= 0)).toBe(true)
+  })
+
+  it("keeps the Compare tariff's rates identical to the fixture's published representativeRates48", () => {
+    const fixture = buildLandingDemoFixture()
+    const compareRates = fixture.compare.day.slots.map((s) => s.unitRateIncVatPence)
+    expect(compareRates).toEqual(LANDING_DEMO_DATA_SOURCES.representativeRates48)
+  })
+
+  it('places the representative day’s structural 16:00-19:00 peak window above its surrounding rates', () => {
+    const peakSlots = LANDING_DEMO_DATA_SOURCES.representativeRates48.slice(32, 38) // 16:00-19:00
+    const offPeakSlots = [
+      ...LANDING_DEMO_DATA_SOURCES.representativeRates48.slice(0, 32),
+      ...LANDING_DEMO_DATA_SOURCES.representativeRates48.slice(38),
+    ]
+    const minPeak = Math.min(...peakSlots)
+    const maxOffPeak = Math.max(...offPeakSlots)
+    expect(minPeak).toBeGreaterThan(maxOffPeak)
   })
 })

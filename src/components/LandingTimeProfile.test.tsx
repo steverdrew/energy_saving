@@ -21,6 +21,7 @@ function renderProfile(overrides: Partial<React.ComponentProps<typeof LandingTim
       explanation="Example day"
       costNote="Figures show usage cost only."
       stepKey="baseline"
+      showStructuralPeakAnnotation={false}
       {...overrides}
     />,
   )
@@ -79,26 +80,60 @@ describe('LandingTimeProfile', () => {
     expect(container.querySelectorAll('.landing-time-profile__usage-bar')).toHaveLength(0)
   })
 
-  // OA-95: the legend only names price bands actually present in this
-  // tab's data, rather than a fixed Cheap/Standard/Peak shown everywhere.
+  // OA-101: Agile has 48 distinct half-hourly prices, not three fixed
+  // tariff bands -- the legend reads as a continuous cheaper/more
+  // expensive scale on every tab, not a Cheap/Standard/Peak label set.
   describe('legend', () => {
-    it('shows only "Standard" for a flat-rate day (no Cheap or Peak band present)', () => {
+    it('shows the continuous cheaper/more-expensive price legend, not Cheap/Standard/Peak labels', () => {
       renderProfile()
-      expect(screen.getByText('Standard')).toBeInTheDocument()
+      expect(screen.getByText(/Cheaper/)).toBeInTheDocument()
+      expect(screen.getByText(/More expensive/)).toBeInTheDocument()
       expect(screen.queryByText('Cheap')).not.toBeInTheDocument()
+      expect(screen.queryByText('Standard')).not.toBeInTheDocument()
       expect(screen.queryByText('Peak')).not.toBeInTheDocument()
     })
 
-    it('shows Cheap/Standard/Peak for a day whose rates actually span all three bands', () => {
+    it('shows the same continuous legend for a flat-rate day as for a day with real price variation', () => {
       renderProfile({ day: fixture.compare.day, heading: 'Compare' })
-      expect(screen.getByText('Cheap')).toBeInTheDocument()
-      expect(screen.getByText('Standard')).toBeInTheDocument()
-      expect(screen.getByText('Peak')).toBeInTheDocument()
+      expect(screen.getByText(/Cheaper/)).toBeInTheDocument()
+      expect(screen.getByText(/More expensive/)).toBeInTheDocument()
     })
 
-    it('always shows the Usage legend item regardless of which price bands are present', () => {
+    it('always shows the Usage legend item alongside the price legend', () => {
       renderProfile()
       expect(screen.getAllByText('Usage').length).toBeGreaterThan(0)
+    })
+  })
+
+  // OA-99/OA-101: Agile's documented 16:00-19:00 structural peak window
+  // is annotated, but every half-hour still keeps its own distinct
+  // background colour -- this is not a fixed "Peak rate" band.
+  describe('structural peak annotation', () => {
+    it('annotates the 16:00-19:00 window without collapsing it into one fixed-rate band', () => {
+      const { container } = renderProfile({
+        day: fixture.compare.day,
+        heading: 'Compare',
+        showStructuralPeakAnnotation: true,
+      })
+      expect(screen.getByText('4–7pm peak period')).toBeInTheDocument()
+
+      const columns = container.querySelectorAll('.landing-time-profile__column')
+      const colorsInWindow = new Set(
+        Array.from(columns)
+          .slice(32, 38)
+          .map((el) => (el as HTMLElement).style.backgroundColor),
+      )
+      // Every half-hour within the structural window still has its own
+      // price, so the window is not rendered as one uniform colour.
+      expect(colorsInWindow.size).toBeGreaterThan(1)
+    })
+
+    // OA-99: the structural peak is a documented feature of Agile's own
+    // pricing formula -- not shown on a flat Standard Variable day, which
+    // has no such structural feature.
+    it('is not shown when showStructuralPeakAnnotation is false, even across the same clock window', () => {
+      renderProfile({ day: fixture.compare.day, heading: 'Compare', showStructuralPeakAnnotation: false })
+      expect(screen.queryByText('4–7pm peak period')).not.toBeInTheDocument()
     })
   })
 

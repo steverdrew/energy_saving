@@ -5,14 +5,21 @@ import {
   buildSmoothUsageAreaPath,
   describeSlot,
   formatSlotTime,
+  isStructuralPeakSlot,
   maxUsage,
-  presentRateCategories,
-  rateCategoryIndex,
+  rateColorStepIndex,
   rateRange,
-  RATE_CATEGORY_LABELS,
+  RATE_COLOR_STEPS_DARK,
   type HeatMapDay,
 } from './heatMapMath'
 import './LandingTimeProfile.css'
+
+// OA-101: "Cheaper <- price -> More expensive" continuous legend gradient,
+// built from the same validated 9-step ramp (dark-theme variant, since
+// the landing page is always dark) used to colour each column below --
+// one source of truth for the ramp's actual colours, rather than a second
+// hard-coded copy of the hex values in CSS.
+const PRICE_LEGEND_GRADIENT = `linear-gradient(to right, ${RATE_COLOR_STEPS_DARK.join(', ')})`
 
 export interface LandingTimeProfileProps {
   day: HeatMapDay
@@ -28,6 +35,8 @@ export interface LandingTimeProfileProps {
   caveat?: string
   /** Remounts just the narrative block (not the chart) to replay its OA-80 fade/slide on step change -- see the component doc comment for why the chart itself must stay mounted. */
   stepKey: string
+  /** OA-99/OA-101: the 16:00-19:00 structural-peak annotation is a documented feature of *Agile's* pricing formula specifically -- showing it on a flat Standard Variable day would wrongly imply that flat tariff has the same structural peak. Baseline passes `false`; Compare/Optimise (both on Agile) pass `true`. */
+  showStructuralPeakAnnotation: boolean
 }
 
 // Every hour of the 24-hour day -- one axis label underneath each, not
@@ -70,8 +79,11 @@ const SLOT_DIVIDER_HOURS: number[] = Array.from({ length: 47 }, (_, i) => (i + 1
  *
  * This component splits price and usage into two visually distinct
  * layers over the same 48 half-hour columns, one per slot:
- * - background: a continuous price "time landscape" -- cheap/standard/
- *   peak bands, touching with no gaps, coloured by rateCategoryIndex.
+ * - background: a continuous price "time landscape" -- touching, with no
+ *   gaps, each column coloured along a cheaper -> more expensive 9-step
+ *   ramp (OA-101: replaces the earlier 3-band cheap/standard/peak
+ *   categorical model, which misrepresented Agile as having fixed tariff
+ *   bands when every half-hour actually carries its own distinct price).
  *   Usage is never encoded here (no opacity channel).
  * - foreground: a usage bar, anchored to the bottom of each column,
  *   height proportional to that slot's kWh -- a distinct shape sitting
@@ -104,7 +116,16 @@ const SLOT_DIVIDER_HOURS: number[] = Array.from({ length: 47 }, (_, i) => (i + 1
  * the chart itself stays mounted throughout, same as before, so its own
  * transitions keep interpolating.
  */
-function LandingTimeProfile({ day, heading, summary, explanation, costNote, caveat, stepKey }: LandingTimeProfileProps) {
+function LandingTimeProfile({
+  day,
+  heading,
+  summary,
+  explanation,
+  costNote,
+  caveat,
+  stepKey,
+  showStructuralPeakAnnotation,
+}: LandingTimeProfileProps) {
   const [selected, setSelected] = useState<number | null>(null)
   const panelId = useId()
   const cellRefs = useRef<Array<HTMLButtonElement | null>>([])
@@ -112,10 +133,21 @@ function LandingTimeProfile({ day, heading, summary, explanation, costNote, cave
   const days = useMemo(() => [day], [day])
   const { min, max } = useMemo(() => rateRange(days), [days])
   const peakUsage = useMemo(() => maxUsage(days), [days])
-  // OA-95: the legend reflects only the price categories actually present
-  // in this tab's data -- a flat tariff shows "Standard" only, not a fixed
-  // "Cheap · Standard · Peak" shared by every tab regardless of its data.
-  const presentCategories = useMemo(() => presentRateCategories(days, min, max), [days, min, max])
+
+  // OA-99/OA-101: the 16:00-19:00 structural peak window, as an optional
+  // subtle annotation -- a fixed clock window, not derived from this
+  // day's own price ranking, so it's computed from each slot's real
+  // local time rather than from rateColorStepIndex. Only rendered when
+  // at least one slot actually falls in it (defensive -- every demo day
+  // does, but this stays correct for any future day shape too).
+  const structuralPeakSlotIndices = useMemo(
+    () => day.slots.reduce<number[]>((acc, slot, i) => (isStructuralPeakSlot(slot.startsAt) ? [...acc, i] : acc), []),
+    [day],
+  )
+  const structuralPeakWindow =
+    showStructuralPeakAnnotation && structuralPeakSlotIndices.length > 0
+      ? { start: structuralPeakSlotIndices[0], end: structuralPeakSlotIndices[structuralPeakSlotIndices.length - 1] }
+      : null
 
   // OA-97: the usage silhouette moves from "one bar per slot" to one
   // smooth path across all 48 -- same underlying ratios as before (clamped
@@ -164,15 +196,14 @@ function LandingTimeProfile({ day, heading, summary, explanation, costNote, cave
         {caveat && <p className="landing-time-profile__caveat">{caveat}</p>}
       </div>
 
+      {/* OA-101: a continuous cheaper -> more-expensive gradient, replacing
+          the earlier "Cheap · Standard · Peak" 3-band legend -- Agile has
+          48 distinct half-hour prices, not fixed tariff bands. */}
       <div className="landing-time-profile__legend">
-        {RATE_CATEGORY_LABELS.map((label, i) =>
-          presentCategories.includes(i) ? (
-            <span className="landing-time-profile__legend-item" key={label}>
-              <span className="landing-time-profile__legend-swatch" aria-hidden="true" data-category={i} />
-              {label}
-            </span>
-          ) : null,
-        )}
+        <span className="landing-time-profile__legend-item landing-time-profile__legend-item--price">
+          <span className="landing-time-profile__legend-gradient" aria-hidden="true" style={{ background: PRICE_LEGEND_GRADIENT }} />
+          Cheaper <span aria-hidden="true">←</span> price <span aria-hidden="true">→</span> More expensive
+        </span>
         <span className="landing-time-profile__legend-item">
           <span className="landing-time-profile__legend-bar" aria-hidden="true" />
           Usage
@@ -187,7 +218,11 @@ function LandingTimeProfile({ day, heading, summary, explanation, costNote, cave
           aria-describedby={selectedSlot ? panelId : undefined}
         >
           {day.slots.map((slot, slotIndex) => {
-            const category = rateCategoryIndex(slot.unitRateIncVatPence, min, max)
+            // OA-101: continuous cheaper -> more-expensive background,
+            // one of the validated 9-step ramp's colours per slot
+            // (rateColorStepIndex), not a 3-band category -- every
+            // half-hour keeps its own distinct price.
+            const step = rateColorStepIndex(slot.unitRateIncVatPence, min, max)
             const isSelected = selected === slotIndex
             return (
               <button
@@ -197,7 +232,8 @@ function LandingTimeProfile({ day, heading, summary, explanation, costNote, cave
                   cellRefs.current[slotIndex] = el
                 }}
                 className="landing-time-profile__column"
-                data-category={category ?? 'unknown'}
+                style={step !== null ? { backgroundColor: RATE_COLOR_STEPS_DARK[step] } : undefined}
+                data-unknown={step === null || undefined}
                 data-selected={isSelected || undefined}
                 aria-label={describeSlot(slot)}
                 tabIndex={slotIndex === 0 ? 0 : -1}
@@ -207,6 +243,25 @@ function LandingTimeProfile({ day, heading, summary, explanation, costNote, cave
               />
             )
           })}
+
+          {/* OA-99/OA-101: an optional subtle annotation for Agile's
+              documented 16:00-19:00 structural peak window -- a label and
+              a thin top bracket across those columns, not a coloured band
+              (each column's own background above already carries its
+              real, distinct price). Purely decorative/duplicative of the
+              per-slot aria-label and sr-table below, so aria-hidden. */}
+          {structuralPeakWindow && (
+            <div
+              className="landing-time-profile__structural-peak"
+              aria-hidden="true"
+              style={{
+                left: `${(structuralPeakWindow.start / day.slots.length) * 100}%`,
+                width: `${((structuralPeakWindow.end - structuralPeakWindow.start + 1) / day.slots.length) * 100}%`,
+              }}
+            >
+              <span className="landing-time-profile__structural-peak-label">4–7pm peak period</span>
+            </div>
+          )}
 
           {/* OA-97: restrained vertical time guidance, stronger at the
               6-hour marks (matching the axis labels below) than the

@@ -8,9 +8,10 @@
    panel. ~900px keeps the chart's own rendered width close to OA-94/97's
    ~860px target once the card's padding is accounted for. */
 .landing-time-profile {
-  --landing-time-profile-cheap: #10b981;
-  --landing-time-profile-standard: #8b5cf6;
-  --landing-time-profile-peak: #ef4444;
+  /* OA-101: columns are coloured individually via inline style (the
+     continuous rateColorStepIndex/RATE_COLOR_STEPS_DARK ramp, one source
+     of truth with heatMapMath.ts) -- this token is only the fallback for
+     a slot with no known rate. */
   --landing-time-profile-unknown: #2c2c3a;
 
   position: relative;
@@ -116,18 +117,19 @@
   gap: 6px;
 }
 
-.landing-time-profile__legend-swatch {
-  width: 8px;
+/* OA-101: a continuous cheaper -> more-expensive gradient swatch,
+   replacing the earlier three discrete category dots -- its background
+   is set inline from the same RATE_COLOR_STEPS_DARK ramp the columns
+   below use, so the legend always matches what's actually rendered. */
+.landing-time-profile__legend-gradient {
+  width: 56px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: 4px;
   display: inline-block;
 }
-.landing-time-profile__legend-swatch[data-category='0'] { background: var(--landing-time-profile-cheap); }
-.landing-time-profile__legend-swatch[data-category='1'] { background: var(--landing-time-profile-standard); }
-.landing-time-profile__legend-swatch[data-category='2'] { background: var(--landing-time-profile-peak); }
 
 /* Foreground usage shape, shown in the legend as a short bar rather than
-   a dot -- distinguishes it from the price-category swatches above. */
+   a dot -- distinguishes it from the price gradient above. */
 .landing-time-profile__legend-bar {
   width: 10px;
   height: 10px;
@@ -154,6 +156,10 @@
   overflow: hidden;
 }
 
+/* OA-101: each column's actual price colour is set inline from the
+   continuous rateColorStepIndex ramp (one source of truth with
+   heatMapMath.ts) -- this background is only the fallback for a slot
+   with no known rate (`data-unknown`). */
 .landing-time-profile__column {
   position: relative;
   flex: 1 1 0;
@@ -162,18 +168,44 @@
   padding: 0;
   border: none;
   cursor: pointer;
-  background: var(--landing-time-profile-unknown);
+  background-color: var(--landing-time-profile-unknown);
 }
-
-.landing-time-profile__column[data-category='0'] { background: var(--landing-time-profile-cheap); }
-.landing-time-profile__column[data-category='1'] { background: var(--landing-time-profile-standard); }
-.landing-time-profile__column[data-category='2'] { background: var(--landing-time-profile-peak); }
 
 .landing-time-profile__column[data-selected],
 .landing-time-profile__column:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.65);
   outline-offset: -2px;
   z-index: 2;
+}
+
+/* OA-99/OA-101: a thin top bracket + label across Agile's documented
+   16:00-19:00 structural peak window -- deliberately not a coloured
+   band (each column underneath already carries its own real, distinct
+   price); this only calls the window out as a structural feature of how
+   Agile is priced, the way a chart might annotate "market close" without
+   implying every slot within it shares one price. Sits above the price
+   columns, same stacking tier as the hour guides. */
+.landing-time-profile__structural-peak {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  height: 100%;
+  border-left: 1px solid rgba(255, 255, 255, 0.5);
+  border-right: 1px solid rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+}
+
+.landing-time-profile__structural-peak-label {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
 /* OA-97: restrained vertical time guidance across the 24-hour track --

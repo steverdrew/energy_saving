@@ -41,8 +41,8 @@ describe('LandingDemo', () => {
     expect(screen.getByRole('tab', { name: '2. Compare tariff' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: '1. Baseline' })).toHaveAttribute('aria-selected', 'false')
     expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'landing-demo-panel-compare')
-    expect(screen.getByText(/£1\.72/)).toBeInTheDocument()
-    expect(screen.getByText(/£0\.09 less/)).toBeInTheDocument()
+    expect(screen.getByText(/£1\.68/)).toBeInTheDocument()
+    expect(screen.getByText(/£0\.13 less than Standard Variable/)).toBeInTheDocument()
   })
 
   it('selects Optimise timing on click, showing the timing-saving figure', async () => {
@@ -53,7 +53,29 @@ describe('LandingDemo', () => {
 
     expect(screen.getByRole('tab', { name: '3. Optimise timing' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'landing-demo-panel-optimise')
-    expect(screen.getByText(/potential/)).toBeInTheDocument()
+    expect(screen.getByText(/£0\.21 potential saving from timing/)).toBeInTheDocument()
+  })
+
+  // OA-102: plain-language explanation of what moves, plus the "same
+  // tariff / same total energy / better timing" reinforcement.
+  it('explains what moves on the Optimise tab without claiming the whole household was rearranged', async () => {
+    const user = userEvent.setup()
+    renderDemo()
+    await user.click(screen.getByRole('tab', { name: '3. Optimise timing' }))
+
+    expect(screen.getByText(/We identify energy use that can realistically move/)).toBeInTheDocument()
+    expect(screen.getByText(/same tariff, same total energy, just better timing/)).toBeInTheDocument()
+    expect(screen.getByText(/Illustrative optimisation/)).toBeInTheDocument()
+  })
+
+  // OA-101: the caveat names the representative-day methodology rather
+  // than implying this was one arbitrarily cherry-picked example.
+  it('uses representative-comparison caveat wording on the Compare tab', async () => {
+    const user = userEvent.setup()
+    renderDemo()
+    await user.click(screen.getByRole('tab', { name: '2. Compare tariff' }))
+
+    expect(screen.getByText(/Representative comparison/)).toBeInTheDocument()
   })
 
   it('is operable by keyboard alone -- no essential action depends on a mouse/hover', async () => {
@@ -136,7 +158,10 @@ describe('LandingDemo', () => {
       expect.stringContaining('ofgem.gov.uk'),
     )
     expect(screen.getByRole('link', { name: /elexon/i })).toHaveAttribute('href', expect.stringContaining('elexon.co.uk'))
-    expect(screen.getByRole('link', { name: /octopus energy/i })).toHaveAttribute(
+    for (const link of screen.getAllByRole('link', { name: /octopus energy/i })) {
+      expect(link).toHaveAttribute('href', expect.stringContaining('octopus.energy'))
+    }
+    expect(screen.getByRole('link', { name: /how agile prices are calculated/i })).toHaveAttribute(
       'href',
       expect.stringContaining('octopus.energy'),
     )

@@ -79,27 +79,50 @@ export const OFGEM_PRICE_CAP_STANDING_CHARGE_PENCE_PER_DAY = 54.83
 
 const STANDARD_VARIABLE_RATE_PENCE: number[] = new Array(48).fill(OFGEM_PRICE_CAP_AVERAGE_UNIT_RATE_PENCE)
 
-// OA-99: a real, fixed snapshot of Octopus Agile half-hourly unit rates --
-// product AGILE-24-10-01, tariff E-1R-AGILE-24-10-01-C (region C,
-// London), 15 June 2026, fetched from Octopus's public API
-// (api.octopus.energy) and frozen here rather than fetched live on every
-// landing-page render (see `LANDING_DEMO_DATA_SOURCES.tariffSource`/
-// `sourceUrls` below for the endpoint and retrieval date). Index 0 is
-// 00:00 London time, index 47 is 23:30.
-const AGILE_RATE_PENCE: number[] = [
-  16.8945, 16.1175, 15.603, 15.603, 16.0125, 15.435, 14.973, 15.603, 15.2145, 14.784, 16.1175, 15.792, 16.296, 19.866,
-  21.378, 21.693, 20.412, 18.942, 19.5615, 17.745, 15.96, 14.364, 15.057, 14.301, 15.246, 15.12, 15.3405, 14.238,
-  14.868, 14.6055, 14.742, 16.149, 29.883, 31.983, 32.592, 35.826, 36.393, 37.359, 24.759, 24.717, 25.3365, 25.41,
-  24.654, 24.549, 22.911, 22.155, 20.664, 19.236,
+// OA-99 (second pass): a representative Agile day, not a cherry-picked
+// historical date -- the median of each of the 48 daily clock slots'
+// real published Octopus Agile half-hourly unit rates (product
+// AGILE-24-10-01, tariff E-1R-AGILE-24-10-01-C, region C/London), over
+// the latest complete 12-month period at the time this fixture was
+// built (1 October 2025 - 30 September 2026: 365 observations per slot,
+// fetched page-by-page from api.octopus.energy and bucketed into
+// Europe/London clock slots before taking the median -- see
+// `LANDING_DEMO_DATA_SOURCES.aggregationMethod`/`sourceUrls` below).
+// Frozen here rather than re-fetched/re-aggregated on every landing-page
+// render, same as the earlier single-day snapshot this replaces. Index 0
+// is 00:00 London time, index 47 is 23:30.
+//
+// This keeps the genuine tendency for 16:00-19:00 to be more expensive
+// (medians ~31-36p/kWh vs. a ~16-20p/kWh baseline either side) while
+// every one of the 48 slots still carries its own distinct price --
+// Agile is not three fixed tariff bands (see heatMapMath.ts's
+// `rateRatio`/`isStructuralPeakSlot`, which replaced the earlier
+// `rateCategoryIndex` cheap/standard/peak model).
+//
+// The *median* across 365 days smooths away the rare extremes real
+// Agile pricing can produce -- none of these 48 values happens to be
+// negative, even though 497 of the 17,520 underlying half-hourly
+// observations were (observed range: -11.28p to 86.73p/kWh, well inside
+// Agile's documented £1/kWh cap). That range is preserved in
+// `LANDING_DEMO_DATA_SOURCES` so the UI/sources disclosure can say so
+// honestly, per OA-99's "preserve those possibilities in the data model
+// even if the representative fixture does not happen to contain a
+// negative slot."
+const AGILE_REPRESENTATIVE_RATE_PENCE: number[] = [
+  17.0415, 17.5665, 16.9785, 16.653, 16.632, 15.96, 16.338, 15.813, 16.38, 16.107, 16.905, 16.8, 17.8605, 19.425,
+  19.1835, 20.7585, 19.635, 19.53, 18.711, 17.976, 17.577, 17.01, 16.611, 16.296, 16.2015, 16.023, 16.3485, 15.918,
+  16.17, 16.1595, 16.653, 17.514, 31.059, 32.6865, 33.432, 34.3245, 35.364, 35.7, 23.163, 22.6065, 22.26, 21.7665,
+  21.651, 19.74, 19.383, 17.283, 18.333, 17.514,
 ]
 
-// These slots were chosen against the real AGILE_RATE_PENCE snapshot
-// above (not re-derived from it at runtime, so a future snapshot change
-// doesn't silently move the story): 36/37 (18:00-19:00, ~36-37p/kWh) is
-// within the snapshot's most expensive run; 4/5 (02:00-03:00,
-// ~15-16p/kWh) sits in its cheap overnight window.
-const BASELINE_FLEXIBLE_SLOTS = [36, 37] // 18:00-19:00 -- the snapshot's expensive evening peak
-const OPTIMISED_FLEXIBLE_SLOTS = [4, 5] // 02:00-03:00 -- a cheap overnight period in the same snapshot
+// These slots were chosen against the real AGILE_REPRESENTATIVE_RATE_PENCE
+// medians above (not re-derived at runtime, so a future fixture rebuild
+// doesn't silently move the story): 36/37 (18:00-19:00, ~35p/kWh) are the
+// two most expensive slots in the representative day, within the
+// 16:00-19:00 structural peak window; 4/5 (02:00-03:00, ~16p/kWh) sit in
+// a cheap overnight window well below that peak.
+const BASELINE_FLEXIBLE_SLOTS = [36, 37] // 18:00-19:00 -- the representative day's most expensive two slots
+const OPTIMISED_FLEXIBLE_SLOTS = [4, 5] // 02:00-03:00 -- a cheap overnight period in the same representative day
 
 function withFlexibleLoad(slotIndices: number[]): number[] {
   const usage = [...BASE_LOAD_KWH]
@@ -166,31 +189,53 @@ export interface LandingDemoDataSources {
   annualKwhSource: string
   /** Basis for the Compare/Optimise tariff's half-hourly rates. */
   tariffSource: string
+  /** OA-99: a single, explicitly-labelled reference region -- Agile prices vary by region, and a documented multi-region UK blend wasn't methodologically supportable within this fixture's scope, so this is named rather than silently implied to be national. */
   tariffRegion: string
-  tariffDate: string
+  /** The historical period the representative rates were aggregated from (see `aggregationMethod`). */
+  tariffDateRange: string
+  /** How `representativeRates48` was derived from real published Agile rates. */
+  aggregationMethod: string
+  /** The 48 representative median p/kWh values themselves -- the exact rates Compare/Optimise are costed against, exposed here so the fixture's own provenance is inspectable without reaching into module-private constants. */
+  representativeRates48: number[]
+  /** The real min/max unit rate actually observed across every underlying half-hourly record aggregated into `representativeRates48` -- not the (smoothed) median values above, which don't happen to include a negative slot. Documents that Agile's documented possibility of negative prices and its £1/kWh cap are real, observed behaviour, even though the representative day built from them doesn't surface a negative median. */
+  observedRateRangePence: { min: number; max: number }
+  /** How many of the underlying half-hourly records (out of 17,520) were negative. */
+  negativeRateObservationCount: number
   sourceUrls: {
     ofgemTdcv: string
     ofgemPriceCap: string
     elexonProfiling: string
     octopusAgileApi: string
+    /** Octopus's own explanation of how Agile prices are calculated -- the source for the 16:00-19:00 structural peak and the £1/kWh cap / negative-price behaviour. */
+    octopusAgilePricing: string
   }
   fixtureVersion: string
+  /** When this fixture (including the representative-rate aggregation) was last built/snapshotted. */
+  fixtureBuiltAt: string
 }
 
 export const LANDING_DEMO_DATA_SOURCES: LandingDemoDataSources = {
   usageSource:
     "Shape consistent with Elexon's documented domestic Profile Class 1 (Domestic Unrestricted) diurnal pattern -- Elexon's own enumerated 48-period coefficient table is published via the Elexon Portal's Market Domain Data repository, not a public scrapeable export, so this is a representative shape rather than a literal copy of that table.",
   annualKwhSource: "Ofgem medium Typical Domestic Consumption Value for electricity (Profile Class 1), 2,500 kWh/year, effective 1 July 2026.",
-  tariffSource: 'Octopus Agile (product AGILE-24-10-01, tariff E-1R-AGILE-24-10-01-C), fetched from the Octopus Energy public API and snapshotted for a deterministic fixture.',
+  tariffSource:
+    'Octopus Agile (product AGILE-24-10-01, tariff E-1R-AGILE-24-10-01-C) -- median of real published half-hourly unit rates for each of the 48 daily clock slots, fetched from the Octopus Energy public API.',
   tariffRegion: 'C (London)',
-  tariffDate: '2026-06-15',
+  tariffDateRange: '2025-10-01 to 2026-09-30 (latest complete 12 months)',
+  aggregationMethod:
+    'For each of the 48 daily half-hour clock slots (Europe/London time), the median of that slot’s real published Agile unit rate across all 365 days in the date range above (17,520 half-hourly records total, 365 observations per slot) -- not a single cherry-picked historical day.',
+  representativeRates48: AGILE_REPRESENTATIVE_RATE_PENCE,
+  observedRateRangePence: { min: -11.277, max: 86.73 },
+  negativeRateObservationCount: 497,
   sourceUrls: {
     ofgemTdcv: 'https://www.ofgem.gov.uk/sites/default/files/2026-05/Review%20of%20typical%20domestic%20consumption%20values%20decision.pdf',
     ofgemPriceCap: 'https://www.ofgem.gov.uk/news/changes-energy-price-cap-between-1-october-and-31-december-2026',
     elexonProfiling: 'https://www.elexon.co.uk/bsc/settlement/profiling/',
     octopusAgileApi: 'https://developer.octopus.energy/guides/rest/api-endpoints/',
+    octopusAgilePricing: 'https://octopus.energy/help-and-faqs/articles/how-calculate-prices-shape-shifters-agile/',
   },
   fixtureVersion: '2026-10-03',
+  fixtureBuiltAt: '2026-10-03',
 }
 
 export interface LandingDemoFixture {
@@ -208,8 +253,8 @@ export function buildLandingDemoFixture(): LandingDemoFixture {
   const optimisedUsage = withFlexibleLoad(OPTIMISED_FLEXIBLE_SLOTS)
 
   const baselineDays = buildDays(baselineUsage, STANDARD_VARIABLE_RATE_PENCE)
-  const compareDays = buildDays(baselineUsage, AGILE_RATE_PENCE)
-  const optimiseDays = buildDays(optimisedUsage, AGILE_RATE_PENCE)
+  const compareDays = buildDays(baselineUsage, AGILE_REPRESENTATIVE_RATE_PENCE)
+  const optimiseDays = buildDays(optimisedUsage, AGILE_REPRESENTATIVE_RATE_PENCE)
 
   const baseline: LandingDemoStep = {
     tariffName: 'Standard Variable',
@@ -221,14 +266,14 @@ export function buildLandingDemoFixture(): LandingDemoFixture {
   const compare: LandingDemoStep = {
     tariffName: 'Octopus Agile',
     totalKwh: sumKwh(baselineUsage),
-    totalCostPence: sumCostPence(baselineUsage, AGILE_RATE_PENCE),
+    totalCostPence: sumCostPence(baselineUsage, AGILE_REPRESENTATIVE_RATE_PENCE),
     day: compareDays[compareDays.length - 1],
     days: compareDays,
   }
   const optimise: LandingDemoStep = {
     tariffName: 'Octopus Agile',
     totalKwh: sumKwh(optimisedUsage),
-    totalCostPence: sumCostPence(optimisedUsage, AGILE_RATE_PENCE),
+    totalCostPence: sumCostPence(optimisedUsage, AGILE_REPRESENTATIVE_RATE_PENCE),
     day: optimiseDays[optimiseDays.length - 1],
     days: optimiseDays,
   }

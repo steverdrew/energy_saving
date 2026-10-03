@@ -1,8 +1,26 @@
 # HANDOFF
 
-_Last updated: 2026-10-03 (OA-88 built: sign-in page polished to match
+_Last updated: 2026-10-03 (OA-99 second pass/OA-101/OA-102 built: Agile
+modelled as 48 real distinct half-hourly prices on a continuous
+cheaper->more-expensive scale, replacing the earlier Cheap/Standard/Peak
+3-band legend; the representative Agile day is now a genuine median-of-
+12-months aggregation, not a single snapshot date. See "Current task"
+below. Previous entries:)_
+
+_2026-10-03, OA-99 second pass / OA-101 / OA-102 (current task, see
+below): Steve updated all three Jira tickets mid-session with a scope
+change -- Agile must never be presented as three fixed tariff bands,
+even visually; every half-hour keeps its own real price on a continuous
+scale, with 16:00-19:00 kept only as an optional structural annotation
+(Octopus's own documented network-cost peak window), not a coloured
+band. This landed on top of a prior, uncommitted session's OA-95/97/98/
+99/100/101 work already sitting in the working tree (single comparison
+card, smooth usage silhouette, sourced Typical-household data) -- see
+"Current task" below for what was added this session vs. already done._
+
+_2026-10-03, OA-88 built: sign-in page polished to match
 the landing-page visual system, sharing one nav/shell with Home rather
-than a separate lookalike. See "Current task" below. Previous entries:)_
+than a separate lookalike._
 
 _2026-10-03, OA-87 third pass (superseded below as "previous task"):
 Steve's own diagnosis of why two prior CSS-only passes kept missing the
@@ -38,6 +56,99 @@ Steve but not yet started -- largely expected to already be satisfied
 by OA-82's work, pending its own audit pass; OA-65 not started)_
 
 ## Current task (latest)
+
+**OA-99 (second pass) / OA-101 / OA-102** -- Steve updated all three
+Jira tickets mid-session: Agile must never be modelled or presented as
+three fixed Cheap/Standard/Peak tariff bands, even visually -- every
+half-hour keeps its own real price on a continuous cheaper->more-
+expensive scale, with 16:00-19:00 kept only as an optional *structural*
+annotation (Octopus's own documented network-cost peak window), not a
+coloured band. This landed on top of a prior, uncommitted session's
+work already in the tree (OA-95/97/98/99/100: single comparison card,
+smooth usage silhouette, sourced Typical-household data, OA-101's
+two-line Compare summary) -- committed separately first (`9b07bcc`),
+then this pass on top.
+
+- **Representative Agile day is now a real median-of-12-months
+  aggregation, not a snapshot date.** Fetched all 17,520 real published
+  Octopus Agile half-hourly rates (product AGILE-24-10-01, tariff
+  E-1R-AGILE-24-10-01-C, region C/London) for the latest complete 12
+  months (2025-10-01 to 2026-09-30) directly from api.octopus.energy
+  (confirmed this sandbox has outbound internet access), bucketed by
+  Europe/London clock slot, and took the median of each of the 48 slots'
+  365 observations -- `AGILE_REPRESENTATIVE_RATE_PENCE` in
+  landingDemoFixture.ts. Confirms the real, documented structural peak:
+  slot medians jump from ~16-20p/kWh to ~31-36p/kWh exactly across
+  16:00-19:00. Also recorded the real observed range across all 17,520
+  records (-11.28p to 86.73p, 497 negative) in
+  `LANDING_DEMO_DATA_SOURCES.observedRateRangePence`/
+  `negativeRateObservationCount` -- the representative *medians* don't
+  happen to include a negative slot (medians smooth that away), but this
+  keeps the £1/kWh cap and negative-price possibility honestly
+  documented in the data model per the ticket's explicit ask, rather
+  than silently dropping it because this particular fixture doesn't
+  surface one.
+- **heatMapMath.ts**: removed `rateCategoryIndex`/`RATE_CATEGORY_LABELS`/
+  `presentRateCategories` (the 3-band model) and the already-dead
+  `findPeakWindow`/`PeakWindow` (defined but never imported by any
+  component -- confirmed via grep before deleting), replaced by
+  `rateRatio` (continuous 0..1 position) and `isStructuralPeakSlot` (a
+  fixed Europe/London 16:00-19:00 clock check, deliberately *not*
+  derived from a day's own price ranking -- the structural peak is a
+  real feature of Agile's pricing formula, independent of what any
+  particular representative day's prices look like).
+- **LandingTimeProfile.tsx/.css**: columns now coloured via the
+  existing validated `rateColorStepIndex`/`RATE_COLOR_STEPS_DARK` 9-step
+  ramp (already used by the authenticated app's own HeatMap component)
+  rather than 3 fixed category colours -- reuses one validated palette
+  instead of inventing a second. Legend replaced with "Cheaper <- price
+  -> More expensive · Usage" (a gradient swatch built from the same ramp
+  array, so it can't drift from what's actually rendered) instead of
+  Cheap/Standard/Peak dots. Added an optional subtle 16:00-19:00
+  annotation (thin bracket + "4-7pm peak period" label, not a coloured
+  band) -- gated behind a new `showStructuralPeakAnnotation` prop so it
+  only renders on Compare/Optimise (both genuinely on Agile), not on
+  Baseline's flat Standard Variable tariff, which has no such structural
+  feature (caught by reviewing my own first pass in the browser -- the
+  annotation is purely clock-driven, so it rendered on every tab until
+  gated).
+- **LandingDemo.tsx**: Optimise tab now gets the same two-line summary
+  hierarchy OA-101 gave Compare ("Octopus Agile · £X" / "£Y potential
+  saving from timing"), plain-language "what moves" explanation (dishwasher-
+  cycle example, "everything else stays where it was... same tariff, same
+  total energy, just better timing"), and OA-102's "Illustrative
+  optimisation" caveat. Compare's caveat updated to "Representative
+  comparison..." (was "One example comparison...") to match the
+  methodology's actual name. Sources disclosure gained a fifth link
+  (Octopus's own Agile-pricing explainer, the source for the structural
+  peak/cap/negative-price claims) and a methodology line ("Agile profile
+  based on median half-hour prices...").
+- Flexible-load slot choices (`BASELINE_FLEXIBLE_SLOTS = [36, 37]`,
+  `OPTIMISED_FLEXIBLE_SLOTS = [4, 5]`) turned out to still be the right
+  ones against the new median data too (verified by scanning the new
+  48-value array) -- 36/37 are genuinely the representative day's two
+  most expensive slots, 4/5 a genuinely cheap overnight pair -- so no
+  change needed there, just updated comments to stop citing the old
+  snapshot's p/kWh figures.
+- New headline figures from the real median data (baseline unchanged,
+  Compare/Optimise now costed against the new representative curve):
+  Baseline £1.80, Compare £1.68 (£0.13 less than Standard Variable),
+  Optimise £1.46 (£0.21 potential saving from timing) -- test assertions
+  updated to match, not hand-picked.
+
+Verified: `npm test` (88/88), `npm run lint` (clean, same pre-existing
+warnings), `npm run build`/`check-bundle` (pass), and confirmed visually
+in the browser pane across all three tabs -- continuous price gradient,
+structural peak annotation present on Compare/Optimise and correctly
+absent on Baseline, usage silhouette geometrically identical across
+tabs, flexible-load bump visibly relocated from 18:00 to ~02:00 on
+Optimise with the tariff background unchanged from Compare, Sources
+disclosure showing all five links plus the methodology line.
+
+Not yet committed as of writing this entry -- about to commit on `main`
+(no PR requested this session), not yet pushed.
+
+## Previous task
 
 **OA-88** ("Polish sign-in page to match Shift & Save landing-page
 visual system") -- Steve asked for this right after OA-87's third pass,

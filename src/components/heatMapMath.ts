@@ -58,39 +58,44 @@ export function rateColorStepIndex(rate: number | null, min: number, max: number
 }
 
 /**
- * OA-85: the landing-page demo's "tariff" variant encodes price as one of
- * three categorical bands (cheap/standard/peak) rather than the 9-step
- * sequential ramp above -- same min/max normalisation approach, just
- * fewer, named buckets so colour reads as "cheap vs. peak" at a glance
- * instead of a continuous gradient. Returns null/1 for the same reasons
- * as rateColorStepIndex.
+ * OA-101: the landing-page demo's price scale -- Agile has 48 genuinely
+ * distinct half-hourly prices, not three fixed tariff bands, so the
+ * comparison chart encodes price as a continuous cheaper -> more
+ * expensive position (0 = the cheapest slot actually present, 1 = the
+ * most expensive) rather than bucketing it into named categories.
+ * Replaces the earlier `rateCategoryIndex`/`RATE_CATEGORY_LABELS`
+ * cheap/standard/peak model, which OA-99/OA-101 explicitly retired as
+ * misrepresenting how Agile pricing actually works. Same min/max
+ * normalisation and null/flat-rate handling as `rateColorStepIndex`
+ * above; callers map the returned ratio to a colour themselves (see
+ * LandingTimeProfile.tsx, which reuses the `rateColorStepIndex` ramp).
  */
-export const RATE_CATEGORY_LABELS = ['Cheap', 'Standard', 'Peak'] as const
-
-export function rateCategoryIndex(rate: number | null, min: number, max: number): number | null {
+export function rateRatio(rate: number | null, min: number, max: number): number | null {
   if (rate === null || !Number.isFinite(rate)) return null
-  if (max === min) return 1 // flat-rate: no implied ranking -- the "standard" middle band
+  if (max === min) return 0.5 // flat-rate: no implied ranking -- dead centre of the scale
   const t = (rate - min) / (max - min)
-  if (t < 1 / 3) return 0
-  if (t < 2 / 3) return 1
-  return 2
+  return Math.max(0, Math.min(1, t))
 }
 
-/**
- * OA-95: which of the 3 rate categories are actually present in a day's
- * data (vs. always showing all 3) -- a flat-rate tariff (e.g. Standard
- * Variable) buckets every slot into the "standard" middle band, so its
- * legend should read "Standard" only, not "Cheap · Standard · Peak".
- */
-export function presentRateCategories(days: HeatMapDay[], min: number, max: number): number[] {
-  const present = new Set<number>()
-  for (const day of days) {
-    for (const slot of day.slots) {
-      const category = rateCategoryIndex(slot.unitRateIncVatPence, min, max)
-      if (category !== null) present.add(category)
-    }
-  }
-  return [...present].sort((a, b) => a - b)
+// OA-99/OA-101: Agile's pricing formula includes higher network/grid-
+// related costs during 16:00-19:00 London time -- a genuine structural
+// feature of how Agile is priced (see LANDING_DEMO_DATA_SOURCES.sourceUrls
+// .octopusAgilePricing), independent of any particular day's actual
+// price ranking. This is therefore a fixed clock window, not derived
+// from rateRatio/rateColorStepIndex -- every one of its six half-hours
+// still carries its own distinct price; this only flags which slots fall
+// inside that documented window, for an optional subtle annotation.
+export const STRUCTURAL_PEAK_WINDOW_HOURS = { startHour: 16, endHour: 19 } as const
+
+const structuralPeakHourFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/London',
+  hour: 'numeric',
+  hourCycle: 'h23',
+})
+
+export function isStructuralPeakSlot(startsAtIso: string): boolean {
+  const hour = Number(structuralPeakHourFormatter.format(new Date(startsAtIso)))
+  return hour >= STRUCTURAL_PEAK_WINDOW_HOURS.startHour && hour < STRUCTURAL_PEAK_WINDOW_HOURS.endHour
 }
 
 export function rateRange(days: HeatMapDay[]): { min: number; max: number } {
@@ -213,45 +218,6 @@ export function findAnnotations(days: HeatMapDay[]): HeatMapAnnotation[] {
 
   const candidates: Array<HeatMapAnnotation | null> = [cheapest, mostExpensive, highestUsage]
   return candidates.filter((a): a is HeatMapAnnotation => a !== null)
-}
-
-export interface PeakWindow {
-  startSlot: number
-  endSlot: number
-}
-
-/**
- * OA-86: the landing-page demo's peak-window overlay -- the longest run of
- * consecutive "peak" (rateCategoryIndex === 2) slots in a representative
- * day, used to highlight *where* the expensive window actually falls in
- * the current illustrative tariff data. Deliberately not a hard-coded
- * time band (the reference mockup's "16:00-19:00" was fixed to one
- * example Agile shape) -- a flat tariff has no peak band at all, so this
- * returns null and the overlay simply doesn't render, rather than a
- * union/day considered. Ties for longest run keep the first.
- */
-export function findPeakWindow(day: HeatMapDay | undefined, min: number, max: number): PeakWindow | null {
-  if (!day) return null
-  let bestStart = -1
-  let bestLength = 0
-  let runStart = -1
-  let runLength = 0
-
-  day.slots.forEach((slot, index) => {
-    if (rateCategoryIndex(slot.unitRateIncVatPence, min, max) === 2) {
-      if (runLength === 0) runStart = index
-      runLength++
-      if (runLength > bestLength) {
-        bestLength = runLength
-        bestStart = runStart
-      }
-    } else {
-      runLength = 0
-    }
-  })
-
-  if (bestLength === 0) return null
-  return { startSlot: bestStart, endSlot: bestStart + bestLength - 1 }
 }
 
 /**
