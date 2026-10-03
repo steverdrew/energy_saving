@@ -62,7 +62,7 @@ function jumpToStage(name: string) {
 // shared setup step most Optimise-path tests need, since Standard
 // Variable (the default) is flat and has nothing to optimise.
 async function switchToSmartAgile(user: ReturnType<typeof userEvent.setup>) {
-  const typeGroup = screen.getByRole('group', { name: /your current tariff/i })
+  const typeGroup = screen.getByRole('group', { name: /^current tariff$/i })
   await user.click(within(typeGroup).getByRole('button', { name: 'Smart' }))
 }
 
@@ -76,30 +76,40 @@ describe('LandingDemo', () => {
     // "energy cost on <tariff>", with the standing charge disclosed
     // separately alongside it.
     expect(container.querySelector('.landing-time-profile__result-label')).toHaveTextContent('Typical day · 6.8 kWh')
-    expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('£1.80 energy cost on Flexible')
+    expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('£1.80/day on Flexible')
     expect(container.querySelector('.landing-time-profile__standing-charge-note')).toHaveTextContent(
       '+ £0.55/day standing charge',
     )
   })
 
+  it('leads Baseline with "What tariff are you on now?", not the old usage-led heading (OA-135)', () => {
+    renderDemo()
+    expect(screen.getByRole('heading', { name: 'What tariff are you on now?' })).toBeInTheDocument()
+    expect(
+      screen.getByText('Choose your current tariff so we can compare this same household day against the alternatives.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('When do you use energy?')).not.toBeInTheDocument()
+  })
+
   // OA-135: "add a compact tariff selector within Baseline... Primary
   // choices: Flexible | Fixed | Smart."
   describe('Baseline current-tariff selector (OA-135)', () => {
-    it('shows a Flexible/Fixed/Smart selector, with Smart revealing its own products', async () => {
+    it('shows a visible "Current tariff" label above a Flexible/Fixed/Smart selector, with Smart revealing its own products', async () => {
       const user = userEvent.setup()
       const { container } = renderDemo()
 
-      const typeGroup = screen.getByRole('group', { name: /your current tariff/i })
+      expect(screen.getByText('Current tariff')).toBeInTheDocument()
+      const typeGroup = screen.getByRole('group', { name: /^current tariff$/i })
       expect(within(typeGroup).getByRole('button', { name: 'Flexible' })).toHaveAttribute('aria-pressed', 'true')
       expect(screen.queryByRole('group', { name: /choose your current smart tariff/i })).not.toBeInTheDocument()
 
       await user.click(within(typeGroup).getByRole('button', { name: 'Smart' }))
-      expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('energy cost on Smart · Agile')
+      expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('/day on Smart · Agile')
       const smartGroup = screen.getByRole('group', { name: /choose your current smart tariff/i })
       expect(within(smartGroup).getByRole('button', { name: 'Economy 7' })).toBeInTheDocument()
 
       await user.click(within(smartGroup).getByRole('button', { name: 'Economy 7' }))
-      expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('energy cost on Smart · Economy 7')
+      expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('/day on Smart · Economy 7')
     })
 
     it('leaves usage, timings and total kWh identical when the current tariff changes -- only pricing changes', async () => {
@@ -122,64 +132,68 @@ describe('LandingDemo', () => {
     })
   })
 
-  describe('Compare reframed around the current tariff (OA-136)', () => {
-    it('names the current tariff as the explicit reference, with no difference until an alternative is chosen', async () => {
+  describe('Compare selects one alternative for an A/B comparison (OA-136)', () => {
+    it('names the current tariff as the fixed reference, with no A/B result until an alternative is chosen', async () => {
       const user = userEvent.setup()
       const { container } = renderDemo()
 
       await user.click(jumpToStage('Compare'))
 
       expect(scrubber()).toHaveAttribute('aria-valuenow', '1')
+      expect(screen.getByRole('heading', { name: /^Compare Flexible with another tariff$/ })).toBeInTheDocument()
       expect(container.querySelector('.landing-time-profile__result-label')).toHaveTextContent('Same usage · 6.8 kWh')
       expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('Current tariff: Flexible')
       expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('£1.80')
+      // No duplicate all-tariffs results stack any more.
+      expect(screen.queryByText(/smart · agile/i)).not.toBeInTheDocument()
     })
 
-    it('lists every tariff as a clickable comparison row, with cost and signed difference vs. the current tariff', async () => {
+    it("shows the current tariff's own category visibly disabled, so it can't be re-selected as its own comparison target", async () => {
       const user = userEvent.setup()
       renderDemo()
       await user.click(jumpToStage('Compare'))
 
-      const comparison = screen.getByRole('group', { name: /how this tariff compares with the alternatives/i })
-      const currentRow = within(comparison).getByRole('button', { name: /current.*flexible/i })
-      expect(currentRow).toHaveAttribute('aria-pressed', 'true')
-
-      const agileRow = within(comparison).getByRole('button', { name: /smart.*agile/i })
-      expect(agileRow).toHaveTextContent('£1.66')
-      expect(agileRow).toHaveTextContent(/£0\.14 less/)
+      const selector = screen.getByRole('group', { name: /compare flexible with/i })
+      expect(within(selector).getByRole('button', { name: 'Flexible' })).toBeDisabled()
+      expect(within(selector).getByRole('button', { name: 'Fixed' })).toBeEnabled()
+      expect(within(selector).getByRole('button', { name: 'Smart' })).toBeEnabled()
     })
 
-    it('choosing an alternative from the comparison list updates the figure live and carries into Optimise', async () => {
+    it('choosing one alternative shows only the current and chosen tariff, with a directional difference, and carries into Optimise', async () => {
       const user = userEvent.setup()
       const { container } = renderDemo()
       await user.click(jumpToStage('Compare'))
 
-      const comparison = screen.getByRole('group', { name: /how this tariff compares with the alternatives/i })
-      const agileRow = within(comparison).getByRole('button', { name: /smart.*agile/i })
-      await user.click(agileRow)
+      const selector = screen.getByRole('group', { name: /compare flexible with/i })
+      await user.click(within(selector).getByRole('button', { name: 'Smart' }))
+      const smartGroup = screen.getByRole('group', { name: /choose a smart tariff to compare/i })
+      await user.click(within(smartGroup).getByRole('button', { name: 'Agile' }))
 
-      expect(agileRow).toHaveAttribute('aria-pressed', 'true')
-      // Current tariff reference (Flexible) stays named, independent of
-      // the chosen alternative -- "current/base tariff" and "chosen
-      // tariff" are separate states.
-      expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('Current tariff: Flexible')
+      const result = container.querySelector('.landing-time-profile__result')!
+      expect(result).toHaveTextContent('Flexible — £1.80/day')
+      expect(result).toHaveTextContent('Smart · Agile — £1.66/day')
+      expect(result).toHaveTextContent(/14p less for the same day/)
 
       await user.click(jumpToStage('Optimise'))
       expect(container.querySelector('.landing-time-profile__tariff-context')).toHaveTextContent('Smart · Agile')
       expect(screen.getByText(/save around £\d/i)).toBeInTheDocument()
     })
 
-    it('also supports the Flexible/Fixed/Smart category shortcut to choose an alternative', async () => {
+    it("disables the current tariff's own product within the Smart secondary row too", async () => {
       const user = userEvent.setup()
       const { container } = renderDemo()
+      await switchToSmartAgile(user)
       await user.click(jumpToStage('Compare'))
 
-      const typeGroup = screen.getByRole('group', { name: /choose a tariff type to compare/i })
-      await user.click(within(typeGroup).getByRole('button', { name: 'Fixed' }))
+      const selector = screen.getByRole('group', { name: /compare smart · agile with/i })
+      await user.click(within(selector).getByRole('button', { name: 'Smart' }))
+      const smartGroup = screen.getByRole('group', { name: /choose a smart tariff to compare/i })
+      expect(within(smartGroup).getByRole('button', { name: 'Agile' })).toBeDisabled()
+      expect(within(smartGroup).getByRole('button', { name: 'Economy 7' })).toBeEnabled()
 
-      expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('Current tariff: Flexible')
-      const comparison = screen.getByRole('group', { name: /how this tariff compares with the alternatives/i })
-      expect(within(comparison).getByRole('button', { name: /^Fixed/ })).toHaveAttribute('aria-pressed', 'true')
+      await user.click(within(smartGroup).getByRole('button', { name: 'Economy 7' }))
+      expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('Smart · Agile — £1.66/day')
+      expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('Smart · Economy 7')
     })
   })
 

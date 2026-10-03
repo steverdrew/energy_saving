@@ -292,64 +292,21 @@
   opacity: 0.85;
 }
 
-/* OA-136: the clickable "current tariff vs. alternatives" comparison list
-   -- each row names its tariff, cost, and (for every alternative) its
-   signed difference from the current tariff, so "the direction of
-   comparison must be unmistakable" reads directly off the row rather than
-   needing a separate selector plus a separate figure elsewhere. */
-.landing-time-profile__tariff-comparison {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-  max-width: 320px;
+/* OA-135/136: the small visible label above a tariff selector ("Current
+   tariff" on Baseline, "Compare Flexible with:" on Compare) -- the control
+   already carries an `aria-label`, but the ticket wants this spelled out
+   on-screen too, not just as an accessible name. */
+.landing-time-profile__controls-heading {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
 }
 
-.landing-time-profile__tariff-comparison-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--text-h, #fff);
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.landing-time-profile__tariff-comparison-row:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.landing-time-profile__tariff-comparison-row:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* OA-136: "current/base tariff and chosen tariff are separate states" --
-   this marks whichever row is the live *chosen* tariff (which may or may
-   not be the current one), matching the pressed-state convention the
-   plain type selector already uses. */
-.landing-time-profile__tariff-comparison-row[aria-pressed='true'] {
-  border-color: var(--accent);
-}
-
-.landing-time-profile__tariff-comparison-label {
-  font-weight: 500;
-}
-
-.landing-time-profile__tariff-comparison-figures {
-  flex: none;
-  white-space: nowrap;
-}
-
-.landing-time-profile__tariff-comparison-diff {
-  opacity: 0.75;
-  font-weight: 400;
+/* OA-136: each named-tariff line in Compare's two-tariff A/B result
+   ("Flexible — £1.80/day" / "Smart · Agile — £1.66/day"), stacked above
+   the directional difference line. */
+.landing-time-profile__compare-row {
+  display: block;
 }
 
 /* OA-117/OA-132: Optimise's quiet tariff context -- "may appear as quiet

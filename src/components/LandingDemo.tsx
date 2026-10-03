@@ -112,26 +112,31 @@ const STAGE_HEADINGS: Record<DemoStageId, string> = {
 
 // OA-110: one question-style heading and a short supporting line per
 // stage -- answers "understand the household day -> choose a tariff type
-// -> optimise against it" at a glance, so the copy reads as one continuous
-// narrative rather than three separate screens.
-// OA-132: Compare's question is now neutral and type-led ("do not lead
-// with product-specific wording such as 'What would that day cost on
-// Agile?'") -- the specific resolved product (e.g. "Smart · Agile") is
-// still shown, but only as secondary detail in the result line/controls,
-// never in this primary question. Optimise's question stays tariff-neutral
-// too, per OA-117/OA-132 ("main copy stays neutral... focus on timing and
-// household behaviour").
-// OA-135/OA-136: Baseline now establishes "the tariff I am on now" as the
-// reference point, so Compare's question can be concrete ("how does this
-// tariff compare") rather than the old abstract "which type of tariff
-// fits this household?" (OA-132's framing, now superseded by OA-136's
-// explicit reference-point requirement). Optimise's question/supporting
-// pair is resolved separately below once it's known whether there's a
-// genuine timing-saving opportunity (OA-137) -- this function only covers
-// Baseline/Compare, whose copy never depends on that.
-function stageNarrative(stage: 'baseline' | 'compare'): { question: string; supporting: string } {
-  if (stage === 'baseline') return { question: 'When do you use energy?', supporting: 'Your typical day, half hour by half hour.' }
-  return { question: 'How would this same day cost on other tariffs?', supporting: 'Same usage. Same timings. Only the tariff changes.' }
+// -> optimise against it" at a glance. OA-135/136 made both Baseline's and
+// Compare's copy depend on the live current/chosen tariff (Compare's
+// heading names the current tariff dynamically), so these are now set
+// inline per-branch below, alongside each branch's `result`/`controls` --
+// not from one static lookup table.
+
+// OA-136: "14p less"/"5p more", not "£0.14 less" -- the ticket's own worked
+// example stays in pence for any difference under a pound, only switching
+// to formatGbp's £ form once it's large enough that pence would read
+// oddly. `diffPence` is signed the same way
+// `differencePenceVsCurrentTariffPence` already is: positive means the
+// comparison tariff costs *more* than the current one.
+function formatPenceCompact(pence: number): string {
+  const rounded = Math.round(Math.abs(pence))
+  return rounded < 100 ? `${rounded}p` : formatGbp(rounded)
+}
+
+// OA-136: "about the same" for a negligible (rounds to zero) difference --
+// never a "0p less/more" reading as spuriously precise. Otherwise
+// explicitly directional, per the ticket's "the result must be directional
+// relative to the current tariff."
+function describeComparisonDifference(diffPence: number): string {
+  const rounded = Math.round(diffPence)
+  if (rounded === 0) return 'About the same for this day'
+  return rounded < 0 ? `${formatPenceCompact(rounded)} less for the same day` : `${formatPenceCompact(rounded)} more for the same day`
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -184,15 +189,6 @@ function computeEffectiveOptimisedStartSlots(tariffId: TariffId): Record<string,
   const trialSlots = computeAutoOptimisedStartSlots(tariffId)
   const trialFixture = buildLandingDemoFixture(trialSlots, tariffId, tariffId)
   return trialFixture.hasTimingSavingOpportunity ? trialSlots : {}
-}
-
-// OA-101/OA-110: the compact result line's difference wording -- no
-// reference-tariff name (that attribution is left to the supporting copy,
-// which already states the tariff changes), just the bare amount.
-function describeDifferenceCompact(pence: number, moreLabel: string, lessLabel: string): string {
-  if (pence > 0) return `${formatGbp(pence)} ${lessLabel}`
-  if (pence < 0) return `${formatGbp(-pence)} ${moreLabel}`
-  return 'no different'
 }
 
 // OA-104/OA-110: "the longer-term number should carry more visual weight
@@ -320,6 +316,16 @@ function LandingDemo() {
     return buildLandingDemoFixture(trialSlots, chosenTariffId, chosenTariffId).hasTimingSavingOpportunity
   }, [chosenTariffId])
 
+  // OA-136: "select exactly one alternative tariff to compare" -- Compare
+  // starts with nothing chosen yet (the A/B result only appears once a
+  // genuine alternative has been picked), which this derives as "the
+  // chosen tariff differs from the current one" rather than a separate
+  // boolean to keep in sync. `chosenTariffId` starts, and gets reset back
+  // to, `currentTariffId` itself (see `selectCurrentTariff` below) exactly
+  // when there's no alternative selected -- so this stays correct through
+  // every state transition without extra state.
+  const hasSelectedComparisonTariff = chosenTariffId !== currentTariffId
+
   // OA-136: picking an alternative tariff to inspect/carry into Optimise --
   // re-optimises against the newly chosen tariff's own rates (OA-137-aware:
   // falls back to the original schedule if that tariff has no genuine
@@ -361,6 +367,18 @@ function LandingDemo() {
 
   function selectChosenTariffCategory(category: TariffCategory) {
     selectChosenTariff(resolveTariffForCategory(category, chosenTariffId))
+  }
+
+  // OA-136: "the tariff selected as current in Tab 1 must be visible,
+  // clearly disabled, and not selectable as the comparison target."
+  // Flexible/Fixed each resolve to exactly one tariff, so the category
+  // button itself is the thing to disable when it would just re-select
+  // the current tariff. Smart never gets disabled at the category level --
+  // it covers multiple products, so the specific matching product is
+  // disabled in the secondary row instead (see the Compare `controls`
+  // below), never the whole category.
+  function isCategoryDisabledAsComparisonTarget(category: TariffCategory): boolean {
+    return category !== 'smart' && resolveTariffForCategory(category, chosenTariffId) === currentTariffId
   }
 
   const clampedProgress = Math.max(0, Math.min(2, progress))
@@ -435,6 +453,8 @@ function LandingDemo() {
   // is the Typical household's modelled daily usage, not a visitor's own
   // spend) and `standingChargeNote` discloses the excluded standing
   // charge right next to it, consistently across all three stages.
+  let questionHeading: React.ReactNode
+  let supportingCopy: React.ReactNode
   let resultLabel: React.ReactNode
   let result: React.ReactNode
   let standingChargeNote: React.ReactNode = STANDING_CHARGE_NOTE
@@ -444,29 +464,35 @@ function LandingDemo() {
   let controls: React.ReactNode
 
   if (nearestStage === 'baseline') {
+    // OA-135: "Tab 1's primary job is choosing the tariff this household
+    // is on now" -- replaces the old usage-led "When do you use energy?"
+    // heading, which no longer names the actual primary action here.
+    questionHeading = 'What tariff are you on now?'
+    supportingCopy = 'Choose your current tariff so we can compare this same household day against the alternatives.'
+
     // OA-126/OA-135: previously one combined "6.8 kWh · £1.80" line, which
     // read as a single authoritative "average household spend" figure.
     // Split into a quiet "Typical day · 6.8 kWh" label (names the Typical
-    // household's modelled daily usage) above the bold, explicitly
-    // labelled "£1.80 energy cost on <tariff>" result (OA-135: "the main
-    // Baseline cost names the selected tariff"), with the standing charge
-    // disclosed separately beneath both.
+    // household's modelled daily usage) above the bold "£1.80/day on
+    // <tariff>" result (OA-135's own worked example wording), with the
+    // standing charge disclosed separately beneath both.
     resultLabel = <>Typical day · {interpolatedTotalKwh.toFixed(1)} kWh</>
     result = (
       <>
-        <strong>{formatGbp(interpolatedTotalCostPence)}</strong> energy cost on {tariffContextLabel(currentTariffId)}
+        <strong>{formatGbp(interpolatedTotalCostPence)}/day</strong> on {tariffContextLabel(currentTariffId)}
       </>
     )
 
     // OA-135: "add a compact tariff selector within Baseline... Primary
     // choices: Flexible | Fixed | Smart. If Smart is selected, reveal the
-    // relevant second-level tariff choice." The exact same Flexible/Fixed/
-    // Smart two-level control Compare used to own (OA-132) -- Baseline is
-    // now where "the tariff I am on now" is actually set.
+    // relevant second-level tariff choice", under a visible "Current
+    // tariff" label (not just an accessible name) -- Baseline is now where
+    // "the tariff I am on now" is actually set.
     const currentCategory = TARIFF_CATEGORY[currentTariffId]
     controls = (
       <div className="landing-time-profile__controls-stack">
-        <div className="landing-time-profile__controls" role="group" aria-label="Your current tariff">
+        <span className="landing-time-profile__controls-heading">Current tariff</span>
+        <div className="landing-time-profile__controls" role="group" aria-label="Current tariff">
           {(['flexible', 'fixed', 'smart'] as const).map((category) => (
             <button
               key={category}
@@ -501,20 +527,43 @@ function LandingDemo() {
       </div>
     )
   } else if (nearestStage === 'compare') {
-    // OA-136: Compare now reads directly off `fixture.tariffComparison` --
-    // the current tariff's own cost plus every alternative's, each
-    // modelled against this exact same baseline usage, with a signed
-    // difference vs. the current tariff. The dominant `result` line names
-    // the current tariff explicitly ("Current tariff: Flexible"); the
-    // alternatives (with their own cost and directional difference) are
-    // the clickable comparison list below, in `controls`.
+    // OA-136: "select one tariff to compare against the current tariff
+    // chosen in Tab 1" -- a simple A/B interaction, current tariff fixed
+    // as the reference, not a table of every tariff's result at once.
+    // The heading/result stay in terms of the current tariff until a
+    // genuine alternative is picked (see `hasSelectedComparisonTariff`).
+    questionHeading = `Compare ${tariffContextLabel(currentTariffId)} with another tariff`
+    supportingCopy = 'Same household. Same usage. Same timings. Only the tariff changes.'
     resultLabel = <>Same usage · {interpolatedTotalKwh.toFixed(1)} kWh</>
     const currentEntry = fixture.tariffComparison.find((entry) => entry.isCurrentTariff)!
-    result = (
-      <>
-        Current tariff: {tariffContextLabel(currentTariffId)} · <strong>{formatGbp(currentEntry.totalCostPence)}</strong>
-      </>
-    )
+    if (hasSelectedComparisonTariff) {
+      // OA-136: "after an alternative is selected, show only the two
+      // tariffs being compared" -- current and chosen, each named with
+      // its own daily cost, then one directional line ("14p less for the
+      // same day"/"5p more"/"about the same"), never the full
+      // alternatives table this replaces.
+      const chosenEntry = fixture.tariffComparison.find((entry) => entry.tariffId === chosenTariffId)!
+      result = (
+        <>
+          <span className="landing-time-profile__compare-row">
+            {tariffContextLabel(currentTariffId)} — {formatGbp(currentEntry.totalCostPence)}/day
+          </span>
+          <span className="landing-time-profile__compare-row">
+            {tariffContextLabel(chosenTariffId)} — {formatGbp(chosenEntry.totalCostPence)}/day
+          </span>
+          <strong>{describeComparisonDifference(chosenEntry.differencePenceVsCurrentTariffPence)}</strong>
+        </>
+      )
+    } else {
+      // OA-136: "starting state" -- only the fixed current-tariff
+      // reference, before any alternative has been chosen to compare it
+      // against.
+      result = (
+        <>
+          Current tariff: {tariffContextLabel(currentTariffId)} · <strong>{formatGbp(currentEntry.totalCostPence)}</strong>
+        </>
+      )
+    }
     // OA-101/OA-127: "representative comparison", not "one example" --
     // matches OA-99's representative-day methodology rather than implying
     // this was a single arbitrarily-picked example.
@@ -524,72 +573,46 @@ function LandingDemo() {
     const chosenCategory = TARIFF_CATEGORY[chosenTariffId]
     controls = (
       <div className="landing-time-profile__controls-stack">
-        {/* OA-136: "show the alternative tariff types/products with
-            their modelled daily energy cost and difference from the
-            current tariff" -- every tariff (including the current one,
-            clearly marked) as one clickable, directional comparison
-            list, not a plain type selector any more. Clicking an
-            alternative sets it as the *chosen* tariff carried into
-            Optimise (OA-136: "current/base tariff" and "chosen tariff"
-            are separate states, which may be the same). */}
+        {/* OA-136: one canonical comparison control -- "Compare <current>
+            with:", current tariff's own category visibly disabled so it
+            can never be re-selected as its own comparison target. Smart
+            reveals its own products below, with whichever one matches
+            the current tariff disabled the same way. */}
+        <span className="landing-time-profile__controls-heading">Compare {tariffContextLabel(currentTariffId)} with:</span>
         <div
-          className="landing-time-profile__tariff-comparison"
+          className="landing-time-profile__controls"
           role="group"
-          aria-label="How this tariff compares with the alternatives"
+          aria-label={`Compare ${tariffContextLabel(currentTariffId)} with`}
         >
-          {fixture.tariffComparison.map((entry) => (
-            <button
-              key={entry.tariffId}
-              type="button"
-              className="landing-time-profile__tariff-comparison-row"
-              aria-pressed={entry.tariffId === chosenTariffId}
-              onClick={() => selectChosenTariff(entry.tariffId)}
-            >
-              <span className="landing-time-profile__tariff-comparison-label">
-                {entry.isCurrentTariff ? 'Current · ' : ''}
-                {tariffContextLabel(entry.tariffId)}
-              </span>
-              <span className="landing-time-profile__tariff-comparison-figures">
-                <strong>{formatGbp(entry.totalCostPence)}</strong>
-                {!entry.isCurrentTariff && (
-                  <span className="landing-time-profile__tariff-comparison-diff">
-                    {' · '}
-                    {describeDifferenceCompact(-entry.differencePenceVsCurrentTariffPence, 'more', 'less')}
-                  </span>
-                )}
-              </span>
-            </button>
-          ))}
-        </div>
-        {/* OA-132/136: the Flexible/Fixed/Smart category shortcut remains
-            available as a quicker way to pick among the four tariffs
-            (and to reach Smart's own secondary product row), alongside
-            the comparison list above rather than replacing it. */}
-        <div className="landing-time-profile__controls" role="group" aria-label="Choose a tariff type to compare">
-          {(['flexible', 'fixed', 'smart'] as const).map((category) => (
-            <button
-              key={category}
-              type="button"
-              className="landing-time-profile__controls-button"
-              aria-pressed={category === chosenCategory}
-              onClick={() => selectChosenTariffCategory(category)}
-            >
-              {CATEGORY_LABELS[category]}
-            </button>
-          ))}
+          {(['flexible', 'fixed', 'smart'] as const).map((category) => {
+            const disabled = isCategoryDisabledAsComparisonTarget(category)
+            return (
+              <button
+                key={category}
+                type="button"
+                className="landing-time-profile__controls-button"
+                aria-pressed={!disabled && category === chosenCategory}
+                disabled={disabled}
+                onClick={() => selectChosenTariffCategory(category)}
+              >
+                {CATEGORY_LABELS[category]}
+              </button>
+            )
+          })}
         </div>
         {chosenCategory === 'smart' && (
           <div
             className="landing-time-profile__controls landing-time-profile__controls--secondary"
             role="group"
-            aria-label="Choose a smart tariff"
+            aria-label="Choose a smart tariff to compare"
           >
             {SMART_TARIFF_IDS.map((tariffId) => (
               <button
                 key={tariffId}
                 type="button"
                 className="landing-time-profile__controls-button landing-time-profile__controls-button--secondary"
-                aria-pressed={tariffId === chosenTariffId}
+                aria-pressed={tariffId === chosenTariffId && hasSelectedComparisonTariff}
+                disabled={tariffId === currentTariffId}
                 onClick={() => selectChosenTariff(tariffId)}
               >
                 {TARIFF_SHORT_LABELS[tariffId]}
@@ -603,6 +626,8 @@ function LandingDemo() {
     // OA-137: a genuine timing-saving opportunity exists under the chosen
     // tariff's real pricing structure -- the existing auto-optimise/Reset
     // behaviour, unchanged.
+    questionHeading = 'What could you save by moving flexible use?'
+    supportingCopy = 'Shift only the things that can realistically move.'
     const annualSavingPence = lerp(0, fixture.projection.projectedAnnualSavingPence, optFrac)
     const monthlySavingPence = lerp(0, fixture.projection.projectedMonthlySavingPence, optFrac)
     const dailySavingPence = lerp(0, fixture.timingSavingPence, optFrac)
@@ -699,6 +724,8 @@ function LandingDemo() {
     // (`optimiseEventStartSlots` is never auto-populated with a trial
     // schedule that didn't clear the threshold -- see
     // `computeEffectiveOptimisedStartSlots`).
+    questionHeading = 'Can this tariff be improved by moving flexible use?'
+    supportingCopy = 'Your tariff charges broadly the same throughout the day.'
     resultLabel = undefined
     result = <strong>There&rsquo;s little to save by changing when you use electricity on this tariff.</strong>
     standingChargeNote = undefined
@@ -711,19 +738,6 @@ function LandingDemo() {
     explanation = undefined
     controls = <span className="landing-time-profile__tariff-context">{tariffContextLabel(chosenTariffId)}</span>
   }
-
-  // OA-137: Optimise's own question/supporting copy depends on whether a
-  // genuine opportunity was found, so it can't come from the shared
-  // Baseline/Compare `stageNarrative` helper above.
-  const { question: questionHeading, supporting: supportingCopy } =
-    nearestStage === 'baseline' || nearestStage === 'compare'
-      ? stageNarrative(nearestStage)
-      : tariffHasTimingSavingOpportunity
-        ? { question: 'What could you save by moving flexible use?', supporting: 'Shift only the things that can realistically move.' }
-        : {
-            question: 'Can this tariff be improved by moving flexible use?',
-            supporting: 'Your tariff charges broadly the same throughout the day.',
-          }
 
   // OA-108: "per-event feedback should appear contextually... in/near the
   // event block itself" -- only meaningful once events are actually
