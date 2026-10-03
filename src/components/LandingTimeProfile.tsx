@@ -186,6 +186,8 @@ export interface LandingTimeProfileProps {
   standingChargeNote?: ReactNode
   /** OA-106: optional secondary controls ("Optimise all" / "Reset"), shown above the chart -- only the Optimise step passes this. */
   controls?: ReactNode
+  /** OA-141: Baseline's current-tariff selector, promoted to its own full-width, visually prominent block -- "the key decision on Tab 1... should have stronger hierarchy than secondary controls." Rendered between the supporting copy and the result (never squeezed into the `controls` slot beside the heading, which stays small/secondary for Compare/Optimise). Only the Baseline step passes this. */
+  primarySelector?: ReactNode
   /** Remounts just the narrative block (not the chart) to replay its OA-80 fade/slide on step change -- see the component doc comment for why the chart itself must stay mounted. */
   stepKey: string
   /** OA-99/OA-101: the 16:00-19:00 structural-peak annotation is a documented feature of *Agile's* pricing formula specifically -- showing it on a flat Standard Variable day would wrongly imply that flat tariff has the same structural peak. Baseline passes `false`; Compare/Optimise (both on Agile) pass `true`. */
@@ -288,6 +290,7 @@ function LandingTimeProfile({
   payoff,
   standingChargeNote,
   controls,
+  primarySelector,
   stepKey,
   showStructuralPeakAnnotation,
   priceStripShape,
@@ -508,6 +511,12 @@ function LandingTimeProfile({
           </div>
           {controls}
         </div>
+        {/* OA-141: "the selector should not feel visually lost between the
+            intro copy and the graph" -- its own full-width block, between
+            the supporting copy and the result, with stronger hierarchy
+            than the small `controls` slot above (which stays as-is for
+            Compare/Optimise). Only Baseline passes this. */}
+        {primarySelector && <div className="landing-time-profile__primary-selector">{primarySelector}</div>}
         {/* OA-126: names what the result figure actually is (a modelled
             daily usage amount, not a total household spend) directly
             above it, rather than relying on the result line itself to

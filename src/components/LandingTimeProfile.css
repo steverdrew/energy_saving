@@ -292,6 +292,85 @@
   opacity: 0.85;
 }
 
+/* OA-141: the full-width block Baseline's current-tariff selector lives in
+   -- its own row between the supporting copy and the result, with real
+   margin above/below, so it reads as a distinct, prominent step rather
+   than being squeezed beside the heading like Compare/Optimise's small
+   `controls`. */
+.landing-time-profile__primary-selector {
+  margin: 18px 0;
+}
+
+.landing-time-profile__primary-selector-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* OA-141: "a directive label... with enough visual weight to connect
+   clearly to the control" -- bold and full-text-coloured, not the small
+   muted `__controls-heading` Compare/Optimise's secondary selectors use. */
+.landing-time-profile__primary-selector-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-h, #fff);
+}
+
+/* OA-141: "restyle as a clear segmented control rather than small chips" --
+   one bordered, padded group the options sit inside (not individually
+   bordered pills), taller and heavier than `__controls-button` so it reads
+   as the primary interaction on this stage. */
+.landing-time-profile__segmented {
+  display: inline-flex;
+  width: 100%;
+  max-width: 420px;
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.landing-time-profile__segmented-button {
+  flex: 1;
+  padding: 14px 20px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.landing-time-profile__segmented-button:hover:not([aria-pressed='true']) {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-h, #fff);
+}
+
+.landing-time-profile__segmented-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* OA-141: "the selected state must be unmistakable at a glance" -- filled
+   brand purple, high-contrast text, and a stronger outline/glow than the
+   small `__controls-button[aria-pressed]` treatment. */
+.landing-time-profile__segmented-button[aria-pressed='true'] {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(168, 85, 247, 0.45);
+}
+
+@media (max-width: 640px) {
+  .landing-time-profile__segmented-button {
+    padding: 11px 12px;
+    font-size: 14px;
+  }
+}
+
 /* OA-135/136: the small visible label above a tariff selector ("Current
    tariff" on Baseline, "Compare Flexible with:" on Compare) -- the control
    already carries an `aria-label`, but the ticket wants this spelled out

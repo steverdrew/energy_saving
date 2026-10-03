@@ -62,7 +62,7 @@ function jumpToStage(name: string) {
 // shared setup step most Optimise-path tests need, since Standard
 // Variable (the default) is flat and has nothing to optimise.
 async function switchToSmartAgile(user: ReturnType<typeof userEvent.setup>) {
-  const typeGroup = screen.getByRole('group', { name: /^current tariff$/i })
+  const typeGroup = screen.getByRole('group', { name: /^your current tariff$/i })
   await user.click(within(typeGroup).getByRole('button', { name: 'Smart' }))
 }
 
@@ -94,12 +94,12 @@ describe('LandingDemo', () => {
   // OA-135: "add a compact tariff selector within Baseline... Primary
   // choices: Flexible | Fixed | Smart."
   describe('Baseline current-tariff selector (OA-135)', () => {
-    it('shows a visible "Current tariff" label above a Flexible/Fixed/Smart selector, with Smart revealing its own products', async () => {
+    it('shows a visible "Your current tariff" label above a Flexible/Fixed/Smart selector, with Smart revealing its own products', async () => {
       const user = userEvent.setup()
       const { container } = renderDemo()
 
-      expect(screen.getByText('Current tariff')).toBeInTheDocument()
-      const typeGroup = screen.getByRole('group', { name: /^current tariff$/i })
+      expect(screen.getByText('Your current tariff')).toBeInTheDocument()
+      const typeGroup = screen.getByRole('group', { name: /^your current tariff$/i })
       expect(within(typeGroup).getByRole('button', { name: 'Flexible' })).toHaveAttribute('aria-pressed', 'true')
       expect(screen.queryByRole('group', { name: /choose your current smart tariff/i })).not.toBeInTheDocument()
 
@@ -110,6 +110,22 @@ describe('LandingDemo', () => {
 
       await user.click(within(smartGroup).getByRole('button', { name: 'Economy 7' }))
       expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('/day on Smart · Economy 7')
+    })
+
+    // OA-141: "the current tariff selector must be immediately visible as
+    // the primary interaction on Tab 1" -- its own full-width, prominent
+    // block (segmented control), not the small `controls` chip group
+    // Compare/Optimise use for their own secondary controls.
+    it('renders as a prominent, full-width segmented control, not a small secondary control (OA-141)', () => {
+      const { container } = renderDemo()
+
+      const primarySelector = container.querySelector('.landing-time-profile__primary-selector')
+      expect(primarySelector).toBeInTheDocument()
+      const segmented = within(primarySelector as HTMLElement).getByRole('group', { name: /^your current tariff$/i })
+      expect(segmented).toHaveClass('landing-time-profile__segmented')
+      const flexibleButton = within(segmented).getByRole('button', { name: 'Flexible' })
+      expect(flexibleButton).toHaveClass('landing-time-profile__segmented-button')
+      expect(flexibleButton).toHaveAttribute('aria-pressed', 'true')
     })
 
     it('leaves usage, timings and total kWh identical when the current tariff changes -- only pricing changes', async () => {

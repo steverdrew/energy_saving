@@ -462,6 +462,7 @@ function LandingDemo() {
   let caveat: React.ReactNode
   let payoff: React.ReactNode
   let controls: React.ReactNode
+  let primarySelector: React.ReactNode
 
   if (nearestStage === 'baseline') {
     // OA-135: "Tab 1's primary job is choosing the tariff this household
@@ -483,21 +484,23 @@ function LandingDemo() {
       </>
     )
 
-    // OA-135: "add a compact tariff selector within Baseline... Primary
-    // choices: Flexible | Fixed | Smart. If Smart is selected, reveal the
-    // relevant second-level tariff choice", under a visible "Current
-    // tariff" label (not just an accessible name) -- Baseline is now where
-    // "the tariff I am on now" is actually set.
+    // OA-135/OA-141: "the key decision on Tab 1 ... should have stronger
+    // hierarchy than secondary controls and labels" -- promoted out of the
+    // small `controls` slot (which Compare/Optimise still use for their
+    // own, deliberately secondary controls) into its own full-width,
+    // visually prominent `primarySelector` block, under a directive label
+    // with real visual weight ("Your current tariff", not just an
+    // accessible name).
     const currentCategory = TARIFF_CATEGORY[currentTariffId]
-    controls = (
-      <div className="landing-time-profile__controls-stack">
-        <span className="landing-time-profile__controls-heading">Current tariff</span>
-        <div className="landing-time-profile__controls" role="group" aria-label="Current tariff">
+    primarySelector = (
+      <div className="landing-time-profile__primary-selector-stack">
+        <span className="landing-time-profile__primary-selector-label">Your current tariff</span>
+        <div className="landing-time-profile__segmented" role="group" aria-label="Your current tariff">
           {(['flexible', 'fixed', 'smart'] as const).map((category) => (
             <button
               key={category}
               type="button"
-              className="landing-time-profile__controls-button"
+              className="landing-time-profile__segmented-button"
               aria-pressed={category === currentCategory}
               onClick={() => selectCurrentTariffCategory(category)}
             >
@@ -887,6 +890,7 @@ function LandingDemo() {
           payoff={payoff}
           standingChargeNote={standingChargeNote}
           controls={controls}
+          primarySelector={primarySelector}
           stepKey={nearestStage}
           // OA-99/OA-101/OA-127/OA-135: the 16:00-19:00 structural peak is
           // a documented feature of Agile's pricing specifically -- shown
