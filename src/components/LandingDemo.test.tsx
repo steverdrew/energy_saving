@@ -211,6 +211,28 @@ describe('LandingDemo', () => {
       expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('Smart · Agile — £1.66/day')
       expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('Smart · Economy 7')
     })
+
+    // OA-136 (updated spec): "use the same large segmented-control
+    // treatment as Tab 1" -- promoted into the main content flow
+    // (`primarySelector`), not the old small top-right pills.
+    it('renders as a prominent, full-width segmented control matching Tab 1, not small top-right pills (OA-136)', async () => {
+      const user = userEvent.setup()
+      const { container } = renderDemo()
+      await user.click(jumpToStage('Compare'))
+
+      const primarySelector = container.querySelector('.landing-time-profile__primary-selector')
+      expect(primarySelector).toBeInTheDocument()
+      const selector = within(primarySelector as HTMLElement).getByRole('group', { name: /compare flexible with/i })
+      expect(selector).toHaveClass('landing-time-profile__segmented')
+      expect(within(selector).getByRole('button', { name: 'Fixed' })).toHaveClass('landing-time-profile__segmented-button')
+
+      // Smart's second-level row uses the same large treatment too, not a
+      // smaller secondary widget.
+      await user.click(within(selector).getByRole('button', { name: 'Smart' }))
+      const smartGroup = within(primarySelector as HTMLElement).getByRole('group', { name: /choose a smart tariff to compare/i })
+      expect(smartGroup).toHaveClass('landing-time-profile__segmented')
+      expect(within(smartGroup).getByRole('button', { name: 'Agile' })).toHaveClass('landing-time-profile__segmented-button')
+    })
   })
 
   // OA-135: "Optimise does not show a duplicate prominent tariff

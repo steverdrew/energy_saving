@@ -573,17 +573,29 @@ function LandingDemo() {
     caveat =
       'Representative comparison — which tariff costs less depends on your own usage, region and actual prices on the day.'
 
+    // OA-136 (updated spec): "Tab 2 should follow the same pattern" as
+    // Tab 1's prominent segmented control (OA-141) -- promoted into
+    // `primarySelector` (its own block in the main content flow, directly
+    // below the heading/supporting copy), using the exact same
+    // `.landing-time-profile__segmented`/`-button` treatment, not the
+    // small top-right pills this replaces. Smart's second-level row below
+    // it uses the same large treatment too -- "a direct continuation of
+    // the primary choice, not a separate secondary widget in the corner."
+    // `controls` (the small heading-row slot) is left unset for Compare:
+    // there's no second, duplicate selector any more.
     const chosenCategory = TARIFF_CATEGORY[chosenTariffId]
-    controls = (
-      <div className="landing-time-profile__controls-stack">
-        {/* OA-136: one canonical comparison control -- "Compare <current>
-            with:", current tariff's own category visibly disabled so it
-            can never be re-selected as its own comparison target. Smart
-            reveals its own products below, with whichever one matches
-            the current tariff disabled the same way. */}
-        <span className="landing-time-profile__controls-heading">Compare {tariffContextLabel(currentTariffId)} with:</span>
+    primarySelector = (
+      <div className="landing-time-profile__primary-selector-stack">
+        {/* OA-136: current tariff's own category visibly disabled so it
+            can never be re-selected as its own comparison target --
+            legible, but clearly not selectable. Smart reveals its own
+            products below, with whichever one matches the current tariff
+            disabled the same way. */}
+        <span className="landing-time-profile__primary-selector-label">
+          Compare {tariffContextLabel(currentTariffId)} with:
+        </span>
         <div
-          className="landing-time-profile__controls"
+          className="landing-time-profile__segmented"
           role="group"
           aria-label={`Compare ${tariffContextLabel(currentTariffId)} with`}
         >
@@ -593,7 +605,7 @@ function LandingDemo() {
               <button
                 key={category}
                 type="button"
-                className="landing-time-profile__controls-button"
+                className="landing-time-profile__segmented-button"
                 aria-pressed={!disabled && category === chosenCategory}
                 disabled={disabled}
                 onClick={() => selectChosenTariffCategory(category)}
@@ -605,7 +617,7 @@ function LandingDemo() {
         </div>
         {chosenCategory === 'smart' && (
           <div
-            className="landing-time-profile__controls landing-time-profile__controls--secondary"
+            className="landing-time-profile__segmented"
             role="group"
             aria-label="Choose a smart tariff to compare"
           >
@@ -613,7 +625,7 @@ function LandingDemo() {
               <button
                 key={tariffId}
                 type="button"
-                className="landing-time-profile__controls-button landing-time-profile__controls-button--secondary"
+                className="landing-time-profile__segmented-button"
                 aria-pressed={tariffId === chosenTariffId && hasSelectedComparisonTariff}
                 disabled={tariffId === currentTariffId}
                 onClick={() => selectChosenTariff(tariffId)}

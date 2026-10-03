@@ -292,11 +292,11 @@
   opacity: 0.85;
 }
 
-/* OA-141: the full-width block Baseline's current-tariff selector lives in
-   -- its own row between the supporting copy and the result, with real
-   margin above/below, so it reads as a distinct, prominent step rather
-   than being squeezed beside the heading like Compare/Optimise's small
-   `controls`. */
+/* OA-141/136: the full-width block Baseline's and Compare's tariff
+   selectors live in -- its own row between the supporting copy and the
+   result, with real margin above/below, so it reads as a distinct,
+   prominent step rather than being squeezed beside the heading like
+   Optimise's small `controls` (Reset/Optimise). */
 .landing-time-profile__primary-selector {
   margin: 18px 0;
 }
@@ -334,6 +334,7 @@
 
 .landing-time-profile__segmented-button {
   flex: 1;
+  box-sizing: border-box;
   padding: 14px 20px;
   border: none;
   border-radius: 10px;
@@ -345,7 +346,7 @@
   transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.landing-time-profile__segmented-button:hover:not([aria-pressed='true']) {
+.landing-time-profile__segmented-button:hover:not([aria-pressed='true']):not(:disabled) {
   background: rgba(255, 255, 255, 0.07);
   color: var(--text-h, #fff);
 }
@@ -364,21 +365,23 @@
   box-shadow: 0 2px 12px rgba(168, 85, 247, 0.45);
 }
 
+/* OA-136: the current tariff's own option in Compare's segmented control --
+   "must still be legible and clearly identifiable as the reference, but it
+   must not look selectable." Stays readable (unlike the faint
+   `__controls-button:disabled` treatment elsewhere) via its own muted-fill
+   outline, rather than just a low-opacity fade. */
+.landing-time-profile__segmented-button:disabled {
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  cursor: not-allowed;
+}
+
 @media (max-width: 640px) {
   .landing-time-profile__segmented-button {
     padding: 11px 12px;
     font-size: 14px;
   }
-}
-
-/* OA-135/136: the small visible label above a tariff selector ("Current
-   tariff" on Baseline, "Compare Flexible with:" on Compare) -- the control
-   already carries an `aria-label`, but the ticket wants this spelled out
-   on-screen too, not just as an accessible name. */
-.landing-time-profile__controls-heading {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
 }
 
 /* OA-136: each named-tariff line in Compare's two-tariff A/B result
