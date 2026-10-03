@@ -186,9 +186,10 @@ describe('LandingDemo', () => {
       await user.click(within(smartGroup).getByRole('button', { name: 'Agile' }))
 
       const result = container.querySelector('.landing-time-profile__result')!
-      expect(result).toHaveTextContent('Flexible — £1.80/day')
-      expect(result).toHaveTextContent('Smart · Agile — £1.66/day')
-      expect(result).toHaveTextContent(/14p less for the same day/)
+      expect(result).toHaveTextContent(/14p less\/day/)
+      expect(result).toHaveTextContent('Smart · Agile')
+      expect(result).toHaveTextContent('vs Flexible')
+      expect(container.querySelector('.landing-time-profile__payoff-detail')).toHaveTextContent(/≈ £[\d.]+\/year less/)
 
       await user.click(jumpToStage('Optimise'))
       expect(container.querySelector('.landing-time-profile__tariff-context')).toHaveTextContent('Smart · Agile')
@@ -208,8 +209,8 @@ describe('LandingDemo', () => {
       expect(within(smartGroup).getByRole('button', { name: 'Economy 7' })).toBeEnabled()
 
       await user.click(within(smartGroup).getByRole('button', { name: 'Economy 7' }))
-      expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('Smart · Agile — £1.66/day')
       expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('Smart · Economy 7')
+      expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('vs Smart · Agile')
     })
 
     // OA-136 (updated spec): "use the same large segmented-control

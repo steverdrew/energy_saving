@@ -129,14 +129,25 @@ function formatPenceCompact(pence: number): string {
   return rounded < 100 ? `${rounded}p` : formatGbp(rounded)
 }
 
-// OA-136: "about the same" for a negligible (rounds to zero) difference --
-// never a "0p less/more" reading as spuriously precise. Otherwise
-// explicitly directional, per the ticket's "the result must be directional
-// relative to the current tariff."
-function describeComparisonDifference(diffPence: number): string {
+// OA-136 (updated spec): "lead with the meaningful result... do not lead
+// with raw tariff prices" -- "14p less/day"/"5p more/day", or "About the
+// same" for a negligible (rounds to zero) difference, never a "0p
+// less/more" reading as spuriously precise.
+function describeComparisonHeadline(diffPence: number): string {
   const rounded = Math.round(diffPence)
-  if (rounded === 0) return 'About the same for this day'
-  return rounded < 0 ? `${formatPenceCompact(rounded)} less for the same day` : `${formatPenceCompact(rounded)} more for the same day`
+  if (rounded === 0) return 'About the same'
+  return rounded < 0 ? `${formatPenceCompact(rounded)} less/day` : `${formatPenceCompact(rounded)} more/day`
+}
+
+// OA-136 (updated spec): "annualised value can be shown as a secondary
+// figure where the model supports it" -- e.g. "≈ £51/year less". Omitted
+// (returns undefined) once the daily difference is already negligible, so
+// an "About the same" headline is never followed by a spurious annual
+// figure derived from rounding noise.
+function describeAnnualDifference(annualPence: number, dailyDiffPence: number): string | undefined {
+  if (Math.round(dailyDiffPence) === 0) return undefined
+  const rounded = Math.round(Math.abs(annualPence))
+  return annualPence < 0 ? `≈ ${formatGbp(rounded)}/year less` : `≈ ${formatGbp(rounded)}/year more`
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -537,30 +548,37 @@ function LandingDemo() {
     // genuine alternative is picked (see `hasSelectedComparisonTariff`).
     questionHeading = `Compare ${tariffContextLabel(currentTariffId)} with another tariff`
     supportingCopy = 'Same household. Same usage. Same timings. Only the tariff changes.'
-    resultLabel = <>Same usage · {interpolatedTotalKwh.toFixed(1)} kWh</>
     const currentEntry = fixture.tariffComparison.find((entry) => entry.isCurrentTariff)!
     if (hasSelectedComparisonTariff) {
-      // OA-136: "after an alternative is selected, show only the two
-      // tariffs being compared" -- current and chosen, each named with
-      // its own daily cost, then one directional line ("14p less for the
-      // same day"/"5p more"/"about the same"), never the full
-      // alternatives table this replaces.
+      // OA-136 (updated spec): "lead with the meaningful result... the
+      // right-hand summary should make the result understandable without
+      // requiring the user to mentally subtract two tariff prices" --
+      // replaces the old "Flexible — £1.80/day" / "Smart · Agile —
+      // £1.66/day" raw-price pair with the directional headline first,
+      // then which tariff and what it's compared against.
       const chosenEntry = fixture.tariffComparison.find((entry) => entry.tariffId === chosenTariffId)!
+      resultLabel = undefined
       result = (
         <>
-          <span className="landing-time-profile__compare-row">
-            {tariffContextLabel(currentTariffId)} — {formatGbp(currentEntry.totalCostPence)}/day
-          </span>
-          <span className="landing-time-profile__compare-row">
-            {tariffContextLabel(chosenTariffId)} — {formatGbp(chosenEntry.totalCostPence)}/day
-          </span>
-          <strong>{describeComparisonDifference(chosenEntry.differencePenceVsCurrentTariffPence)}</strong>
+          <strong>{describeComparisonHeadline(chosenEntry.differencePenceVsCurrentTariffPence)}</strong>
+          <span className="landing-time-profile__compare-row">{tariffContextLabel(chosenTariffId)}</span>
+          <span className="landing-time-profile__compare-row">vs {tariffContextLabel(currentTariffId)}</span>
         </>
       )
+      // OA-136 (updated spec): "annualised value can be shown as a
+      // secondary figure where the model supports it" -- a quiet detail
+      // line under the headline, same treatment Optimise's today/month
+      // figure already uses.
+      const annualText = describeAnnualDifference(
+        chosenEntry.annualDifferencePence,
+        chosenEntry.differencePenceVsCurrentTariffPence,
+      )
+      payoff = annualText ? <span className="landing-time-profile__payoff-detail">{annualText}</span> : undefined
     } else {
       // OA-136: "starting state" -- only the fixed current-tariff
       // reference, before any alternative has been chosen to compare it
       // against.
+      resultLabel = <>Same usage · {interpolatedTotalKwh.toFixed(1)} kWh</>
       result = (
         <>
           Current tariff: {tariffContextLabel(currentTariffId)} · <strong>{formatGbp(currentEntry.totalCostPence)}</strong>
@@ -903,9 +921,11 @@ function LandingDemo() {
           standingChargeNote={standingChargeNote}
           controls={controls}
           primarySelector={primarySelector}
-          // OA-143: "move pricing summary to the right" is Tab 1/Baseline-
-          // only -- Compare/Optimise keep their existing stacked narrative.
-          splitLayout={nearestStage === 'baseline'}
+          // OA-143/OA-136: "Tab 1 and Tab 2 should share the same
+          // high-level layout" -- left = choice, right = outcome, for both
+          // Baseline and Compare. Optimise keeps its existing stacked
+          // narrative (not part of either ticket's scope).
+          splitLayout={nearestStage === 'baseline' || nearestStage === 'compare'}
           stepKey={nearestStage}
           // OA-99/OA-101/OA-127/OA-135: the 16:00-19:00 structural peak is
           // a documented feature of Agile's pricing specifically -- shown

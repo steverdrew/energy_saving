@@ -645,6 +645,14 @@ export interface LandingDemoTariffComparisonEntry {
   tariffName: string
   totalCostPence: number
   differencePenceVsCurrentTariffPence: number
+  // OA-136 (updated spec): "annualised value can be shown as a secondary
+  // figure where the model supports it" -- unlike the timing-saving
+  // projection above, a tariff's per-day rate difference genuinely recurs
+  // every day of the year (it isn't tied to how often a flexible event
+  // happens to run), so a straight x365 projection is the correct model
+  // here, not the "do not simply calculate today's saving x 365" case
+  // `projection.projectedAnnualSavingPence` exists to avoid.
+  annualDifferencePence: number
   isCurrentTariff: boolean
 }
 
@@ -760,11 +768,13 @@ export function buildLandingDemoFixture(
   const currentTariffCostPence = sumCostPence(baselineUsage, currentTariffRatePence)
   const tariffComparison: LandingDemoTariffComparisonEntry[] = TARIFF_IDS.map((id) => {
     const totalCostPence = sumCostPence(baselineUsage, ratesForTariff(id))
+    const differencePenceVsCurrentTariffPence = totalCostPence - currentTariffCostPence
     return {
       tariffId: id,
       tariffName: TARIFF_LABELS[id],
       totalCostPence,
-      differencePenceVsCurrentTariffPence: totalCostPence - currentTariffCostPence,
+      differencePenceVsCurrentTariffPence,
+      annualDifferencePence: differencePenceVsCurrentTariffPence * 365,
       isCurrentTariff: id === currentTariffId,
     }
   })
