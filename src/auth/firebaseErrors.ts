@@ -1,7 +1,12 @@
 import { FirebaseError } from 'firebase/app'
 
-/** Maps Firebase Auth error codes to consumer-friendly messages. */
-export function describeAuthError(err: unknown): string {
+/**
+ * Maps Firebase Auth error codes to consumer-friendly messages.
+ * `action` only changes the generic fallback copy's verb (OA-88 added
+ * `resetPassword`, whose errors shouldn't read as sign-in errors) --
+ * the specific-code messages below already read fine for either action.
+ */
+export function describeAuthError(err: unknown, action: 'signing in' | 'sending that email' = 'signing in'): string {
   if (err instanceof FirebaseError) {
     switch (err.code) {
       case 'auth/invalid-credential':
@@ -23,8 +28,8 @@ export function describeAuthError(err: unknown): string {
       case 'auth/operation-not-allowed':
         return 'Sign-in is not available right now. Please try again later.'
       default:
-        return 'Something went wrong signing in. Please try again.'
+        return `Something went wrong ${action}. Please try again.`
     }
   }
-  return 'Something went wrong signing in. Please try again.'
+  return `Something went wrong ${action}. Please try again.`
 }

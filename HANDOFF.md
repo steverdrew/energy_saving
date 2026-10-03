@@ -1,13 +1,17 @@
 # HANDOFF
 
-_Last updated: 2026-10-03 (OA-87, third pass: Steve's own diagnosis of
-why two prior CSS-only passes kept missing the mockup -- the landing
-page was reusing HeatMap.tsx's analytics-widget *presentation*, which
-no amount of per-variant override turns into the mockup's bespoke
-visual. Built a dedicated LandingHeatMap.tsx from the mockup's own
-structure instead, reusing only heatMapMath.ts's pure data/colour logic;
-removed the now-dead `variant="tariff"` branch from HeatMap.tsx/.css
-entirely. See "Current task" below. Previous entries:)_
+_Last updated: 2026-10-03 (OA-88 built: sign-in page polished to match
+the landing-page visual system, sharing one nav/shell with Home rather
+than a separate lookalike. See "Current task" below. Previous entries:)_
+
+_2026-10-03, OA-87 third pass (superseded below as "previous task"):
+Steve's own diagnosis of why two prior CSS-only passes kept missing the
+mockup -- the landing page was reusing HeatMap.tsx's analytics-widget
+*presentation*, which no amount of per-variant override turns into the
+mockup's bespoke visual. Built a dedicated LandingHeatMap.tsx from the
+mockup's own structure instead, reusing only heatMapMath.ts's pure
+data/colour logic; removed the now-dead `variant="tariff"` branch from
+HeatMap.tsx/.css entirely._
 
 _2026-10-03, OA-86 second pass (superseded below as "previous task"):
 Steve supplied the actual reference mockup after the first "no code
@@ -34,6 +38,58 @@ Steve but not yet started -- largely expected to already be satisfied
 by OA-82's work, pending its own audit pass; OA-65 not started)_
 
 ## Current task (latest)
+
+**OA-88** ("Polish sign-in page to match Shift & Save landing-page
+visual system") -- Steve asked for this right after OA-87's third pass,
+then to merge and push everything together.
+
+- **Shared nav, not a second implementation**: the app already renders
+  one `<header>` in `App.tsx` for every route (never duplicated), but
+  the dark/purple glass treatment and the wider ~1280px shell (OA-87)
+  were gated to `pathname === '/'` only -- so `/login` silently fell
+  back to the authenticated app's plain light header/960px shell, even
+  though it's the same component. Fix: broadened that condition
+  (renamed `isLandingRoute` -> `isPublicSiteRoute`) to cover both `/`
+  and `/login` when signed out, so both now get `[data-landing]`'s
+  tokens and the wide shell from the exact same CSS rules -- no
+  route-specific nav markup anywhere.
+- **Sign-in visual treatment**: rewrote `LoginPage.tsx`/`.css` -- a
+  centred glass card (matching `LandingHeatMap`'s/the hero card's own
+  treatment) with "Welcome back", muted subtitle, dark-styled inputs,
+  a full-width violet rounded submit button with the hero CTA's glow.
+- **Inline validation, not browser bubbles**: both forms are
+  `noValidate`; email/password are validated in `handleSubmit` with
+  per-field `<span role="alert">` errors plus `aria-invalid`/`aria-
+  describedby` wiring, so the error still reaches assistive tech the
+  way a native bubble would, just designed instead of browser-default.
+- **"Forgot password?"**: a real flow, not a dead decorative link --
+  added `resetPassword` to `AuthContext` (`sendPasswordResetEmail`).
+  Deliberately swallows `auth/user-not-found` and always shows the same
+  "If an account exists for that email..." confirmation, so this page
+  never reveals whether a given address has an account (the ticket only
+  asked for the link visually; this was the simplest option that didn't
+  leave it going nowhere -- recorded here per CLAUDE.md's "pick the
+  simplest option and carry on" rather than stopping to ask). Refactored
+  `describeAuthError` to take an `action` param so its generic fallback
+  text doesn't say "signing in" for a reset-email failure.
+
+Not done / explicitly scoped out: no test file for `LoginPage` --
+testing it meaningfully needs mocking `AuthContext`/Firebase, which
+earlier sessions (OA-82 update, see below) found made real-browser/
+Firebase-backed testing infeasible in this sandbox; `LandingDemo.test
+.tsx` exists specifically because that component has no Firebase
+dependency, which `LoginPage` does. Decision: ship without a dedicated
+test file for this ticket rather than build out Firebase auth mocking
+infrastructure that wasn't asked for; the manual QA this session could
+do was source-level (types, lint, build, prerender output), not a real
+sign-in attempt.
+
+Verified: `npm test` (51/51, unchanged), `npm run lint` (clean, same
+pre-existing warnings), `npm run build` (typecheck + build passes) and
+`check-bundle` (passes).
+
+Not yet merged/deployed as of this entry -- queued up with OA-87's
+third pass to merge and push together next.
 
 **OA-87, third pass.** After two CSS-only passes (widen the shell,
 widen the card, bump cell height) still produced a cramped, thin-strip

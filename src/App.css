@@ -100,13 +100,13 @@
   box-sizing: border-box;
 }
 
-/* OA-79: dark navy / purple visual system for the logged-out landing
-   route -- scoped via [data-landing] so it never leaks into the
-   authenticated app's light theme. Overriding the shared tokens here
-   means every nested component (nav, cards, the heat map's own
-   var(--border)/var(--bg) usage) picks the dark palette automatically
-   through normal CSS custom-property cascade, with no per-component
-   dark-mode logic needed. */
+/* OA-79/OA-88: dark navy / purple visual system for the logged-out
+   "public site" routes (Home, Sign in) -- scoped via [data-landing] so
+   it never leaks into the authenticated app's light theme. Overriding
+   the shared tokens here means every nested component (nav, cards, the
+   heat map's own var(--border)/var(--bg) usage) picks the dark palette
+   automatically through normal CSS custom-property cascade, with no
+   per-component dark-mode logic needed. */
 .app-shell[data-landing] {
   --bg: #0a0a16;
   --text: #b6b2c9;

@@ -1,5 +1,7 @@
+import { FirebaseError } from 'firebase/app'
 import {
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   type User,
@@ -18,6 +20,13 @@ interface AuthContextValue {
   loading: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  /**
+   * OA-88: used by LoginPage's "Forgot password?" link. Never throws for
+   * "no such account" (`auth/user-not-found`) -- callers should show the
+   * same generic confirmation either way, so this page never reveals
+   * whether a given email has an account.
+   */
+  resetPassword: (email: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -54,8 +63,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await firebaseSignOut(auth)
   }
 
+  async function resetPassword(email: string) {
+    try {
+      await sendPasswordResetEmail(auth, email)
+    } catch (err) {
+      if (err instanceof FirebaseError && err.code === 'auth/user-not-found') return
+      throw new Error(describeAuthError(err, 'sending that email'))
+    }
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, resetPassword }}>
       {children}
     </AuthContext.Provider>
   )

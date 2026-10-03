@@ -1,43 +1,133 @@
+/* OA-88: matches the landing page's own glass-card visual language
+   (LandingHeatMap.css, LandingPage.css's hero card) -- dark navy/purple
+   atmosphere comes from the shared [data-landing] tokens (App.css), now
+   also applied on this route, so this file only shapes the card/form
+   itself. "Wide public-site shell with constrained auth card": the
+   shell's own width is .app-main's (1280px on this route, see App.css)
+   -- this card stays narrow and centred within it. */
 .auth-page {
+  display: flex;
+  justify-content: center;
+  padding: 56px 0;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15);
   text-align: center;
-  padding: 24px 0 48px;
+}
+
+.auth-card__title {
+  margin: 0 0 8px;
+  font-size: 28px;
+}
+
+.auth-card__subtitle {
+  margin: 0 0 28px;
+  font-size: 14px;
+  color: var(--text);
+  opacity: 0.8;
 }
 
 .auth-form {
-  max-width: 400px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
   text-align: left;
 }
 
-.auth-form label {
+.auth-form__field {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 14px;
 }
 
-.auth-form input[type='email'],
-.auth-form input[type='password'] {
-  padding: 10px 12px;
-  border-radius: 6px;
+.auth-form__label {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.auth-form__field input {
+  padding: 12px 14px;
+  border-radius: 10px;
   border: 1px solid var(--border);
   font-size: 16px;
-  background: var(--bg);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text-h);
 }
 
+.auth-form__field input::placeholder {
+  color: var(--text);
+  opacity: 0.6;
+}
+
+.auth-form__field input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Designed inline validation, not a browser-native bubble -- see
+   LoginPage.tsx's `noValidate` forms. */
+.auth-form__field input[data-invalid] {
+  border-color: #f87171;
+}
+
+.auth-form__field-error {
+  font-size: 12px;
+  color: #f87171;
+}
+
+.auth-form__forgot {
+  align-self: flex-end;
+  margin-top: -6px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.auth-form__forgot:hover,
+.auth-form__forgot:focus-visible {
+  text-decoration: underline;
+}
+
+.auth-form__error {
+  margin: 0;
+  font-size: 14px;
+  color: #f87171;
+}
+
 .auth-form__submit {
-  padding: 12px;
+  width: 100%;
+  padding: 14px;
   font-size: 16px;
   font-weight: 600;
   border: none;
-  border-radius: 6px;
-  color: var(--bg);
+  border-radius: 999px;
+  color: #fff;
   background: var(--accent);
   cursor: pointer;
+  box-shadow: 0 8px 28px rgba(168, 85, 247, 0.4);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.auth-form__submit:hover:not(:disabled) {
+  box-shadow: 0 10px 34px rgba(168, 85, 247, 0.55);
+  transform: translateY(-1px);
+}
+
+.auth-form__submit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .auth-form__submit:disabled {
@@ -45,8 +135,34 @@
   cursor: not-allowed;
 }
 
-.auth-form__error {
-  color: #e05252;
+.auth-form__back {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: var(--text);
+  text-decoration: underline;
+  cursor: pointer;
+  align-self: center;
+}
+
+.auth-form__confirmation {
+  margin: 0 0 20px;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.1);
   font-size: 14px;
-  margin: 0;
+  color: var(--text-h);
+}
+
+@media (max-width: 480px) {
+  .auth-page {
+    padding: 32px 0;
+  }
+
+  .auth-card {
+    padding: 24px;
+    border-radius: 16px;
+  }
 }

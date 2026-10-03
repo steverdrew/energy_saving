@@ -31,14 +31,18 @@ function HomeRoute() {
 function App() {
   const { user, loading, logout } = useAuth()
   const location = useLocation()
-  // OA-79: the dark/purple visual system is scoped to the logged-out
-  // landing route only -- the authenticated app keeps its existing light
-  // theme, so this never fights the rest of the product's design.
-  const isLandingRoute = !loading && !user && location.pathname === '/'
+  // OA-79/OA-88: the dark/purple visual system (and the wider public-site
+  // shell width, see App.css) is scoped to the logged-out "public site"
+  // routes -- Home and Sign in -- not the authenticated app, which keeps
+  // its existing light theme/narrower shell untouched. OA-88 explicitly
+  // requires Home and Sign in to share one nav/shell rather than each
+  // route maintaining its own lookalike version, so both are covered by
+  // the same flag/attribute here instead of two separate checks.
+  const isPublicSiteRoute = !loading && !user && (location.pathname === '/' || location.pathname === '/login')
 
   return (
     <OctopusConnectionProvider>
-      <div className="app-shell" data-landing={isLandingRoute || undefined}>
+      <div className="app-shell" data-landing={isPublicSiteRoute || undefined}>
         <header className="app-header">
           <div className="app-header__inner">
             <NavLink to="/" className="app-header__brand">
