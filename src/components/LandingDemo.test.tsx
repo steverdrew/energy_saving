@@ -120,13 +120,14 @@ describe('LandingDemo', () => {
     )
   })
 
-  it('leads Baseline with "What Octopus tariff are you on now?", not the old usage-led heading (OA-135)', () => {
+  it('leads Baseline with "Would another tariff cost less?", not the old usage-led or instruction-led headings (OA-135/OA-171)', () => {
     renderDemo()
-    expect(screen.getByRole('heading', { name: 'What Octopus tariff are you on now?' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Would another tariff cost less?' })).toBeInTheDocument()
     expect(
-      screen.getByText('Choose your current tariff so we can compare this same household day against the alternatives.'),
+      screen.getByText("Choose your current tariff and we'll compare the same electricity use against the alternatives."),
     ).toBeInTheDocument()
     expect(screen.queryByText('When do you use energy?')).not.toBeInTheDocument()
+    expect(screen.queryByText('What Octopus tariff are you on now?')).not.toBeInTheDocument()
   })
 
   // OA-135: "add a compact tariff selector within Baseline... Primary
@@ -573,17 +574,17 @@ describe('LandingDemo', () => {
     expect(screen.getByRole('link', { name: /sign up free/i })).toHaveAttribute('href', '/login')
   })
 
-  it('has exactly one heading in the section -- "Typical household"', () => {
+  it('has exactly one heading in the section -- "See how the comparison works" (OA-171)', () => {
     renderDemo()
-    expect(screen.getByRole('heading', { name: 'Typical household' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'See how the comparison works' })).toBeInTheDocument()
   })
 
-  it('labels the demo "Typical household" with a calm representative-model statement (OA-166)', () => {
+  it('explains the demo starts with a typical household and switches to real usage once connected (OA-166/OA-171)', () => {
     renderDemo()
-    expect(screen.getByText('Typical household')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'See how the comparison works' })).toBeInTheDocument()
     expect(screen.queryByText(/example household/i)).not.toBeInTheDocument()
-    expect(screen.getByText(/a representative household model/i)).toBeInTheDocument()
-    expect(screen.getByText(/not your own usage/i)).toBeInTheDocument()
+    expect(screen.getByText(/start with a typical household/i)).toBeInTheDocument()
+    expect(screen.getByText(/we.ll use your actual electricity use/i)).toBeInTheDocument()
   })
 
   // OA-166: the full explanation (what the model means, what it's based

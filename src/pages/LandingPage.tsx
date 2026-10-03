@@ -33,23 +33,28 @@ function LandingPage() {
   return (
     <>
       <section className="landing-hero" id="hero">
-        {/* OA-168: replaces OA-111's "Hunt the energy vampires in your
-            home" hook -- that framing was too narrow (it only spoke to
-            waste detection), while the product is now about tariff
-            comparison, practical timing optimisation, waste, neutral
-            recommendations, and "do nothing" being a genuine valid
-            answer. The new headline is the exact copy already used as
-            VisionPage's own title (OA-151) -- the hero and the vision
-            page now open with the same statement rather than two
-            competing ones. The vampire phrase itself isn't deleted: it's
-            repositioned as the waste section's own heading (see
-            VisionPage.tsx's "energy vampires" section). No gradient
-            emphasis on any one word here -- unlike "energy vampires",
-            there's no single phrase this headline is built to spotlight. */}
-        <h1 className="landing-hero__headline">Small changes. Bigger consequences.</h1>
+        {/* OA-168 (revised): "Small changes. Bigger consequences." tested
+            as brand-clever rather than literal -- a first-time visitor
+            arriving with "prices are going up, should I stay, fix, or
+            switch?" still had to decode what the product does before the
+            headline answered it. Replaced with the user's own question,
+            stated directly; the old headline isn't deleted, just moved
+            further down the page (VisionPage.tsx) where a visitor who
+            already understands the product can appreciate the framing.
+            OA-171 (second revision): the subhead had over-corrected into a
+            pure tariff-comparison pitch -- "would another tariff cost
+            less?" -- which undersells the product's other half (what to
+            run when, and whether a change actually paid off). Every
+            public line here now has to answer "what could I change, when,
+            or what it's worth" -- this subhead now names both halves:
+            comparing tariffs against real usage, *and* finding cheaper
+            times to run things, with the saving itself named as the
+            payoff of both -- deliberately without jargon like "load
+            shifting" or "optimisation". */}
+        <h1 className="landing-hero__headline">See where you could save on your electricity bill.</h1>
         <p className="landing-hero__sub">
-          See what your electricity is costing you, whether another tariff would suit you better, and what — if
-          anything — is actually worth changing.
+          We use your actual electricity use to compare tariffs, find things you could run at cheaper times, and
+          show how much those changes could save you.
         </p>
         <div className="landing-hero__ctas">
           {/* OA-92: hero CTA starts the explanatory journey (Hero -> See

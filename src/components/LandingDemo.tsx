@@ -483,11 +483,13 @@ function LandingDemo() {
   )
 
   if (nearestStage === 'baseline') {
-    // OA-135: "Tab 1's primary job is choosing the tariff this household
-    // is on now" -- replaces the old usage-led "When do you use energy?"
-    // heading, which no longer names the actual primary action here.
-    questionHeading = 'What Octopus tariff are you on now?'
-    supportingCopy = 'Choose your current tariff so we can compare this same household day against the alternatives.'
+    // OA-135/OA-171 (revised): "Tab 1's primary job is choosing the tariff
+    // this household is on now" -- but the heading itself now states the
+    // visitor's own underlying question ("would another tariff cost
+    // less?") rather than just naming the control action, so it reads as
+    // exactly why they're here rather than a form-field instruction.
+    questionHeading = 'Would another tariff cost less?'
+    supportingCopy = "Choose your current tariff and we'll compare the same electricity use against the alternatives."
 
     // OA-126/OA-135: previously one combined "6.8 kWh · £1.80" line, which
     // read as a single authoritative "average household spend" figure.
@@ -874,22 +876,23 @@ function LandingDemo() {
       data-active-stage={nearestStage}
       tabIndex={-1}
     >
-      {/* OA-99/OA-100: "Typical household" is the section's one real
-          heading -- the figures are grounded in published Ofgem/Elexon/
-          Octopus data (see landingDemoFixture.ts's
-          LANDING_DEMO_DATA_SOURCES) rather than invented numbers, but
-          it's still not the visitor's own usage until they connect an
-          account (see the CTA note below). OA-166: the previous
-          source-heavy inline `<details>` here is replaced by a calmer
-          one-line statement plus a "More info" action -- the full
-          explanation (what the model means, what it's based on, what
-          assumptions it includes, the sources themselves, and a route to
-          the detailed savings calculation) now lives in the dialog this
-          opens, so the header itself stays light. */}
+      {/* OA-99/OA-100/OA-171 (revised): "Typical household" read as a
+          strange transition for a first-time visitor -- "why am I looking
+          at somebody else's household?" before they understand the
+          exercise. Reframed as what's actually happening ("see how the
+          comparison works") plus the one-line explanation that this is a
+          stand-in for their own usage until they connect an account,
+          rather than naming the model itself as the heading. The figures
+          are still grounded in published Ofgem/Elexon/Octopus data (see
+          landingDemoFixture.ts's LANDING_DEMO_DATA_SOURCES); OA-166's
+          "More info" action still opens the fuller dialog explaining the
+          model, what it's based on, its assumptions, and the sources
+          themselves, so that detail isn't lost, just no longer the
+          section's own heading. */}
       <div className="landing-demo__heading-row">
-        <h2 className="landing-demo__heading">Typical household</h2>
+        <h2 className="landing-demo__heading">See how the comparison works</h2>
         <p className="landing-demo__subheading">
-          A representative household model — not your own usage ·{' '}
+          Start with a typical household. When you connect your account, we&rsquo;ll use your actual electricity use. ·{' '}
           <button
             type="button"
             className="landing-demo__more-info-link"
@@ -986,20 +989,6 @@ function LandingDemo() {
         <span className="landing-demo__cta-note">
           Connecting your account replaces this example with your own tariff and half-hourly usage.
         </span>
-      </p>
-
-      {/* OA-155: secondary exit for visitors already on a smart tariff --
-          the public demo above stays a linear Standard -> Smart -> Optimise
-          walkthrough rather than branching into a real comparison for
-          them, so this gives that audience its own path straight to
-          signup/personalised analysis instead of sitting through a fake
-          comparison against their own tariff. Generic placement/styling
-          for now -- not yet positioned to intercept earlier in the flow. */}
-      <p className="landing-demo__cta landing-demo__cta--secondary">
-        <span className="landing-demo__cta-note">Already on a smart tariff?</span>
-        <Link to="/login" className="landing-demo__cta-link">
-          Sign up to start finding what you could save by using it better.
-        </Link>
       </p>
 
       {/* OA-166: "Typical household" explained -- what the model is, what

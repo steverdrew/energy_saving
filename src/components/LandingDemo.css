@@ -224,31 +224,6 @@
   opacity: 0.8;
 }
 
-/* OA-155: the "already on a smart tariff?" secondary exit -- deliberately
-   plain-text, not a second pill button, so it doesn't compete with the
-   primary "Sign up free" CTA above it. Generic placement for now (see the
-   usage site's comment); just needs to read as a quiet alternative, not a
-   duplicate call to action. */
-.landing-demo__cta--secondary {
-  margin-top: 12px;
-}
-
-.landing-demo__cta--secondary .landing-demo__cta-note {
-  margin-top: 0;
-}
-
-.landing-demo__cta--secondary .landing-demo__cta-link {
-  display: inline;
-  padding: 0;
-  margin-top: 4px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--accent);
-  background: none;
-  box-shadow: none;
-  text-decoration: underline;
-}
-
 /* OA-155: the "already on a smart tariff?" prompt that replaces the
    step nav's own slot (steps + Back/Next) once the current tariff is
    Smart -- there's no genuine Next step to show controls for, so this
@@ -287,5 +262,30 @@
     flex: 1 1 auto;
     text-align: center;
     padding: 8px 6px;
+  }
+}
+
+/* Mirrors LandingTimeProfile.css's own max-height tier: shrinks this
+   section's own chrome (padding above/below the card, the heading row's
+   gap) together with the card's internal spacing, so the whole "Typical
+   household" block scales down continuously on a short viewport instead
+   of just the card contents inside it. */
+@media (max-height: 760px) {
+  .landing-demo {
+    padding-top: clamp(12px, 2.4svh, 32px);
+    padding-bottom: clamp(12px, 2.4svh, 32px);
+    margin-top: clamp(10px, 2svh, 28px);
+  }
+
+  .landing-demo__heading-row {
+    margin: 0 0 clamp(6px, 1.2svh, 16px);
+  }
+
+  .landing-demo__heading {
+    font-size: clamp(18px, 3svh, 28px);
+  }
+
+  .landing-demo__cta {
+    margin-top: clamp(10px, 1.6svh, 20px);
   }
 }

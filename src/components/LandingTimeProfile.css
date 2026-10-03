@@ -1169,3 +1169,46 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* "Fit to the height of the screen": the same OA-129 token-scaling
+   pattern used for narrow widths above, keyed on viewport *height*
+   instead -- a short window (a laptop with the browser chrome/dock
+   eating into it, a landscape tablet) shrinks the card's typography,
+   padding and chart height together, continuously, rather than only
+   reacting to width. `svh` (not `vh`) so mobile browser toolbars that
+   show/hide on scroll don't make the thresholds flicker. */
+@media (max-height: 760px) {
+  .landing-time-profile {
+    --demo-stage-heading-size: clamp(18px, 3.2svh, 25px);
+    --demo-supporting-size: clamp(14px, 2.4svh, 19px);
+    --demo-primary-metric-size: clamp(20px, 3.4svh, 28px);
+    --demo-secondary-metric-size: clamp(13px, 2svh, 17px);
+    --chart-event-label-size: clamp(12px, 2svh, 16px);
+    --chart-event-secondary-size: clamp(11px, 1.7svh, 14px);
+    --chart-axis-label-size: clamp(11px, 1.7svh, 14px);
+    --chart-footnote-size: clamp(12px, 1.8svh, 15px);
+    padding: clamp(10px, 2svh, 24px);
+  }
+
+  .landing-time-profile__narrative {
+    margin-bottom: clamp(8px, 1.6svh, 16px);
+  }
+
+  .landing-time-profile__track {
+    height: clamp(80px, 16svh, 220px);
+  }
+
+  .landing-time-profile__below-chart {
+    margin-top: clamp(6px, 1.4svh, 14px);
+  }
+
+  .landing-time-profile__annual-hero,
+  .landing-time-profile__split-right {
+    padding: clamp(10px, 1.8svh, 16px) clamp(12px, 2svh, 20px);
+  }
+
+  .landing-time-profile__annual-hero--compact {
+    padding-top: clamp(12px, 2svh, 20px);
+    padding-bottom: clamp(12px, 2svh, 20px);
+  }
+}

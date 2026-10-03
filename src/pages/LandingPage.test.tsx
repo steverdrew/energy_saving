@@ -3,7 +3,7 @@
 // with the broader-proposition headline/subhead, plus a new quieter
 // secondary CTA alongside the existing primary one.
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it } from 'vitest'
 import LandingPage from './LandingPage'
@@ -18,16 +18,17 @@ function renderLandingPage() {
   )
 }
 
-describe('LandingPage hero (OA-168)', () => {
-  it('reads the new broader-proposition headline and subhead, not the old energy-vampires hook', () => {
+describe('LandingPage hero (OA-168/OA-171)', () => {
+  it('reads the literal, persona-led headline and subhead, not the old brand-led or energy-vampires hooks', () => {
     renderLandingPage()
-    expect(screen.getByRole('heading', { name: 'Small changes. Bigger consequences.' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'See where you could save on your electricity bill.' })).toBeInTheDocument()
     expect(
       screen.getByText(
-        'See what your electricity is costing you, whether another tariff would suit you better, and what — if anything — is actually worth changing.',
+        'We use your actual electricity use to compare tariffs, find things you could run at cheaper times, and show how much those changes could save you.',
       ),
     ).toBeInTheDocument()
     expect(screen.queryByText(/hunt the energy vampires/i)).not.toBeInTheDocument()
+    expect(screen.queryByText('Small changes. Bigger consequences.')).not.toBeInTheDocument()
   })
 
   it('shows "See how it works" as the hero\'s one CTA, jumping to the comparison demo', () => {
@@ -38,13 +39,11 @@ describe('LandingPage hero (OA-168)', () => {
     expect(screen.queryByText('Try a typical household')).not.toBeInTheDocument()
   })
 
-  it('introduces no new savings or £ claims in the hero', () => {
+  it('shows the Octopus account requirement under the CTA, linking to the Octopus explainer', () => {
     const { container } = renderLandingPage()
     const hero = container.querySelector('#hero')!
-    // OA-171: the hero now legitimately names "Octopus Energy" once, in
-    // the account-requirement note below the CTA (a prerequisite
-    // disclosure, not a savings/behavioural claim) -- this no longer
-    // blanket-forbids the word "octopus", only an actual money claim.
-    expect(hero.textContent).not.toMatch(/£|save/i)
+    expect(within(hero as HTMLElement).getByText(/Requires an Octopus Energy account/)).toBeInTheDocument()
+    const learnMore = within(hero as HTMLElement).getByRole('link', { name: 'Why Octopus?' })
+    expect(learnMore).toHaveAttribute('href', '/why-octopus')
   })
 })
