@@ -1,6 +1,10 @@
 # HANDOFF
 
-_Last updated: 2026-10-02 (core loop via PR #14; backlog audit +
+_Last updated: 2026-10-03 (OA-86 audited and closed as already-satisfied
+by OA-85 -- no code change needed; see "Current task" below. Previous
+entry:)_
+
+_2026-10-02 (core loop via PR #14; backlog audit +
 polish tier via PR #15; deeper feature tier via PR #16/#17; beta
 mop-up cluster OA-63/64/68/69/66/67 merged via PR #18; revised build
 order OA-70/71/72/74 merged via PR #19/#20/#21/#22, all Done in Jira;
@@ -18,6 +22,37 @@ Steve but not yet started -- largely expected to already be satisfied
 by OA-82's work, pending its own audit pass; OA-65 not started)_
 
 ## Current task (latest)
+
+**OA-86** ("Restore original multi-day heat map inside the tighter
+comparison layout") -- filed by Steve as a follow-up implementation
+ticket because OA-85 is already marked Done, with acceptance criteria
+describing the exact multi-day, green/purple/red, usage-as-opacity
+heat map, tighter narrative-left/visual-right layout, demoted
+table/detail chrome, and Baseline/Compare/Optimise state rules.
+
+Audited the ticket's full spec line-by-line against the code already
+on this branch (HEAD at audit time: `06fa9bb`, OA-85's own merge) before
+writing anything, since the description reads like a literal restatement
+of OA-85's own commit message. Result: **every acceptance criterion is
+already met by the existing `HeatMap` `variant="tariff"` + multi-day
+`landingDemoFixture` work from OA-85** -- confirmed by reading
+`LandingDemo.tsx`, `HeatMap.tsx`, `heatMapMath.ts`,
+`landingDemoFixture.ts`, `HeatMap.css`, and `LandingDemo.css` directly
+(not just trusting OA-85's commit message), then re-running
+verification: `npm test` (48/48 pass), `npm run lint` (clean, only
+pre-existing unrelated warnings), `npm run build` and `check-bundle`
+(both pass), and confirming the prerendered `dist/index.html` contains
+`heat-map--tariff` with exactly 192 (`4 x 48`) cells.
+
+No code change made -- nothing to push. Commented on OA-86 in Jira
+explaining it's already satisfied by OA-85 (merged/deployed to prod per
+the previous entry below) with this verification evidence, and
+transitioned it to Done per the standing rule below. If Steve sees a
+visible gap between this and the actual beta deploy, that's a real new
+finding (not covered by re-reading the merged source) and should become
+its own ticket rather than reopening this one.
+
+## Previous task
 
 **OA-85** ("Keep tighter comparison layout but restore original
 heat-map mechanism") -- Steve's follow-up to OA-83: keep the second
@@ -946,6 +981,16 @@ merged via PR #18 and Done in Jira before the above.)
 
 ## Decisions
 
+- OA-86: closed with no code change, since the existing OA-85 work
+  (already merged/deployed) was re-verified to satisfy every acceptance
+  criterion in OA-86's description line-by-line (not just assumed from
+  OA-85's commit message). Decision: treat "ticket description restates
+  a already-Done ticket's own commit message" as a signal to audit
+  against the real code before writing anything, same as the OA-84/OA-82
+  pattern noted above -- not an automatic ask-Steve case, since
+  CLAUDE.md's "pick the simplest option and carry on" covers it. Added a
+  Jira comment on OA-86 with the verification evidence and transitioned
+  it to Done per the standing rule below.
 - Tickets referenced in this file (OA-xx) live in **Jira**
   (`altitudeconsulting.atlassian.net`, project key `OA`), not Linear —
   the connected Linear workspace in this environment is an unrelated
