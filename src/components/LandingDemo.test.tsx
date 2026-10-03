@@ -201,7 +201,7 @@ describe('LandingDemo', () => {
 
       await user.click(jumpToStage('Optimise'))
       expect(container.querySelector('.landing-time-profile__tariff-context')).toHaveTextContent('Smart · Agile')
-      expect(screen.getByText(/save around £\d/i)).toBeInTheDocument()
+      expect(container.querySelector('.landing-time-profile__annual-hero-figure')).toHaveTextContent(/save about £[\d.]+\/year/i)
     })
 
     // OA-146: "Compare figures reconcile after rounding" -- the secondary
@@ -361,7 +361,7 @@ describe('LandingDemo', () => {
 
       expect(scrubber()).toHaveAttribute('aria-valuenow', '2')
       expect(screen.queryByText(/little to save by changing when you use electricity/i)).not.toBeInTheDocument()
-      expect(screen.getByText(/save around £\d/i)).toBeInTheDocument()
+      expect(screen.getByText(/save about £[\d.]+\/year/i)).toBeInTheDocument()
       const expected = expectedAutoOptimisedStartSlots()
       expect(screen.getByRole('slider', { name: /dishwasher/i })).toHaveAttribute(
         'aria-valuenow',
@@ -384,9 +384,9 @@ describe('LandingDemo', () => {
       await switchToSmartAgile(user)
       await user.click(jumpToStage('Optimise'))
 
-      const annualText = screen.getByText(/save around £\d+\.\d\d\/year/i).textContent!
+      const annualText = screen.getByText(/save about £\d+\.\d\d\/year/i).textContent!
       const annualPounds = Number(annualText.match(/£(\d+\.\d\d)/)![1])
-      const monthlyText = screen.getByText(/≈ £\d+\.\d\d\/month/).textContent!
+      const monthlyText = screen.getByText(/≈ £\d+\.\d\d\/month total/).textContent!
       const monthlyPounds = Number(monthlyText.match(/£(\d+\.\d\d)/)![1])
       expect(monthlyPounds * 12).toBeCloseTo(annualPounds, 1)
     })
@@ -591,7 +591,7 @@ describe('LandingDemo', () => {
       await switchToSmartAgile(user)
       await user.click(jumpToStage('Optimise'))
 
-      const resultBefore = screen.getByText(/save around £\d/i).textContent
+      const resultBefore = screen.getByText(/save about £[\d.]+\/year/i).textContent
 
       // Dragging the washing machine away from its own already-optimised
       // (cheapest) slot can only ever raise its cost, never lower it --
@@ -602,7 +602,7 @@ describe('LandingDemo', () => {
 
       const expected = expectedAutoOptimisedStartSlots()
       expect(slider).toHaveAttribute('aria-valuenow', String(Math.max(14, expected.washing_machine - 3)))
-      expect(screen.getByText(/save around £\d|little to save/i).textContent).not.toBe(resultBefore)
+      expect(screen.getByText(/save about £[\d.]+\/year|little to save/i).textContent).not.toBe(resultBefore)
     })
 
     it('moves each event independently -- moving one never affects an unrelated event', async () => {
@@ -650,8 +650,8 @@ describe('LandingDemo', () => {
       // it always reconciles), plus today's single-day figure labelled
       // separately since it's a different measure, not that figure's
       // daily rate -- see the dedicated OA-146 describe block below.
-      expect(screen.getByText(/save around £\d+\.\d\d\/year/i)).toBeInTheDocument()
-      expect(screen.getByText(/≈ £\d+\.\d\d\/month/)).toBeInTheDocument()
+      expect(screen.getByText(/save about £\d+\.\d\d\/year/i)).toBeInTheDocument()
+      expect(screen.getByText(/≈ £\d+\.\d\d\/month total/)).toBeInTheDocument()
       const result = container.querySelector('.landing-time-profile__result')
       expect(result).not.toHaveTextContent(/potential saving/i)
     })
