@@ -68,7 +68,7 @@ function LandingPage() {
             cluttering the hero with the Smart tariff / smart meter
             detail -- that stays in onboarding where it's actionable. */}
         <p className="landing-hero__requirement">
-          Requires an Octopus Energy account · <Link to="/why-octopus">Learn more</Link>
+          Requires an Octopus Energy account · <Link to="/why-octopus">Why Octopus?</Link>
         </p>
       </section>
 
