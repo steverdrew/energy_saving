@@ -30,9 +30,15 @@ function LandingPage() {
             boundaries the mockup uses; the break before line 2 only
             applies at the `md`-equivalent breakpoint and up (see
             .landing-hero__break in LandingPage.css) -- below that, lines
-            1-2 flow and wrap naturally as one phrase. */}
+            1-2 flow and wrap naturally as one phrase.
+            Bugfix (linked to OA-87): the literal `{" "}` below is load-
+            bearing -- below the breakpoint `.landing-hero__break` is
+            `display:none`, which removes the <br> from the render
+            entirely rather than just suppressing a line break, so
+            without an explicit space here "of" and "when" concatenate
+            into "ofwhen". */}
         <h1 className="landing-hero__headline">
-          Take control of
+          Take control of{' '}
           <br className="landing-hero__break" />
           <span className="landing-hero__line--gradient">when you use energy</span>
           <br />
