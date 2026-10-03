@@ -8,14 +8,22 @@
   position: sticky;
   top: 0;
   z-index: 10;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+/* OA-87: the header bar itself stays full-bleed (background/sticky/
+   border); this inner row owns the actual flex layout so the landing
+   route alone can cap/center it at a wider max-width below, without
+   changing the authenticated app's existing edge-to-edge header. */
+.app-header__inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px 16px;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  box-sizing: border-box;
 }
 
 .app-header__brand {
@@ -115,6 +123,13 @@
      the --text override above (custom properties cascade for var()
      lookups, but an inherited `color` does not re-resolve on its own). */
   color: var(--text);
+  /* OA-87: section bands (LandingDemo.css, LandingPage.css) use a
+     100vw/negative-margin breakout so their background can span the full
+     viewport width while their own content still centers at the normal
+     max-width -- which can introduce a few pixels of horizontal overflow
+     in browsers where the scrollbar eats into 100vw. Scoped to landing
+     only so it never masks a real horizontal-overflow bug elsewhere. */
+  overflow-x: hidden;
 }
 
 .app-shell[data-landing]::before {
@@ -128,11 +143,47 @@
     radial-gradient(520px 360px at 86% 6%, rgba(99, 70, 220, 0.22), transparent 65%);
 }
 
+.app-shell[data-landing] {
+  /* OA-87: Inter, matching the approved mockup -- loaded in index.html,
+     scoped here so the authenticated app keeps its system-ui stack. */
+  --heading: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --sans: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+}
+
 .app-shell[data-landing] .app-header {
   background: rgba(10, 10, 22, 0.65);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--border);
+}
+
+/* OA-87: "wide page, controlled content widths within it" -- the landing
+   route's shell/nav widen to roughly max-w-7xl (the approved mockup's own
+   container strategy); individual content blocks (hero, paragraph, cards)
+   keep their own narrower caps inside that wider shell. The authenticated
+   app's header/main are untouched (no [data-landing] attribute there). */
+.app-shell[data-landing] .app-header__inner,
+.app-shell[data-landing] .app-main {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+@media (min-width: 640px) {
+  .app-shell[data-landing] .app-header__inner,
+  .app-shell[data-landing] .app-main {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-shell[data-landing] .app-header__inner,
+  .app-shell[data-landing] .app-main {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
 }
 
 .app-shell[data-landing] .app-main {

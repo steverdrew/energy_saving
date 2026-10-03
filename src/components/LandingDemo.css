@@ -1,7 +1,21 @@
+/* OA-87: "the mockup intentionally uses distinct background treatments
+   for each major landing-page section" -- a subtly different, translucent
+   band (the mockup's own bg-dark-900/40) rather than one continuous
+   navy/purple surface for the whole page, so the comparison reads as the
+   page's next "chapter". The 100vw/negative-margin breakout lets this
+   section's background span the full viewport width even though it sits
+   inside .app-main's centered max-width -- its own content
+   (.landing-demo__grid etc.) keeps its existing centering untouched. */
 .landing-demo {
+  position: relative;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
   margin-top: 28px;
-  padding: 20px 0 28px;
+  padding: 32px 0;
+  background: rgba(15, 23, 42, 0.4);
   border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 
 /* OA-83 (second pass): no standalone section title -- the ticket's own
@@ -62,8 +76,12 @@
    stacks on narrow screens (narrative first, then the visual -- already
    the DOM order, so no reordering needed for the mobile requirement
    that the narrative appear before the heat map). Capped width so the
-   pair reads as one contained object instead of sprawling the full
-   960px page-content width on a large screen. */
+   pair reads as one contained object instead of sprawling edge to edge.
+   OA-87: the landing shell itself widened to ~1280px (App.css); this cap
+   grows with it (760px -> 1040px) so the comparison gets the breathing
+   room the approved mockup shows instead of feeling squeezed into the
+   old 960px app-content width -- still well short of the full shell so
+   it keeps reading as one contained object, not full-bleed. */
 .landing-demo__grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -75,8 +93,9 @@
 
 @media (min-width: 860px) {
   .landing-demo__grid {
-    grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
-    gap: 24px;
+    grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+    gap: 32px;
+    max-width: 1040px;
   }
 }
 
@@ -177,6 +196,11 @@
 @media (min-width: 860px) {
   .landing-demo__heatmap-card {
     margin: 0;
+    /* OA-87: a bit more room now that the right-hand column itself is
+       wider (see .landing-demo__grid above) -- still capped well short
+       of that column's full width so it keeps its contained, closer-to-
+       square card feel rather than becoming a wide dominant grid. */
+    max-width: 460px;
   }
 }
 

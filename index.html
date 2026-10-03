@@ -10,6 +10,15 @@
       content="Shift & Save: see what a dynamic tariff could save you on Octopus Energy, and make it easy to switch."
     />
     <title>Shift &amp; Save</title>
+    <!-- OA-87: Inter, scoped to the landing page only via --heading/--sans
+         overrides in App.css's [data-landing] rule -- the authenticated
+         app keeps its existing system-ui stack. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
     <div id="root"></div>

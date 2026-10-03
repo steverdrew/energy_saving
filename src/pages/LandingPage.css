@@ -3,20 +3,57 @@
    App.css -- this file only shapes layout, cards and motion. */
 
 .landing-hero {
+  /* OA-87: hero text stays constrained to roughly the mockup's max-w-4xl
+     even though the surrounding shell (.app-main) is now wider -- "wide
+     page, controlled content widths within it". */
+  max-width: 896px;
+  margin: 0 auto;
   text-align: center;
   padding: 56px 0 48px;
 }
 
-.landing-hero h1 {
+.landing-hero__headline {
   margin: 32px auto 16px;
-  max-width: 720px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+/* Mirrors the mockup's `<br class="hidden md:block">`: lines 1-2 flow and
+   wrap naturally as one phrase below this breakpoint, and only split
+   into the deliberate three-line composition at desktop widths. */
+.landing-hero__break {
+  display: none;
+}
+
+@media (min-width: 860px) {
+  .landing-hero__break {
+    display: inline;
+  }
+}
+
+.landing-hero__line--gradient {
+  background: linear-gradient(135deg, #fff 0%, #c4b5fd 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.landing-hero__line--muted {
+  font-weight: 300;
+  color: #c4b5fd;
 }
 
 .landing-hero__sub {
   font-size: 20px;
   margin: 0 auto 32px;
-  max-width: 640px;
+  max-width: 672px;
   color: var(--text);
+}
+
+.landing-hero__sub strong {
+  color: var(--text-h);
+  font-weight: 600;
 }
 
 .landing-hero__cta {
@@ -35,6 +72,21 @@
 .landing-hero__cta:hover {
   box-shadow: 0 10px 34px rgba(168, 85, 247, 0.55);
   transform: translateY(-1px);
+}
+
+/* OA-87: "CTA / 'Now tell us what you actually use': a cleaner, darker
+   background band... calmer and more direct after the interactive
+   comparison" -- a solid, slightly-opaque navy that sits over the hero's
+   ambient glow (the fixed [data-landing]::before layer) rather than
+   letting it show through, same full-bleed breakout as LandingDemo.css's
+   comparison band. */
+.landing-chapter-cta {
+  position: relative;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  padding: 48px 0;
+  background: #0f172a;
 }
 
 /* Glass card treatment shared by the informational sections below the
@@ -99,13 +151,21 @@
   color: var(--accent);
 }
 
-/* Dark footer treatment -- a touch darker than the page body, separated
-   by a hairline border rather than another floating card. */
+/* OA-87: "a deeper closing band... with a subtle top border" -- the
+   mockup's own footer tone, deeper/darker again than the CTA chapter
+   above it, closing the page's section rhythm. Same full-bleed breakout
+   as the other bands; .landing-footer's own children keep their existing
+   centering/max-widths untouched. */
 .landing-footer {
-  margin-top: 48px;
+  position: relative;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  margin-top: 0;
   padding: 32px 20px 40px;
-  background: rgba(0, 0, 0, 0.18);
+  background: #0a0f1c;
   border-top: 1px solid var(--border);
+  box-sizing: border-box;
 }
 
 .landing-trust {

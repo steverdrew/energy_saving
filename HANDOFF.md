@@ -1,12 +1,16 @@
 # HANDOFF
 
-_Last updated: 2026-10-03 (OA-86, second pass: Steve supplied the actual
-reference mockup after the first "no code change needed" audit --
-found and fixed two real gaps that audit missed; see "Current task"
-below. Previous entries:)_
+_Last updated: 2026-10-03 (OA-87 built: ported the approved mockup's
+hero typography/section-background rhythm and wider desktop shell --
+design/layout only, product copy kept as-is per Steve's explicit
+instruction; see "Current task" below. Previous entries:)_
 
-_2026-10-03, first pass (superseded below): OA-86 audited and closed as
-already-satisfied by OA-85 -- no code change needed._
+_2026-10-03, OA-86 second pass (superseded below as "previous task"):
+Steve supplied the actual reference mockup after the first "no code
+change needed" audit -- found and fixed two real gaps that audit missed._
+
+_2026-10-03, OA-86 first pass: audited and closed as already-satisfied
+by OA-85 -- no code change needed._
 
 _2026-10-02 (core loop via PR #14; backlog audit +
 polish tier via PR #15; deeper feature tier via PR #16/#17; beta
@@ -26,6 +30,94 @@ Steve but not yet started -- largely expected to already be satisfied
 by OA-82's work, pending its own audit pass; OA-65 not started)_
 
 ## Current task (latest)
+
+**OA-87** ("Match landing-page hero and desktop width to the approved
+mockup") -- explicitly a visual-fidelity ticket against the same
+`shift_save_landing_page(1).html` reference from OA-86, scoped to the
+hero, page/nav/comparison width, and (added mid-session, after Steve
+updated the ticket) a "section background rhythm" requirement: distinct
+background bands per chapter (hero / comparison / CTA / footer) instead
+of one flat navy surface. **Mid-task, Steve clarified: "use the html for
+design only, not text/copy"** -- the mockup's own wording (hero headline,
+CTA label) is a design reference for layout/typography/colour treatment,
+not copy to port in. Caught and reverted one real slip from before that
+instruction landed: I'd briefly changed the hero headline's third line
+and the hero CTA's label/destination to the mockup's own text ("— and
+what it costs." / "See how it works" -> `#comparison-demo`) before being
+corrected; reverted both to the product's existing copy ("— and what it
+costs you." / "See my last 30 days" -> `/login`), keeping only the
+three-line *split* and per-line colour/weight treatment, which is a
+design decision applied to the same existing words.
+
+What changed:
+
+- **Inter**, loaded in `index.html` (Google Fonts, preconnect +
+  stylesheet), applied only via `--heading`/`--sans` inside
+  `.app-shell[data-landing]` (App.css) -- the authenticated app keeps
+  its existing system-ui stack.
+- **Hero headline** (`LandingPage.tsx`/`.css`): split into three lines
+  via `<br>`/`<span>`, matching the mockup's own line-break mechanism --
+  the break before line 2 is only `display:inline` at `min-width:860px`
+  (mirrors the mockup's `hidden md:block`), so lines 1-2 flow and wrap
+  naturally as one phrase on narrow screens, exactly like the reference,
+  while line 2/3's break is unconditional. Line 2 gets the gradient
+  (`background-clip:text`), line 3 gets `font-weight:300` + a lavender
+  colour; line 1 stays the default heading colour (white). `font-weight:
+  800` added on the heading itself (the shared global `h1,h2` rule is
+  `500`, left untouched for every other `h1`/`h2` in the app).
+- **Width strategy** -- "wide page, controlled content widths within
+  it": `.app-shell[data-landing] .app-header__inner`/`.app-main` now cap
+  at `1280px` (the authenticated app's own header/main are untouched --
+  no `[data-landing]` there). Extracting `.app-header__inner` as a new
+  wrapper (App.tsx/.css, and the SSR-only duplicate header markup in
+  `entry-server.tsx`) let the landing route alone centre/cap the header
+  row without changing every other route's existing edge-to-edge header.
+  `.landing-hero` itself caps at `896px` (~`max-w-4xl`), `.landing-hero
+  __sub` at `672px` (~`max-w-2xl`) -- both narrower than the new wider
+  shell, per the ticket's explicit "do not stretch the headline" bullet.
+- **Comparison canvas**: `.landing-demo__grid`'s desktop max-width grew
+  760px -> 1040px (and the heat-map card 340px -> 460px) now that the
+  shell itself is wider -- a moderate increase, not matching the full
+  1280px shell, so OA-83/85's "contained object, not a sprawling grid"
+  intent still holds; this was a judgment call (ticket gives no exact
+  number), recorded here per CLAUDE.md's "pick the simplest option and
+  carry on."
+- **Section background rhythm** (new, added to the ticket mid-session):
+  hero keeps its existing fixed-position ambient glow (`[data-landing]
+  ::before`, already full-bleed via `position:fixed`, so already "richer
+  than the sections below" relative to the flatter bands added now).
+  `LandingDemo.css`'s `.landing-demo` and the new `.landing-chapter-cta`
+  wrapper (around the existing about/compatibility/who-we-are cards,
+  individual section ids/aria-labels untouched) and `.landing-footer`
+  each use a `100vw`/negative-margin "breakout" so their background can
+  span the full viewport width while sitting inside `.app-main`'s
+  centered max-width -- their own children keep their existing
+  max-width/centering untouched. Tones: comparison
+  `rgba(15,23,42,0.4)` (mockup's `bg-dark-900/40`, subtle,
+  glow still shows through a little), CTA chapter solid `#0f172a`
+  (mockup's `bg-dash-900`, opaque -- deliberately blocks the hero's glow
+  for a "calmer, cleaner" feel), footer `#0a0f1c` (deepest, closing
+  tone). Added `overflow-x: hidden` to `.app-shell[data-landing]` only,
+  since the viewport-width breakout can introduce a few px of horizontal
+  overflow in browsers where the scrollbar eats into `100vw`.
+
+Verified: `npm test` (51/51, unchanged -- no test asserts on hero/nav
+markup or styling), `npm run lint` (clean, same pre-existing unrelated
+warnings), `npm run build`/`check-bundle` (pass), and confirmed in the
+prerendered `dist/index.html` that the original copy ("See my last 30
+days", "— and what it costs you.") survived, the new `app-header__inner`
+wrapper is present (both the real `App.tsx` header and the SSR-only
+duplicate in `entry-server.tsx` needed the same change, or the no-JS
+prerendered shell would've drifted from the client-rendered page), and
+the Inter font-loading `<link>` tags are intact after prerendering.
+
+Not yet done: pushed to `claude/zen-archimedes-26lz8o` (not merged to
+`main`), so "Stable beta deploy verified" is still open, same situation
+as OA-86's latest fix -- left as In Progress in Jira rather than Done.
+No real-browser visual check was possible in this sandbox (same limit
+noted on OA-82/85/86); the gradient-text/background-band CSS is standard
+and was eyeballed in the diffed CSS, but hasn't been confirmed to render
+correctly pixel-for-pixel against the mockup in an actual browser.
 
 **OA-86** ("Restore original multi-day heat map inside the tighter
 comparison layout") -- first pass (see superseded entry above) audited

@@ -40,29 +40,31 @@ function App() {
     <OctopusConnectionProvider>
       <div className="app-shell" data-landing={isLandingRoute || undefined}>
         <header className="app-header">
-          <NavLink to="/" className="app-header__brand">
-            <BrandMark />
-          </NavLink>
-          <nav className="app-header__nav">
-            <NavLink to="/" end>
-              Home
+          <div className="app-header__inner">
+            <NavLink to="/" className="app-header__brand">
+              <BrandMark />
             </NavLink>
-            {loading ? null : user ? (
-              <>
-                <NavLink to="/actual">Actual</NavLink>
-                <NavLink to="/compare">Compare</NavLink>
-                <NavLink to="/optimised">Optimised</NavLink>
-                <NavLink to="/appliances">Appliances</NavLink>
-                <NavLink to="/savings">My Savings</NavLink>
-                <NavLink to="/account">Account</NavLink>
-                <button type="button" className="app-header__signout" onClick={() => logout()}>
-                  Sign out
-                </button>
-              </>
-            ) : (
-              <NavLink to="/login">Sign in</NavLink>
-            )}
-          </nav>
+            <nav className="app-header__nav">
+              <NavLink to="/" end>
+                Home
+              </NavLink>
+              {loading ? null : user ? (
+                <>
+                  <NavLink to="/actual">Actual</NavLink>
+                  <NavLink to="/compare">Compare</NavLink>
+                  <NavLink to="/optimised">Optimised</NavLink>
+                  <NavLink to="/appliances">Appliances</NavLink>
+                  <NavLink to="/savings">My Savings</NavLink>
+                  <NavLink to="/account">Account</NavLink>
+                  <button type="button" className="app-header__signout" onClick={() => logout()}>
+                    Sign out
+                  </button>
+                </>
+              ) : (
+                <NavLink to="/login">Sign in</NavLink>
+              )}
+            </nav>
+          </div>
         </header>
 
         <main className="app-main">
