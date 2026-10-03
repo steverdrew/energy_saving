@@ -92,12 +92,13 @@ function LandingDemo() {
   }
 
   return (
-    // OA-92: the hero's "See how it works" CTA jumps here via a plain
-    // #comparison-demo anchor -- tabIndex={-1} makes the section itself
-    // programmatically focusable so the browser's native anchor
-    // activation also moves keyboard/AT focus into this section, not
-    // just the viewport, "ensuring the comparison lands clearly in
-    // view" rather than only scrolling past it.
+    // OA-92: the hero's "See how it works" CTA jumps here (#comparison-
+    // demo) -- tabIndex={-1} makes the section programmatically
+    // focusable (sections aren't by default) so LandingPage.tsx's click
+    // handler can call .focus({preventScroll: true}) on it after
+    // scrolling, "ensuring the comparison lands clearly in view" without
+    // triggering a second, uncoordinated scroll (see that handler's own
+    // comment for why a second scroll was the actual bug).
     <section
       className="landing-demo landing-section-band"
       id="comparison-demo"

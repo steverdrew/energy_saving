@@ -16,6 +16,23 @@
   background: rgba(15, 23, 42, 0.4);
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
+  /* OA-92: the hero's "See how it works" CTA jumps to #comparison-demo
+     (this section). `.app-header` is `position: sticky` within
+     `.app-shell`'s own scroll container (App.css), so without this, the
+     section's top -- including the eyebrow line above the tabs -- lands
+     underneath the sticky header instead of below it. `scrollIntoView`
+     (LandingPage.tsx's click handler, and any native/no-JS/keyboard
+     anchor jump) respects scroll-margin-top natively, so one CSS value
+     covers both paths; it just needs to clear the header, not be
+     pixel-exact. The header wraps onto two rows below ~640px
+     (brand/badge row + nav row), hence the taller mobile value. */
+  scroll-margin-top: 150px;
+}
+
+@media (min-width: 640px) {
+  .landing-demo {
+    scroll-margin-top: 90px;
+  }
 }
 
 /* OA-83 (second pass): no standalone section title -- the ticket's own

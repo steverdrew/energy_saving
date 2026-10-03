@@ -1,6 +1,32 @@
+import type { MouseEvent } from 'react'
 import LandingDemo from '../components/LandingDemo'
 import PublicFooter from '../components/PublicFooter'
 import './LandingPage.css'
+
+/**
+ * OA-92 (fix): `.app-shell[data-landing]` is itself the scrolling
+ * container, not `window` -- its `overflow-x: hidden` (App.css) forces
+ * `overflow-y: auto` per the CSS spec ("if one of overflow-x/-y is
+ * visible and the other isn't, the visible one computes to auto"). A
+ * plain `<a href="#comparison-demo">` relying on the browser's native
+ * fragment-scroll plus `tabIndex={-1}`'s implicit focus-scroll actually
+ * triggered two separate scrolls that landed ~60px (exactly the sticky
+ * header's height) past the section's top, hiding its eyebrow line
+ * under the header instead of revealing it below. Handling the click
+ * directly removes that ambiguity: one scrollIntoView call against
+ * whichever element the target actually sits in, then focus with
+ * `preventScroll` so moving keyboard/AT focus there can't trigger a
+ * second, uncoordinated scroll.
+ */
+function handleSeeHowItWorksClick(event: MouseEvent<HTMLAnchorElement>) {
+  const target = document.getElementById('comparison-demo')
+  if (!target) return
+  event.preventDefault()
+
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  target.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' })
+  target.focus({ preventScroll: true })
+}
 
 function LandingPage() {
   return (
@@ -36,13 +62,10 @@ function LandingPage() {
         {/* OA-92: hero CTA starts the explanatory journey (Hero -> See how
             it works -> Interactive comparison -> Sign up free) -- an
             in-page jump to the comparison section below, not a route
-            change. Plain anchor + CSS `scroll-behavior: smooth` (gated by
-            prefers-reduced-motion in LandingPage.css) rather than a JS
-            scrollIntoView call, so it still works with JS disabled and
-            needs no extra event handler. #comparison-demo is tabIndex={-1}
-            (LandingDemo.tsx) so a click also moves keyboard/AT focus
-            there, not just the viewport. */}
-        <a href="#comparison-demo" className="landing-hero__cta">
+            change. href="#comparison-demo" is the no-JS/keyboard-default
+            fallback; handleSeeHowItWorksClick takes over for a real click
+            to avoid the scroll container mismatch described there. */}
+        <a href="#comparison-demo" className="landing-hero__cta" onClick={handleSeeHowItWorksClick}>
           See how it works
         </a>
       </section>

@@ -128,8 +128,20 @@
      viewport width while their own content still centers at the normal
      max-width -- which can introduce a few pixels of horizontal overflow
      in browsers where the scrollbar eats into 100vw. Scoped to landing
-     only so it never masks a real horizontal-overflow bug elsewhere. */
+     only so it never masks a real horizontal-overflow bug elsewhere.
+     OA-92: setting overflow-x here, with overflow-y left unset, makes
+     this element itself the scrolling container per the CSS spec ("if
+     one axis is visible and the other isn't, the visible one computes
+     to auto") -- window.scrollY stays 0 while this div scrolls
+     internally. The hero's "See how it works" anchor jump (LandingPage/
+     LandingDemo) targets this container, not window/html. */
   overflow-x: hidden;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .app-shell[data-landing] {
+    scroll-behavior: smooth;
+  }
 }
 
 .app-shell[data-landing]::before {
