@@ -129,6 +129,16 @@ function formatPenceCompact(pence: number): string {
   return rounded < 100 ? `${rounded}p` : formatGbp(rounded)
 }
 
+// OA-152: "£51 tariff saving" / "+ £42 timing saving" -- the cumulative
+// hero's own breakdown rows are deliberately whole-pound, not `formatGbp`'s
+// usual pence precision, matching the ticket's own worked example. The
+// headline figure above it still uses `formatGbp`'s pence precision via
+// `describeAnnualOutcomeHeadline` (unchanged), so this is only for the two
+// quieter rows underneath it.
+function formatGbpWhole(pence: number): string {
+  return `£${Math.round(Math.abs(pence) / 100)}`
+}
+
 // OA-136 (second pass): "14p less/day"/"5p more/day" -- now the
 // *secondary* daily-equivalent line (the annual figure below is the
 // dominant headline). Omitted entirely by the caller once the difference
@@ -656,19 +666,30 @@ function LandingDemo() {
       </div>
     )
   } else if (tariffHasTimingSavingOpportunity) {
-    // OA-137: a genuine timing-saving opportunity exists under the chosen
-    // tariff's real pricing structure -- the existing auto-optimise/Reset
-    // behaviour, unchanged.
-    questionHeading = 'What could you save by moving flexible use?'
-    supportingCopy = 'Shift only the things that can realistically move.'
-    // OA-153: "make Optimise explicitly cumulative" -- `tariffAnnualSavingPence`
-    // is the exact same canonical figure Compare's own hero derives
-    // (`chosenEntry.annualDifferencePence`, OA-146's rounded-once value),
-    // negated so a saving reads positive here the same way the timing
-    // figures already do. It's constant through the 1->2 transition
-    // (already "banked" by the time Optimise is reached); only the timing
-    // portion animates in via `optFrac`, so the hero visibly grows from
-    // "tariff saving alone" to "tariff + timing" as the scrubber arrives.
+    // OA-152: "turn Tab 3 into a simple cumulative payoff screen" -- new
+    // heading naming the total directly, replacing OA-153's "what could
+    // you save by moving flexible use" framing (which undersold this as a
+    // timing-only question when the hero below it is now a tariff+timing
+    // total). The one-line "by switching to..." explanation the ticket
+    // asks for is folded into the supporting copy itself (not a separate
+    // `explanation` block, which renders below the chart) so it actually
+    // sits with the heading on the left -- this also fully replaces the
+    // old top-right tariff-context badge, which is removed entirely.
+    questionHeading = 'What could you save in total?'
+    supportingCopy = (
+      <>
+        Your tariff saving, plus what you could save by moving flexible use. By switching to{' '}
+        {tariffContextLabel(chosenTariffId)} and moving flexible use to cheaper practical times.
+      </>
+    )
+    // OA-153: `tariffAnnualSavingPence` is the exact same canonical figure
+    // Compare's own hero derives (`chosenEntry.annualDifferencePence`,
+    // OA-146's rounded-once value), negated so a saving reads positive
+    // here the same way the timing figures already do. It's constant
+    // through the 1->2 transition (already "banked" by the time Optimise
+    // is reached); only the timing portion animates in via `optFrac`, so
+    // the hero visibly grows from "tariff saving alone" to "tariff +
+    // timing" as the scrubber arrives.
     const chosenEntry = fixture.tariffComparison.find((entry) => entry.tariffId === chosenTariffId)!
     const tariffAnnualSavingPence = -chosenEntry.annualDifferencePence
     const annualSavingPence = lerp(0, fixture.projection.projectedAnnualSavingPence, optFrac)
@@ -676,76 +697,51 @@ function LandingDemo() {
     const dailySavingPence = lerp(0, fixture.timingSavingPence, optFrac)
     const totalAnnualSavingPence = tariffAnnualSavingPence + annualSavingPence
 
-    // OA-153: reuses Compare's own `__annual-hero` markup/styling
+    // OA-152/OA-153: reuses Compare's own `__annual-hero` markup/styling
     // (LandingTimeProfile.css) rather than a parallel implementation --
-    // same card, same `data-direction` tinting, just a cumulative figure
-    // and a breakdown row instead of a tariff-vs-tariff one.
+    // same card, same `data-direction` tinting. OA-152 trims the card's
+    // own content down to just the total and a two-line tariff/timing
+    // breakdown ("reduce the breakdown to tariff saving + timing saving")
+    // -- the tariff-vs-tariff context rows OA-153 put inside the card move
+    // to the supporting copy above, and the monthly/daily/standing-charge
+    // detail move into the disclosure below.
     resultLabel = undefined
     const direction = Math.round(totalAnnualSavingPence) === 0 ? 'neutral' : totalAnnualSavingPence > 0 ? 'save' : 'cost'
     result = (
-      <span className="landing-time-profile__annual-hero" data-direction={direction}>
+      <span className="landing-time-profile__annual-hero landing-time-profile__annual-hero--compact" data-direction={direction}>
         <strong className="landing-time-profile__annual-hero-figure">
           {describeAnnualOutcomeHeadline(totalAnnualSavingPence)}
         </strong>
-        <span className="landing-time-profile__compare-row">{tariffContextLabel(chosenTariffId)}</span>
-        <span className="landing-time-profile__compare-row">vs {tariffContextLabel(currentTariffId)}</span>
-        {/* OA-153: the explicit "tariff + timing = total" breakdown the
-            ticket asks for -- a clearly-labelled extra layer, not folded
-            silently into the headline figure. */}
         <span className="landing-time-profile__annual-hero-daily">
-          {formatGbp(Math.abs(tariffAnnualSavingPence))} tariff saving + {formatGbp(Math.abs(annualSavingPence))} timing
-          saving
+          {formatGbpWhole(tariffAnnualSavingPence)} tariff saving
+          <br />+ {formatGbpWhole(annualSavingPence)} timing saving
         </span>
       </span>
     )
-    // OA-126: "do not present the standing charge as part of the
-    // shiftable/optimisable amount" -- explicit here, since Optimise's
-    // result is a saving rather than a daily cost, so the generic "+
-    // standing charge" note (as if it were an add-on cost) would read
-    // oddly; this stage instead states the standing charge is untouched.
-    standingChargeNote = 'Standing charge unaffected — never part of this saving'
-
-    // OA-146/OA-153: `monthlySavingPence` is derived from the same
-    // canonical `projectedAnnualSavingPence` the breakdown row above
-    // already shows (annual/12, see `buildEventProjection`), so this line
-    // and the headline always reconcile; the tariff portion is added on
-    // the same monthly basis (`tariffAnnualSavingPence / 12`) so the
-    // *total* monthly figure here reconciles with the *total* annual
-    // headline too, not just the timing slice of it. `dailySavingPence`
-    // (`fixture.timingSavingPence`) is a genuinely different measure --
-    // today's example day's actual before/after cost, not an equivalent
-    // daily rate for the annual/monthly recurrence projection above (see
-    // the "do not simply calculate today's saving x 365" comment on
-    // `WEEKS_PER_YEAR` in landingDemoFixture.ts) -- so it's labelled and
-    // explained on its own line, in the same quiet `payoff-caveat`
-    // treatment as the other secondary caveats, rather than grouped next
-    // to the monthly figure as if one annualises into the other.
-    const totalMonthlySavingPence = tariffAnnualSavingPence / 12 + monthlySavingPence
-    payoff = (
-      <>
-        <span className="landing-time-profile__payoff-detail">
-          ≈ {formatGbp(Math.abs(totalMonthlySavingPence))}/month total, at the assumed cycle frequency
-        </span>
-        <span className="landing-time-profile__payoff-caveat">
-          Today's example day alone saves {formatGbp(Math.abs(dailySavingPence))} from timing — a separate, single-day
-          figure, not this estimate's daily rate.
-        </span>
-      </>
-    )
-
-    // OA-112: every secondary detail (methodology, standing-charge
-    // treatment, frequency/region/variance caveats) collapses into one
-    // quiet, collapsed-by-default disclosure -- replaces OA-108's
-    // always-visible "How we calculated it" paragraph plus its nested
-    // "View assumptions" disclosure with a single one, so the card goes
-    // straight from the result/controls into the chart.
+    standingChargeNote = undefined
+    payoff = undefined
+    // OA-152: "move caveats out of the primary view" -- the monthly/daily/
+    // standing-charge detail OA-153 put directly under the hero card now
+    // lives here instead, collapsed by default, alongside the existing
+    // methodology bullets. OA-146's own reconciliation (monthly derives
+    // from the same total the hero shows; today's figure is labelled as a
+    // separate single-day measure) is unchanged, just relocated.
     explanation = (
       <details className="landing-demo__assumptions">
         <summary>How we calculated this</summary>
         <ul>
+          <li>
+            ≈ {formatGbp(Math.abs(tariffAnnualSavingPence / 12 + monthlySavingPence))}/month total, at the assumed cycle
+            frequency.
+          </li>
+          <li>
+            Today's example day alone saves {formatGbp(Math.abs(dailySavingPence))} from timing — a separate, single-day
+            figure, not this estimate's daily rate.
+          </li>
+          <li>Standing charge unaffected — never part of this saving.</li>
           <li>Same household events shown in Baseline and Compare, with each event&rsquo;s duration and kWh unchanged.</li>
           <li>Only loads that can realistically shift move — each one respects its own timing window and any dependency on another event.</li>
-          <li>The saving is simply the original schedule&rsquo;s cost minus the optimised schedule&rsquo;s cost.</li>
+          <li>The timing saving is simply the original schedule&rsquo;s cost minus the optimised schedule&rsquo;s cost.</li>
           <li>Figures are usage cost only — the standing charge doesn&rsquo;t vary by tariff or timing, so it&rsquo;s excluded.</li>
           <li>Illustrative example frequency — how often each load actually runs is a documented assumption, not your own usage.</li>
           <li>
@@ -755,54 +751,62 @@ function LandingDemo() {
         </ul>
       </details>
     )
-
-    // OA-137: "Reset"/"Optimise" removed as top-level actions -- arriving
-    // at Optimise already auto-optimises on its own (OA-117), so a manual
-    // "Optimise" button was always redundant, and the ticket is explicit
-    // that Reset should not remain a primary top-level action here either.
-    // What's left is exactly the tariff-context label the no-opportunity
-    // branch below already uses -- both branches now share the same quiet,
-    // button-free `controls`.
-    controls = <span className="landing-time-profile__tariff-context">{tariffContextLabel(chosenTariffId)}</span>
+    // OA-152: the top-right tariff-context badge is removed -- the
+    // supporting copy above already names the chosen tariff, so a second,
+    // redundant "Smart · Agile" label floating in the corner no longer
+    // earns its place.
+    controls = undefined
   } else {
-    // OA-137/OA-153: a Smart tariff is selected (Optimise is otherwise
-    // unreachable -- see `canReachOptimiseStage`), but it has no genuine
-    // timing-saving opportunity under its real pricing structure -- a
-    // factual, neutral result rather than manufacturing a saving figure of
-    // ~£0 dressed up as an "aha moment". The chart shows the household's
-    // real, unmoved schedule (`optimiseEventStartSlots` is never
-    // auto-populated with a trial schedule that didn't clear the
-    // threshold -- see `computeEffectiveOptimisedStartSlots`). OA-153:
-    // "total collapses to the tariff-only saving, not £0 or an error" --
-    // this still uses the same `__annual-hero` card as the opportunity
-    // branch above, with the timing layer at zero and explicitly labelled
-    // as such, rather than swapping to a different, plainer result shape.
-    questionHeading = 'What could you save by moving flexible use?'
-    supportingCopy = 'Shift only the things that can realistically move.'
+    // OA-137/OA-152/OA-153: a Smart tariff is selected (Optimise is
+    // otherwise unreachable -- see `canReachOptimiseStage`), but it has no
+    // genuine timing-saving opportunity under its real pricing structure
+    // -- a factual, neutral result rather than manufacturing a saving
+    // figure of ~£0 dressed up as an "aha moment". The chart shows the
+    // household's real, unmoved schedule (`optimiseEventStartSlots` is
+    // never auto-populated with a trial schedule that didn't clear the
+    // threshold -- see `computeEffectiveOptimisedStartSlots`). OA-152:
+    // "do not manufacture extra value" -- still the same compact
+    // `__annual-hero` card as the opportunity branch above, with the
+    // timing layer explicitly at £0 rather than a different, plainer
+    // result shape.
+    questionHeading = 'What could you save in total?'
     const chosenEntry = fixture.tariffComparison.find((entry) => entry.tariffId === chosenTariffId)!
     const tariffAnnualSavingPence = -chosenEntry.annualDifferencePence
+    supportingCopy = (
+      <>
+        Your tariff saving, plus what you could save by moving flexible use. By switching to{' '}
+        {tariffContextLabel(chosenTariffId)} — your flexible use is already close to the cheaper periods, so there&rsquo;s
+        no further timing saving available right now.
+      </>
+    )
     resultLabel = undefined
     const direction = Math.round(tariffAnnualSavingPence) === 0 ? 'neutral' : tariffAnnualSavingPence > 0 ? 'save' : 'cost'
     result = (
-      <span className="landing-time-profile__annual-hero" data-direction={direction}>
+      <span className="landing-time-profile__annual-hero landing-time-profile__annual-hero--compact" data-direction={direction}>
         <strong className="landing-time-profile__annual-hero-figure">
           {describeAnnualOutcomeHeadline(tariffAnnualSavingPence)}
         </strong>
-        <span className="landing-time-profile__compare-row">{tariffContextLabel(chosenTariffId)}</span>
-        <span className="landing-time-profile__compare-row">vs {tariffContextLabel(currentTariffId)}</span>
         <span className="landing-time-profile__annual-hero-daily">
-          {formatGbp(Math.abs(tariffAnnualSavingPence))} tariff saving + £0.00 timing saving
+          {formatGbpWhole(tariffAnnualSavingPence)} tariff saving
+          <br />+ £0 timing saving
         </span>
       </span>
     )
     standingChargeNote = undefined
-    payoff = (
-      <span className="landing-time-profile__payoff-detail">
-        Your flexible use is already close to the cheaper periods — no further timing saving available.
-      </span>
+    payoff = undefined
+    explanation = (
+      <details className="landing-demo__assumptions">
+        <summary>How we calculated this</summary>
+        <ul>
+          <li>Standing charge unaffected — never part of this saving.</li>
+          <li>
+            Your actual saving will vary with what you use, how often, your region and real {TARIFF_SHORT_LABELS[chosenTariffId]} prices on the
+            day.
+          </li>
+        </ul>
+      </details>
     )
-    explanation = undefined
-    controls = <span className="landing-time-profile__tariff-context">{tariffContextLabel(chosenTariffId)}</span>
+    controls = undefined
   }
 
   // OA-108: "per-event feedback should appear contextually... in/near the
@@ -957,13 +961,16 @@ function LandingDemo() {
           standingChargeNote={standingChargeNote}
           controls={controls}
           primarySelector={primarySelector}
-          // OA-143/OA-136: "Tab 1 and Tab 2 should share the same
-          // high-level layout" -- left = choice, right = outcome, for both
-          // Baseline and Compare. OA-137: Optimise now uses the same
-          // two-column grammar too, but inverted -- the headline saving is
-          // dominant *left*-hand content, with only the quiet tariff
-          // context on the right.
-          splitLayout={nearestStage === 'optimise' ? 'context-right' : 'result-right'}
+          // OA-143/OA-136/OA-152: "Tab 1, 2 and 3 should share the same
+          // high-level layout" -- left = choice/explanation, right =
+          // outcome, for all three stages now. OA-152 moved Optimise off
+          // OA-137's inverted "context-right" arrangement (headline saving
+          // dominant on the left) to this same `'result-right'` grammar, so
+          // its hero card sits in the same compact right-hand column
+          // Compare's own hero already uses, "reusing the same actual
+          // result-card component as Tab 2" rather than a mirrored layout
+          // of it.
+          splitLayout="result-right"
           stepKey={nearestStage}
           // OA-99/OA-101/OA-127/OA-135: the 16:00-19:00 structural peak is
           // a documented feature of Agile's pricing specifically -- shown

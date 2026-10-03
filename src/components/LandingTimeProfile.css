@@ -458,6 +458,15 @@
   background: rgba(255, 255, 255, 0.04);
 }
 
+/* OA-152: Optimise's own hero -- "a smaller, more deliberate hero result
+   card rather than a wide content panel", trimmed to just the total
+   figure and its two-line breakdown (no tariff-vs-tariff rows). Caps the
+   card's own width within the already-compact `__split-right` column so
+   it doesn't stretch to fill it the way Compare's richer card does. */
+.landing-time-profile__annual-hero--compact {
+  width: 100%;
+}
+
 /* OA-136 (second pass): the dominant figure on Tab 2 -- deliberately
    larger than every other stage's `--demo-primary-metric-size` result,
    since this ticket is explicit that the annual outcome "is the reason

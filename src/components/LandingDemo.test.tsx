@@ -200,7 +200,7 @@ describe('LandingDemo', () => {
       expect(hero.querySelector('.landing-time-profile__annual-hero-daily')).toHaveTextContent(/14p less\/day/)
 
       await user.click(jumpToStage('Optimise'))
-      expect(container.querySelector('.landing-time-profile__tariff-context')).toHaveTextContent('Smart · Agile')
+      expect(screen.getByText(/by switching to smart · agile/i)).toBeInTheDocument()
       expect(container.querySelector('.landing-time-profile__annual-hero-figure')).toHaveTextContent(/save about £[\d.]+\/year/i)
     })
 
@@ -284,7 +284,10 @@ describe('LandingDemo', () => {
 
     expect(screen.queryByRole('group', { name: /choose a tariff type to compare/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('group', { name: /choose a smart tariff/i })).not.toBeInTheDocument()
-    expect(container.querySelector('.landing-time-profile__tariff-context')).toHaveTextContent('Smart · Agile')
+    // OA-152: the old top-right tariff-context badge is gone -- the chosen
+    // tariff is now named in the supporting copy instead.
+    expect(container.querySelector('.landing-time-profile__tariff-context')).not.toBeInTheDocument()
+    expect(screen.getByText(/by switching to smart · agile/i)).toBeInTheDocument()
   })
 
   // OA-117/OA-136: "Fixed/Flexible comparison selections cannot advance
@@ -672,7 +675,7 @@ describe('LandingDemo', () => {
     // Optimise always auto-optimises on its own, so no manual controls are
     // needed; only the quiet tariff-context label remains, with the chart
     // directly below.
-    it('shows no Reset/Optimise buttons, only the quiet tariff context, with the chart directly below', async () => {
+    it('shows no Reset/Optimise buttons and no tariff-context badge, with the chart directly below', async () => {
       const user = userEvent.setup()
       const { container } = renderDemo()
       await switchToSmartAgile(user)
@@ -681,7 +684,9 @@ describe('LandingDemo', () => {
       expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Optimise all' })).not.toBeInTheDocument()
       expect(container.querySelectorAll('.landing-time-profile__controls-button')).toHaveLength(0)
-      expect(container.querySelector('.landing-time-profile__tariff-context')).toHaveTextContent('Smart · Agile')
+      // OA-152: the top-right tariff-context badge is removed entirely --
+      // the chosen tariff is named in the supporting copy instead.
+      expect(container.querySelector('.landing-time-profile__tariff-context')).not.toBeInTheDocument()
     })
 
     // OA-108: "remove the permanent, always-visible verbose per-appliance
