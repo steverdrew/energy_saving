@@ -2,12 +2,15 @@ import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   buildLandingDemoFixture,
+  clampEventStartSlot,
   LANDING_DEMO_DATA_SOURCES,
+  LANDING_DEMO_EVENTS,
   OFGEM_PRICE_CAP_STANDING_CHARGE_PENCE_PER_DAY,
   type LandingDemoFixture,
 } from '../domain/landingDemoFixture'
 import { formatGbp } from '../format'
-import LandingTimeProfile from './LandingTimeProfile'
+import { formatSlotTime } from './heatMapMath'
+import LandingTimeProfile, { type LandingTimeProfileEventOverlay } from './LandingTimeProfile'
 import './LandingDemo.css'
 
 // OA-99: shown on every tab, identically -- the headline £ figure is
@@ -52,6 +55,25 @@ function describeTimingPotential(pence: number): string {
   return 'no further difference from timing'
 }
 
+// OA-104: "the longer-term number should carry more visual weight than a
+// small daily amount" -- the headline of the new payoff block. Handles the
+// non-positive cases honestly rather than ever reading "save -£3/year".
+function describeAnnualPayoff(pence: number): string {
+  if (pence > 0) return `You could save around ${formatGbp(pence)}/year by shifting these loads`
+  if (pence < 0) return `This timing move would cost around ${formatGbp(-pence)}/year more, at the assumed frequency`
+  return 'No extra yearly saving from this timing, at the assumed frequency'
+}
+
+// OA-104: the per-occurrence line in the worked example format the ticket
+// gives ("Saves 18p this cycle"), kept separate from the household-level
+// `describeTimingPotential` above since this is about one cycle, not the
+// whole day's figure (identical today, since there's one flexible event).
+function describeSavingPerOccurrence(pence: number): string {
+  if (pence > 0) return `Saves ${formatGbp(pence)} this cycle`
+  if (pence < 0) return `Costs ${formatGbp(-pence)} more this cycle`
+  return 'No saving this cycle'
+}
+
 /**
  * OA-77/OA-80/OA-83: logged-out, interactive Baseline -> Compare tariff ->
  * Optimise timing walkthrough. All figures come from
@@ -78,9 +100,23 @@ function describeTimingPotential(pence: number): string {
  */
 function LandingDemo() {
   const [step, setStep] = useState<DemoStepId>('baseline')
-  const fixture: LandingDemoFixture = useMemo(() => buildLandingDemoFixture(), [])
+  // OA-103/105: each household event's position on the Optimise tab is
+  // live, user-movable state -- lifted here (rather than into
+  // LandingTimeProfile) so it persists across tab switches and drives the
+  // fixture rebuild below. Keyed by event id; an event with no entry here
+  // starts from its actual (Baseline/Compare) slot -- OA-105's "no event
+  // appears for the first time on Tab 3".
+  const [optimiseEventStartSlots, setOptimiseEventStartSlots] = useState<Record<string, number>>({})
+  const fixture: LandingDemoFixture = useMemo(
+    () => buildLandingDemoFixture(optimiseEventStartSlots),
+    [optimiseEventStartSlots],
+  )
   const current = fixture[step]
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
+
+  function moveEvent(eventId: string, startSlot: number) {
+    setOptimiseEventStartSlots((prev) => ({ ...prev, [eventId]: clampEventStartSlot(eventId, startSlot) }))
+  }
 
   function selectStep(index: number) {
     const clamped = (index + STEP_ORDER.length) % STEP_ORDER.length
@@ -101,6 +137,8 @@ function LandingDemo() {
   let summary: React.ReactNode
   let explanation: string
   let caveat: string | undefined
+  let payoff: React.ReactNode
+  let eventDetail: React.ReactNode
 
   if (step === 'baseline') {
     summary = (
@@ -141,15 +179,80 @@ function LandingDemo() {
         </strong>
       </>
     )
-    // OA-102: plain language for *what* moves (identify flexible usage,
-    // move only that, everything else stays put) plus the "same tariff /
-    // same total energy / better timing" reinforcement -- not a claim
-    // that the whole household's load was rearranged.
+    // OA-102/105: plain language for *what* moves (identify flexible
+    // usage, move only that, everything else stays put) plus the "same
+    // tariff / same total energy / better timing" reinforcement -- not a
+    // claim that the whole household's load was rearranged. OA-105: starts
+    // from the exact same events/positions as Baseline/Compare -- nothing
+    // has moved yet, so the invitation to drag is the active instruction,
+    // not just a hint alongside an already-staged example.
     explanation =
-      'We identify energy use that can realistically move — like a dishwasher cycle — and shift it to a cheaper half-hour. Everything else stays where it was: same tariff, same total energy, just better timing.'
+      'We identify energy use that can realistically move — like a dishwasher or washing machine cycle — and shift it to a cheaper half-hour. Everything else stays where it was: same tariff, same total energy, just better timing. Drag either event in the chart below into a cheaper half-hour to see the saving appear and update live.'
     caveat =
       'Illustrative optimisation — your actual opportunities depend on what you use, when it can move, your region and your actual Agile prices.'
+
+    // OA-104/105: the household-level annual/monthly projection -- summed
+    // across every household event's own recurrence assumption
+    // (fixture.projection), never a naive "today's saving x 365".
+    // Recomputes live as any event moves, since `fixture` is rebuilt from
+    // `optimiseEventStartSlots`.
+    const { projection } = fixture
+    payoff = (
+      <>
+        <span className="landing-time-profile__payoff-headline">
+          {describeAnnualPayoff(projection.projectedAnnualSavingPence)}
+        </span>
+        <span className="landing-time-profile__payoff-detail">
+          {formatGbp(Math.abs(projection.dailyPotentialSavingPence))} today · ≈{' '}
+          {formatGbp(Math.abs(projection.projectedMonthlySavingPence))}/month
+        </span>
+        {/* OA-104: "keep this secondary but discoverable" -- placed right
+            under the projection it qualifies, not buried in the general
+            Optimise caveat above/below. */}
+        <span className="landing-time-profile__payoff-caveat">
+          Estimated from the example household&rsquo;s assumed usage frequency. Your actual saving will depend on what
+          you use, how often, when it can move, your region and Agile prices.
+        </span>
+      </>
+    )
+
+    // OA-104/105: "event-level projection can remain secondary to the
+    // overall household projection" -- one line per household event,
+    // inspectable but subordinate to `payoff` above.
+    eventDetail = (
+      <>
+        {projection.events.map((ev) => (
+          <span key={ev.id} className="landing-time-profile__event-detail-row">
+            {ev.label} moved to {formatSlotTime(fixture.optimise.day.slots[ev.currentStartSlot].startsAt)}
+            <br />
+            {describeSavingPerOccurrence(ev.savingPerOccurrencePence)}
+            <br />≈ {formatGbp(Math.abs(ev.projectedAnnualSavingPence))}/year at {ev.occurrencesPerWeek} cycles/week
+          </span>
+        ))}
+      </>
+    )
   }
+
+  // OA-105: the exact same shared events, in the exact same positions, on
+  // every tab -- Baseline/Compare always show each event's real
+  // (actualStartSlot) position as a fixed annotation; only Optimise makes
+  // them draggable, starting from that same position until moved.
+  const eventOverlays: LandingTimeProfileEventOverlay[] = LANDING_DEMO_EVENTS.map((event) => {
+    const projected = fixture.projection.events.find((e) => e.id === event.id)
+    if (step !== 'optimise') {
+      return { id: event.id, label: event.label, startSlot: event.actualStartSlot, slotCount: event.slotCount, movable: false }
+    }
+    return {
+      id: event.id,
+      label: event.label,
+      startSlot: projected?.currentStartSlot ?? event.actualStartSlot,
+      slotCount: event.slotCount,
+      movable: true,
+      minStartSlot: event.validStartSlotRange.min,
+      maxStartSlot: event.validStartSlotRange.max,
+      onMove: (startSlot) => moveEvent(event.id, startSlot),
+    }
+  })
 
   return (
     // OA-92: the hero's "See how it works" CTA jumps here (#comparison-
@@ -252,12 +355,17 @@ function LandingDemo() {
           explanation={explanation}
           costNote={COST_BASIS_NOTE}
           caveat={caveat}
+          payoff={payoff}
+          eventDetail={eventDetail}
           stepKey={step}
           // OA-99/OA-101: the 16:00-19:00 structural peak is a documented
           // feature of Agile's pricing specifically -- only Compare/
           // Optimise are actually on Agile (see LandingTimeProfile.tsx's
           // prop doc).
           showStructuralPeakAnnotation={step !== 'baseline'}
+          // OA-105: the same shared events on every tab -- fixed
+          // annotations on Baseline/Compare, draggable overlays on Optimise.
+          events={eventOverlays}
         />
       </div>
 

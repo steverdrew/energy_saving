@@ -25,12 +25,52 @@ const DEMO_DAY_DATES = ['2026-06-12', '2026-06-13', '2026-06-14', '2026-06-15']
 const OFGEM_TDCV_ELECTRICITY_KWH_PER_YEAR = 2500
 const TYPICAL_DAILY_KWH = OFGEM_TDCV_ELECTRICITY_KWH_PER_YEAR / 365 // ~6.85 kWh/day
 
-// Octopus Agile's own "a dishwasher cycle" framing for the flexible load
-// stays a modelled assumption (OA-73/76), not a published figure -- it's
-// the one shape element this demo still has to choose for itself, same
-// as before.
-const FLEXIBLE_LOAD_KWH_PER_SLOT = 0.55 // e.g. a dishwasher cycle, spread over two half-hour slots
-const FLEXIBLE_LOAD_TOTAL_KWH = FLEXIBLE_LOAD_KWH_PER_SLOT * 2
+// OA-105: "Tabs 1, 2 and 3 need to share the same event model" -- one
+// shared set of named, identifiable household events, used unchanged
+// across Baseline/Compare/Optimise, rather than a single appliance
+// invented just for the Optimise tab. Each event's duration/kWh is a
+// modelled assumption (OA-73/76), not a published figure -- that's the
+// one shape element this demo still has to choose for itself. Every
+// half-hour of consumption not claimed by a named event here stays
+// unidentified background/base load (BASE_LOAD_KWH below) -- never
+// silently folded into one of these, per OA-73's "ambiguous usage is
+// never silently treated as shiftable".
+export interface HouseholdEventDefinition {
+  id: string
+  label: string
+  kwhPerSlot: number
+  /** How many contiguous half-hour slots this event occupies -- fixed; moving it changes only which slot(s) it starts at (OA-105: "duration and kWh stay constant"). */
+  slotCount: number
+  /** The slot this event actually ran at -- shown fixed on Baseline/Compare, and Optimise's starting position before any drag (OA-105: "no event appears for the first time on Tab 3"). */
+  actualStartSlot: number
+  /** Per OA-73's valid-time-window rules: a dishwasher has no `requiresAwakeHome` constraint (any half-hour that day); a washing machine does (07:00-23:00 local). */
+  validStartSlotRange: { min: number; max: number }
+  /** OA-104: deterministic, documented recurrence assumption -- not a published figure, not the visitor's own usage. */
+  occurrencesPerWeek: number
+}
+
+export const LANDING_DEMO_EVENTS: readonly HouseholdEventDefinition[] = [
+  {
+    id: 'dishwasher',
+    label: 'Dishwasher cycle',
+    kwhPerSlot: 0.55,
+    slotCount: 2,
+    actualStartSlot: 36, // 18:00-19:00 -- the representative day's most expensive two slots (see AGILE_REPRESENTATIVE_RATE_PENCE below)
+    validStartSlotRange: { min: 0, max: 46 }, // no requiresAwakeHome -- any half-hour that day
+    occurrencesPerWeek: 4,
+  },
+  {
+    id: 'washing_machine',
+    label: 'Washing machine cycle',
+    kwhPerSlot: 0.45,
+    slotCount: 2,
+    actualStartSlot: 14, // 07:00-08:00 -- a plausible morning wash, distinct from the dishwasher's evening slot
+    validStartSlotRange: { min: 14, max: 44 }, // requiresAwakeHome: 07:00-23:00 local (last start that still ends by 23:00)
+    occurrencesPerWeek: 3,
+  },
+]
+
+const TOTAL_EVENTS_KWH = LANDING_DEMO_EVENTS.reduce((sum, e) => sum + e.kwhPerSlot * e.slotCount, 0)
 
 // OA-99: the diurnal *shape* (relative weight per half-hour slot, before
 // scaling) follows the general pattern documented for Elexon's domestic
@@ -58,7 +98,7 @@ const BASE_LOAD_SHAPE: number[] = [
 
 const BASE_LOAD_KWH: number[] = (() => {
   const shapeTotal = BASE_LOAD_SHAPE.reduce((sum, v) => sum + v, 0)
-  const targetBaseTotal = TYPICAL_DAILY_KWH - FLEXIBLE_LOAD_TOTAL_KWH
+  const targetBaseTotal = TYPICAL_DAILY_KWH - TOTAL_EVENTS_KWH
   const scale = targetBaseTotal / shapeTotal
   return BASE_LOAD_SHAPE.map((v) => v * scale)
 })()
@@ -115,18 +155,89 @@ const AGILE_REPRESENTATIVE_RATE_PENCE: number[] = [
   21.651, 19.74, 19.383, 17.283, 18.333, 17.514,
 ]
 
-// These slots were chosen against the real AGILE_REPRESENTATIVE_RATE_PENCE
-// medians above (not re-derived at runtime, so a future fixture rebuild
-// doesn't silently move the story): 36/37 (18:00-19:00, ~35p/kWh) are the
-// two most expensive slots in the representative day, within the
-// 16:00-19:00 structural peak window; 4/5 (02:00-03:00, ~16p/kWh) sit in
-// a cheap overnight window well below that peak.
-const BASELINE_FLEXIBLE_SLOTS = [36, 37] // 18:00-19:00 -- the representative day's most expensive two slots
-const OPTIMISED_FLEXIBLE_SLOTS = [4, 5] // 02:00-03:00 -- a cheap overnight period in the same representative day
+// OA-105: event IDs are opaque strings elsewhere (component props, test
+// fixtures) -- this lookup is the one place that needs to find an event's
+// own definition back from its id.
+function getEvent(id: string): HouseholdEventDefinition {
+  const event = LANDING_DEMO_EVENTS.find((e) => e.id === id)
+  if (!event) throw new Error(`Unknown landing demo event id: ${id}`)
+  return event
+}
 
-function withFlexibleLoad(slotIndices: number[]): number[] {
+/** Snaps a candidate start slot to the half-hour grid and keeps it inside this event's own valid same-day window. */
+export function clampEventStartSlot(eventId: string, startSlot: number): number {
+  const event = getEvent(eventId)
+  const rounded = Math.round(startSlot)
+  return Math.max(event.validStartSlotRange.min, Math.min(event.validStartSlotRange.max, rounded))
+}
+
+function eventCostPence(event: HouseholdEventDefinition, startSlot: number, ratePence: number[]): number {
+  let cost = 0
+  for (let i = 0; i < event.slotCount; i++) cost += event.kwhPerSlot * ratePence[startSlot + i]
+  return cost
+}
+
+// OA-104: "do not simply calculate today's saving x 365" -- a deterministic,
+// explicitly-documented recurrence assumption instead (`occurrencesPerWeek`
+// on each `HouseholdEventDefinition` above). There is no published
+// Ofgem/Elexon figure for "how often does a household run its dishwasher",
+// so these are named as demo assumptions, not implied to be measured.
+const WEEKS_PER_YEAR = 52
+
+/** OA-104/105: the per-event detail needed to inspect and project one household event's opportunity. */
+export interface LandingDemoEventProjection {
+  id: string
+  label: string
+  durationMinutes: number
+  kwh: number
+  currentStartSlot: number
+  validStartSlotRange: { min: number; max: number }
+  /** Saving for this one occurrence, at its current position -- same sign convention as `timingSavingPence` (positive = cheaper). */
+  savingPerOccurrencePence: number
+  occurrencesPerWeek: number
+  projectedMonthlySavingPence: number
+  projectedAnnualSavingPence: number
+}
+
+/** OA-104: the household-level projection -- today's modelled saving plus the recurrence-based monthly/annual estimate it implies, summed across every household event. */
+export interface LandingDemoProjection {
+  dailyPotentialSavingPence: number
+  projectedMonthlySavingPence: number
+  projectedAnnualSavingPence: number
+  events: LandingDemoEventProjection[]
+}
+
+function buildEventProjection(
+  event: HouseholdEventDefinition,
+  currentStartSlot: number,
+  savingPerOccurrencePence: number,
+): LandingDemoEventProjection {
+  const projectedAnnualSavingPence = savingPerOccurrencePence * event.occurrencesPerWeek * WEEKS_PER_YEAR
+  return {
+    id: event.id,
+    label: event.label,
+    durationMinutes: event.slotCount * 30,
+    kwh: event.kwhPerSlot * event.slotCount,
+    currentStartSlot,
+    validStartSlotRange: event.validStartSlotRange,
+    savingPerOccurrencePence,
+    occurrencesPerWeek: event.occurrencesPerWeek,
+    // A calendar year's 12 months don't divide 52 weeks evenly -- deriving
+    // monthly from the annual figure (rather than its own
+    // weeks-per-month x occurrences calculation) keeps monthly x 12
+    // exactly equal to the annual figure shown alongside it.
+    projectedMonthlySavingPence: projectedAnnualSavingPence / 12,
+    projectedAnnualSavingPence,
+  }
+}
+
+/** OA-105: lays every household event's kWh onto the base/background load at the given per-event positions -- the base load plus this is what "named events + residual demand reconcile to the baseline half-hour profile" means. */
+function withEventsAt(positions: Record<string, number>): number[] {
   const usage = [...BASE_LOAD_KWH]
-  for (const i of slotIndices) usage[i] += FLEXIBLE_LOAD_KWH_PER_SLOT
+  for (const event of LANDING_DEMO_EVENTS) {
+    const start = positions[event.id]
+    for (let i = 0; i < event.slotCount; i++) usage[start + i] += event.kwhPerSlot
+  }
   return usage
 }
 
@@ -246,11 +357,28 @@ export interface LandingDemoFixture {
   tariffSwitchSavingPence: number
   /** compare cost minus optimise cost, for the same tariff -- the timing opportunity, kept separate from the above. */
   timingSavingPence: number
+  /** OA-104: today's timing saving projected into a monthly/annual equivalent, from each flexible event's own recurrence assumption -- never a naive "today x 365". */
+  projection: LandingDemoProjection
 }
 
-export function buildLandingDemoFixture(): LandingDemoFixture {
-  const baselineUsage = withFlexibleLoad(BASELINE_FLEXIBLE_SLOTS)
-  const optimisedUsage = withFlexibleLoad(OPTIMISED_FLEXIBLE_SLOTS)
+export function buildLandingDemoFixture(
+  // OA-105: "no event appears for the first time on Tab 3" -- Optimise
+  // starts from the exact same (actualStartSlot) positions as
+  // Baseline/Compare; a caller only needs to pass the events it has
+  // actually dragged. Keyed by event id, not array order, so a partial
+  // override (one event moved) can't accidentally shift the other.
+  optimiseEventStartSlots: Partial<Record<string, number>> = {},
+): LandingDemoFixture {
+  const baselinePositions: Record<string, number> = {}
+  const optimisePositions: Record<string, number> = {}
+  for (const event of LANDING_DEMO_EVENTS) {
+    baselinePositions[event.id] = event.actualStartSlot
+    const requested = optimiseEventStartSlots[event.id] ?? event.actualStartSlot
+    optimisePositions[event.id] = clampEventStartSlot(event.id, requested)
+  }
+
+  const baselineUsage = withEventsAt(baselinePositions)
+  const optimisedUsage = withEventsAt(optimisePositions)
 
   const baselineDays = buildDays(baselineUsage, STANDARD_VARIABLE_RATE_PENCE)
   const compareDays = buildDays(baselineUsage, AGILE_REPRESENTATIVE_RATE_PENCE)
@@ -278,11 +406,31 @@ export function buildLandingDemoFixture(): LandingDemoFixture {
     days: optimiseDays,
   }
 
+  const timingSavingPence = compare.totalCostPence - optimise.totalCostPence
+
+  // OA-105: per-event saving is computed directly from that event's own
+  // before/after cost (never from a shared total divided up), so it's
+  // exact and additive regardless of how many events exist or whether
+  // their slots happen to overlap.
+  const events = LANDING_DEMO_EVENTS.map((event) => {
+    const savingPerOccurrencePence =
+      eventCostPence(event, baselinePositions[event.id], AGILE_REPRESENTATIVE_RATE_PENCE) -
+      eventCostPence(event, optimisePositions[event.id], AGILE_REPRESENTATIVE_RATE_PENCE)
+    return buildEventProjection(event, optimisePositions[event.id], savingPerOccurrencePence)
+  })
+  const projection: LandingDemoProjection = {
+    dailyPotentialSavingPence: timingSavingPence,
+    projectedMonthlySavingPence: events.reduce((sum, e) => sum + e.projectedMonthlySavingPence, 0),
+    projectedAnnualSavingPence: events.reduce((sum, e) => sum + e.projectedAnnualSavingPence, 0),
+    events,
+  }
+
   return {
     baseline,
     compare,
     optimise,
     tariffSwitchSavingPence: baseline.totalCostPence - compare.totalCostPence,
-    timingSavingPence: compare.totalCostPence - optimise.totalCostPence,
+    timingSavingPence,
+    projection,
   }
 }

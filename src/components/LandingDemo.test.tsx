@@ -41,11 +41,15 @@ describe('LandingDemo', () => {
     expect(screen.getByRole('tab', { name: '2. Compare tariff' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: '1. Baseline' })).toHaveAttribute('aria-selected', 'false')
     expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'landing-demo-panel-compare')
-    expect(screen.getByText(/£1\.68/)).toBeInTheDocument()
-    expect(screen.getByText(/£0\.13 less than Standard Variable/)).toBeInTheDocument()
+    expect(screen.getByText(/£1\.65/)).toBeInTheDocument()
+    expect(screen.getByText(/£0\.15 less than Standard Variable/)).toBeInTheDocument()
   })
 
-  it('selects Optimise timing on click, showing the timing-saving figure', async () => {
+  // OA-105: Optimise starts from the exact same event positions as
+  // Baseline/Compare -- nothing has moved yet, so the timing opportunity
+  // starts honestly at zero, same as the real app's "eventsConsidered === 0"
+  // framing, until the visitor actually drags something.
+  it('selects Optimise timing on click, starting with no timing difference since nothing has moved yet', async () => {
     const user = userEvent.setup()
     renderDemo()
 
@@ -53,7 +57,7 @@ describe('LandingDemo', () => {
 
     expect(screen.getByRole('tab', { name: '3. Optimise timing' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'landing-demo-panel-optimise')
-    expect(screen.getByText(/£0\.21 potential saving from timing/)).toBeInTheDocument()
+    expect(screen.getByText(/no further difference from timing/)).toBeInTheDocument()
   })
 
   // OA-102: plain-language explanation of what moves, plus the "same
@@ -171,5 +175,146 @@ describe('LandingDemo', () => {
   it('states the headline figure is usage cost only, on every tab', () => {
     renderDemo()
     expect(screen.getByText(/usage cost only/i)).toBeInTheDocument()
+  })
+
+  // OA-105: the same shared events appear on every tab -- fixed
+  // annotations on Baseline/Compare, draggable overlays on Optimise.
+  describe('shared household events across tabs (OA-105)', () => {
+    it('shows both named events as fixed, non-draggable annotations on Baseline and Compare', async () => {
+      const user = userEvent.setup()
+      renderDemo()
+
+      expect(screen.queryByRole('slider')).not.toBeInTheDocument()
+      expect(screen.getByText(/dishwasher cycle/i)).toBeInTheDocument()
+      expect(screen.getByText(/washing machine cycle/i)).toBeInTheDocument()
+
+      await user.click(screen.getByRole('tab', { name: '2. Compare tariff' }))
+      expect(screen.queryByRole('slider')).not.toBeInTheDocument()
+      expect(screen.getByText(/dishwasher cycle/i)).toBeInTheDocument()
+      expect(screen.getByText(/washing machine cycle/i)).toBeInTheDocument()
+    })
+
+    it('shows both events as draggable sliders, starting at their actual positions, on Optimise', async () => {
+      const user = userEvent.setup()
+      renderDemo()
+      await user.click(screen.getByRole('tab', { name: '3. Optimise timing' }))
+
+      const dishwasher = screen.getByRole('slider', { name: /dishwasher cycle/i })
+      const washingMachine = screen.getByRole('slider', { name: /washing machine cycle/i })
+      // Same actual positions named on Baseline/Compare -- "no event
+      // appears for the first time on Tab 3".
+      expect(dishwasher).toHaveAttribute('aria-valuenow', '36')
+      expect(washingMachine).toHaveAttribute('aria-valuenow', '14')
+    })
+
+    it('invites the visitor to drag an event in the Optimise explanation copy', async () => {
+      const user = userEvent.setup()
+      renderDemo()
+      await user.click(screen.getByRole('tab', { name: '3. Optimise timing' }))
+
+      expect(screen.getByText(/drag either event/i)).toBeInTheDocument()
+    })
+  })
+
+  // OA-103/105: moving an event on the Optimise tab recomputes the live
+  // saving figure, end to end through LandingDemo's lifted state.
+  describe('movable household events (OA-103)', () => {
+    it('updates the potential-saving figure live as an event is moved by keyboard', async () => {
+      const user = userEvent.setup()
+      renderDemo()
+      await user.click(screen.getByRole('tab', { name: '3. Optimise timing' }))
+
+      expect(screen.getByText(/no further difference from timing/)).toBeInTheDocument()
+
+      // Move the dishwasher from its actual, expensive evening slot (18:00)
+      // into a cheap overnight one (02:00) -- 32 half-hours earlier.
+      const slider = screen.getByRole('slider', { name: /dishwasher cycle/i })
+      slider.focus()
+      await user.keyboard('{ArrowLeft}'.repeat(32))
+
+      expect(slider).toHaveAttribute('aria-valuenow', '4')
+      expect(screen.queryByText(/no further difference from timing/)).not.toBeInTheDocument()
+      expect(screen.getByText(/£0\.21 potential saving from timing/)).toBeInTheDocument()
+    })
+
+    it('moves each event independently -- moving one never affects the other', async () => {
+      const user = userEvent.setup()
+      renderDemo()
+      await user.click(screen.getByRole('tab', { name: '3. Optimise timing' }))
+
+      const dishwasher = screen.getByRole('slider', { name: /dishwasher cycle/i })
+      dishwasher.focus()
+      await user.keyboard('{ArrowLeft}'.repeat(3))
+
+      const washingMachine = screen.getByRole('slider', { name: /washing machine cycle/i })
+      expect(dishwasher).toHaveAttribute('aria-valuenow', '33')
+      expect(washingMachine).toHaveAttribute('aria-valuenow', '14')
+    })
+  })
+
+  // OA-104: monthly/annual projection, shown prominently, updating live.
+  describe('monthly/annual projection (OA-104)', () => {
+    it('shows no projected payoff while nothing has moved, only on Optimise', async () => {
+      const user = userEvent.setup()
+      renderDemo()
+
+      expect(screen.queryByText(/you could save around/i)).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('tab', { name: '3. Optimise timing' }))
+      expect(screen.getByText(/no extra yearly saving from this timing/i)).toBeInTheDocument()
+    })
+
+    it('shows the annual projection as the prominent payoff, with today/month as supporting detail, once an event moves', async () => {
+      const user = userEvent.setup()
+      renderDemo()
+      await user.click(screen.getByRole('tab', { name: '3. Optimise timing' }))
+
+      const slider = screen.getByRole('slider', { name: /dishwasher cycle/i })
+      slider.focus()
+      await user.keyboard('{ArrowLeft}'.repeat(32))
+
+      expect(screen.getByText(/you could save around £44\.01\/year by shifting these loads/i)).toBeInTheDocument()
+      expect(screen.getByText(/£0\.21 today · ≈ £3\.67\/month/)).toBeInTheDocument()
+    })
+
+    it('shows an inspectable per-event line naming the event, its time and its per-occurrence saving and frequency', async () => {
+      const user = userEvent.setup()
+      const { container } = renderDemo()
+      await user.click(screen.getByRole('tab', { name: '3. Optimise timing' }))
+
+      const slider = screen.getByRole('slider', { name: /dishwasher cycle/i })
+      slider.focus()
+      await user.keyboard('{ArrowLeft}'.repeat(32))
+
+      const eventDetail = container.querySelector('.landing-time-profile__event-detail')
+      expect(eventDetail).toHaveTextContent(/dishwasher cycle moved to 2:00/i)
+      expect(eventDetail).toHaveTextContent(/saves £0\.21 this cycle/i)
+      expect(eventDetail).toHaveTextContent(/£44\.01\/year at 4 cycles\/week/)
+      // The untouched washing machine is still inspectable, with no saving.
+      expect(eventDetail).toHaveTextContent(/washing machine cycle moved to 7:00/i)
+      expect(eventDetail).toHaveTextContent(/no saving this cycle/i)
+    })
+
+    it('updates daily, monthly and annual projections together as an event moves', async () => {
+      const user = userEvent.setup()
+      const { container } = renderDemo()
+      await user.click(screen.getByRole('tab', { name: '3. Optimise timing' }))
+
+      const slider = screen.getByRole('slider', { name: /dishwasher cycle/i })
+      slider.focus()
+      await user.keyboard('{ArrowLeft}'.repeat(3))
+
+      expect(screen.getByText(/you could save around £5\.66\/year by shifting these loads/i)).toBeInTheDocument()
+      expect(screen.getByText(/£0\.03 today · ≈ £0\.47\/month/)).toBeInTheDocument()
+      expect(container.querySelector('.landing-time-profile__event-detail')).toHaveTextContent(/dishwasher cycle moved to 16:30/i)
+    })
+
+    it('labels the projection as an estimate based on the example household, not the visitor\'s own usage', async () => {
+      const user = userEvent.setup()
+      renderDemo()
+      await user.click(screen.getByRole('tab', { name: '3. Optimise timing' }))
+
+      expect(screen.getByText(/estimated from the example household/i)).toBeInTheDocument()
+    })
   })
 })

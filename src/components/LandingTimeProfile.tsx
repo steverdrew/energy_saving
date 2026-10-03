@@ -21,6 +21,31 @@ import './LandingTimeProfile.css'
 // hard-coded copy of the hex values in CSS.
 const PRICE_LEGEND_GRADIENT = `linear-gradient(to right, ${RATE_COLOR_STEPS_DARK.join(', ')})`
 
+/** OA-105: one household event overlaid on the track -- a fixed, non-interactive annotation on Baseline/Compare, or (when `movable`) a draggable overlay on Optimise. Shared shape across all three tabs so "no event appears for the first time on Tab 3" is structural, not just a convention. */
+export type LandingTimeProfileEventOverlay =
+  | {
+      id: string
+      label: string
+      /** Slot index (0-47) the event currently starts at. */
+      startSlot: number
+      /** How many contiguous half-hour slots the event occupies. */
+      slotCount: number
+      movable: false
+    }
+  | {
+      id: string
+      label: string
+      startSlot: number
+      slotCount: number
+      movable: true
+      minStartSlot: number
+      maxStartSlot: number
+      /** Called with a new (already-clamped-by-caller-expected) start slot as the event is dragged or moved by keyboard. */
+      onMove: (startSlot: number) => void
+    }
+
+type MovableEventOverlay = Extract<LandingTimeProfileEventOverlay, { movable: true }>
+
 export interface LandingTimeProfileProps {
   day: HeatMapDay
   /** OA-100: not rendered visibly (the tabs are the state selector, and "Typical household" is the section's one heading -- see LandingDemo.tsx) -- used only as the accessible name for the chart's group aria-label and sr-table caption. */
@@ -33,10 +58,16 @@ export interface LandingTimeProfileProps {
   costNote: string
   /** An optional secondary disclaimer line (Compare/Optimise's "illustrative example" caveats). */
   caveat?: string
+  /** OA-104: an optional prominent payoff line shown above `summary`, carrying more visual weight than the daily figure -- e.g. "You could save around £73/year...". Only the Optimise step passes this. */
+  payoff?: ReactNode
+  /** OA-104: an optional secondary, per-event line (e.g. "Dishwasher moved to 02:00 -- saves 18p this cycle, ~£73/year at 4 cycles/week") shown below the cost note -- inspectable detail, kept subordinate to the household-level `payoff` above. */
+  eventDetail?: ReactNode
   /** Remounts just the narrative block (not the chart) to replay its OA-80 fade/slide on step change -- see the component doc comment for why the chart itself must stay mounted. */
   stepKey: string
   /** OA-99/OA-101: the 16:00-19:00 structural-peak annotation is a documented feature of *Agile's* pricing formula specifically -- showing it on a flat Standard Variable day would wrongly imply that flat tariff has the same structural peak. Baseline passes `false`; Compare/Optimise (both on Agile) pass `true`. */
   showStructuralPeakAnnotation: boolean
+  /** OA-105: every household event, shown as an overlay on the track -- fixed annotations on Baseline/Compare, draggable overlays (the `movable: true` variant) on Optimise. Shared across all three tabs so events are never invented fresh on one tab. */
+  events?: LandingTimeProfileEventOverlay[]
 }
 
 // Every hour of the 24-hour day -- one axis label underneath each, not
@@ -123,12 +154,16 @@ function LandingTimeProfile({
   explanation,
   costNote,
   caveat,
+  payoff,
+  eventDetail,
   stepKey,
   showStructuralPeakAnnotation,
+  events,
 }: LandingTimeProfileProps) {
   const [selected, setSelected] = useState<number | null>(null)
   const panelId = useId()
   const cellRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const trackRef = useRef<HTMLDivElement>(null)
 
   const days = useMemo(() => [day], [day])
   const { min, max } = useMemo(() => rateRange(days), [days])
@@ -176,6 +211,52 @@ function LandingTimeProfile({
 
   const selectedSlot = selected !== null ? day.slots[selected] ?? null : null
 
+  // OA-103/105: pointer position -> slot index, centring the drag point
+  // under the cursor rather than snapping the event's left edge to it,
+  // then clamping to this event's own valid same-day window (handed in by
+  // the caller -- LandingDemo.tsx clamps again before committing state,
+  // this is only so the dragged position never visually escapes the
+  // window). Each event carries its own min/max, so two events with
+  // different constraints (e.g. a washing machine's requiresAwakeHome vs.
+  // a dishwasher's unconstrained window) are each held to their own.
+  function slotFromPointerX(clientX: number, overlay: MovableEventOverlay): number {
+    const rect = trackRef.current?.getBoundingClientRect()
+    if (!rect || rect.width === 0) return overlay.startSlot
+    const ratio = (clientX - rect.left) / rect.width
+    const rawSlot = Math.round(ratio * day.slots.length - overlay.slotCount / 2)
+    return Math.max(overlay.minStartSlot, Math.min(overlay.maxStartSlot, rawSlot))
+  }
+
+  function handleEventPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    e.preventDefault()
+  }
+
+  function handleEventPointerMove(e: React.PointerEvent<HTMLDivElement>, overlay: MovableEventOverlay) {
+    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
+    const nextSlot = slotFromPointerX(e.clientX, overlay)
+    if (nextSlot !== overlay.startSlot) overlay.onMove(nextSlot)
+  }
+
+  function handleEventKeyDown(e: React.KeyboardEvent<HTMLDivElement>, overlay: MovableEventOverlay) {
+    if (e.key === 'ArrowRight') {
+      e.preventDefault()
+      overlay.onMove(Math.min(overlay.maxStartSlot, overlay.startSlot + 1))
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault()
+      overlay.onMove(Math.max(overlay.minStartSlot, overlay.startSlot - 1))
+    }
+  }
+
+  function eventTimeRange(overlay: LandingTimeProfileEventOverlay): string {
+    const slots = Array.from({ length: overlay.slotCount }, (_, i) => day.slots[overlay.startSlot + i]).filter(
+      (s): s is HeatMapDay['slots'][number] => s !== undefined,
+    )
+    if (slots.length === 0) return ''
+    if (slots.length === 1) return formatSlotTime(slots[0].startsAt)
+    return `${formatSlotTime(slots[0].startsAt)}–${formatSlotTime(slots[slots.length - 1].startsAt)}`
+  }
+
   return (
     <div className="landing-time-profile">
       {/* OA-98/OA-100: summary -> explanation (+ optional caveat) -- the
@@ -190,9 +271,17 @@ function LandingTimeProfile({
           the component doc comment for why the chart below must not
           remount the same way). */}
       <div className="landing-time-profile__narrative" key={stepKey}>
+        {/* OA-104: the longer-term projection, shown with more visual
+            weight than the daily figure below it -- "a few pence today
+            only matters if we show what that behaviour could add up to
+            over time". Only the Optimise step passes this. */}
+        {payoff && <div className="landing-time-profile__payoff">{payoff}</div>}
         <p className="landing-time-profile__summary">{summary}</p>
         <p className="landing-time-profile__explanation">{explanation}</p>
         <p className="landing-time-profile__cost-note">{costNote}</p>
+        {/* OA-104: per-event detail ("Dishwasher moved to...") -- secondary
+            to the household-level payoff above, but inspectable. */}
+        {eventDetail && <p className="landing-time-profile__event-detail">{eventDetail}</p>}
         {caveat && <p className="landing-time-profile__caveat">{caveat}</p>}
       </div>
 
@@ -212,6 +301,7 @@ function LandingTimeProfile({
 
       <div className="landing-time-profile__body">
         <div
+          ref={trackRef}
           className="landing-time-profile__track"
           role="group"
           aria-label={heading}
@@ -302,6 +392,55 @@ function LandingTimeProfile({
           >
             <path d={usagePath} />
           </svg>
+
+          {/* OA-105: every shared household event, overlaid in the same
+              position on every tab -- a fixed, non-interactive annotation
+              here, or (Optimise only) a draggable overlay, clamped by the
+              caller to that event's own valid same-day window. Positioned
+              as a percentage of the track, same basis as the
+              structural-peak annotation above, so it always lines up with
+              the columns it covers regardless of rendered width. */}
+          {events?.map((overlay) => {
+            const left = `${(overlay.startSlot / day.slots.length) * 100}%`
+            const width = `${(overlay.slotCount / day.slots.length) * 100}%`
+            const timeRange = eventTimeRange(overlay)
+
+            if (!overlay.movable) {
+              return (
+                <div
+                  key={overlay.id}
+                  className="landing-time-profile__event-annotation"
+                  style={{ left, width }}
+                >
+                  <span className="landing-time-profile__event-annotation-label">
+                    {overlay.label} · {timeRange}
+                  </span>
+                </div>
+              )
+            }
+
+            return (
+              <div
+                key={overlay.id}
+                className="landing-time-profile__flexible-event"
+                role="slider"
+                tabIndex={0}
+                aria-label={`Move ${overlay.label.toLowerCase()}`}
+                aria-valuemin={overlay.minStartSlot}
+                aria-valuemax={overlay.maxStartSlot}
+                aria-valuenow={overlay.startSlot}
+                aria-valuetext={`${overlay.label}, ${timeRange}`}
+                style={{ left, width }}
+                onPointerDown={handleEventPointerDown}
+                onPointerMove={(e) => handleEventPointerMove(e, overlay)}
+                onKeyDown={(e) => handleEventKeyDown(e, overlay)}
+              >
+                <span className="landing-time-profile__flexible-event-label">
+                  {overlay.label} · {timeRange}
+                </span>
+              </div>
+            )
+          })}
         </div>
 
         {/* Short tick marks bridging the gap between the track's hour

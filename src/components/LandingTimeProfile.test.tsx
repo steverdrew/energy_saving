@@ -4,9 +4,9 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildLandingDemoFixture } from '../domain/landingDemoFixture'
-import LandingTimeProfile from './LandingTimeProfile'
+import LandingTimeProfile, { type LandingTimeProfileEventOverlay } from './LandingTimeProfile'
 
 afterEach(cleanup)
 
@@ -177,6 +177,109 @@ describe('LandingTimeProfile', () => {
     it('renders an optional caveat line when given', () => {
       renderProfile({ caveat: 'Illustrative example only.' })
       expect(screen.getByText('Illustrative example only.')).toBeInTheDocument()
+    })
+  })
+
+  // OA-105: every household event overlays the track on every tab -- fixed
+  // annotations when not movable, a draggable slider (Optimise only) when
+  // movable.
+  describe('event overlays', () => {
+    function movableEvent(
+      overrides: Partial<Extract<LandingTimeProfileEventOverlay, { movable: true }>> = {},
+    ): LandingTimeProfileEventOverlay {
+      return {
+        id: 'dishwasher',
+        label: 'Dishwasher cycle',
+        startSlot: 4,
+        slotCount: 2,
+        movable: true,
+        minStartSlot: 0,
+        maxStartSlot: 46,
+        onMove: () => {},
+        ...overrides,
+      }
+    }
+
+    it('renders no overlay when no events are given', () => {
+      renderProfile()
+      expect(screen.queryByRole('slider')).not.toBeInTheDocument()
+      expect(screen.queryByText(/dishwasher cycle/i)).not.toBeInTheDocument()
+    })
+
+    it('renders a fixed, non-interactive annotation for a non-movable event', () => {
+      const { container } = renderProfile({
+        day: fixture.baseline.day,
+        heading: 'Baseline',
+        events: [{ id: 'dishwasher', label: 'Dishwasher cycle', startSlot: 4, slotCount: 2, movable: false }],
+      })
+      expect(screen.queryByRole('slider')).not.toBeInTheDocument()
+      expect(container.querySelector('.landing-time-profile__event-annotation')).toBeInTheDocument()
+      expect(screen.getByText(/dishwasher cycle/i)).toBeInTheDocument()
+    })
+
+    it('renders a slider positioned and labelled at its current slot for a movable event', () => {
+      renderProfile({ day: fixture.optimise.day, heading: 'Optimise', events: [movableEvent()] })
+      const slider = screen.getByRole('slider', { name: /dishwasher cycle/i })
+      expect(slider).toHaveAttribute('aria-valuenow', '4')
+      expect(slider).toHaveAttribute('aria-valuemin', '0')
+      expect(slider).toHaveAttribute('aria-valuemax', '46')
+      expect(screen.getByText(/dishwasher cycle/i)).toBeInTheDocument()
+    })
+
+    it('renders several events at once, each independently', () => {
+      renderProfile({
+        day: fixture.optimise.day,
+        heading: 'Optimise',
+        events: [
+          movableEvent(),
+          movableEvent({ id: 'washing_machine', label: 'Washing machine cycle', startSlot: 14, minStartSlot: 14, maxStartSlot: 44 }),
+        ],
+      })
+      expect(screen.getByRole('slider', { name: /dishwasher cycle/i })).toBeInTheDocument()
+      expect(screen.getByRole('slider', { name: /washing machine cycle/i })).toBeInTheDocument()
+    })
+
+    it('moves one slot per arrow key press, clamped to that event\'s own valid window', async () => {
+      const user = userEvent.setup()
+      const onMove = vi.fn()
+      renderProfile({ day: fixture.optimise.day, heading: 'Optimise', events: [movableEvent({ onMove })] })
+
+      const slider = screen.getByRole('slider', { name: /dishwasher cycle/i })
+      slider.focus()
+
+      await user.keyboard('{ArrowRight}')
+      expect(onMove).toHaveBeenLastCalledWith(5)
+
+      await user.keyboard('{ArrowLeft}')
+      expect(onMove).toHaveBeenLastCalledWith(3)
+    })
+
+    it('does not move past the minimum start slot', async () => {
+      const user = userEvent.setup()
+      const onMove = vi.fn()
+      renderProfile({
+        day: fixture.optimise.day,
+        heading: 'Optimise',
+        events: [movableEvent({ startSlot: 0, onMove })],
+      })
+
+      screen.getByRole('slider', { name: /dishwasher cycle/i }).focus()
+      await user.keyboard('{ArrowLeft}')
+      expect(onMove).toHaveBeenLastCalledWith(0)
+    })
+
+    it('does not move past the maximum start slot', async () => {
+      const user = userEvent.setup()
+      const onMove = vi.fn()
+      renderProfile({
+        day: fixture.optimise.day,
+        heading: 'Optimise',
+        events: [movableEvent({ startSlot: 46, onMove })],
+      })
+
+      screen.getByRole('slider', { name: /dishwasher cycle/i }).focus()
+      await user.keyboard('{ArrowRight}')
+      expect(onMove).toHaveBeenLastCalledWith(46)
     })
   })
 })
