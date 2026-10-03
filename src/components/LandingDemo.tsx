@@ -92,11 +92,18 @@ function LandingDemo() {
   }
 
   return (
+    // OA-92: the hero's "See how it works" CTA jumps here via a plain
+    // #comparison-demo anchor -- tabIndex={-1} makes the section itself
+    // programmatically focusable so the browser's native anchor
+    // activation also moves keyboard/AT focus into this section, not
+    // just the viewport, "ensuring the comparison lands clearly in
+    // view" rather than only scrolling past it.
     <section
       className="landing-demo landing-section-band"
       id="comparison-demo"
       aria-label="Interactive example: how Shift & Save works"
       data-active-step={step}
+      tabIndex={-1}
     >
       <p className="landing-demo__eyebrow">Example household — illustrative data, not your own</p>
 
@@ -196,9 +203,15 @@ function LandingDemo() {
         </div>
       </div>
 
+      {/* OA-92: the post-comparison conversion CTA -- "Sign up free",
+          never "last 30 days" wording. Still routes to /login: there is
+          no dedicated signup flow yet (AuthContext only has
+          login/resetPassword), so this reuses the existing sign-in/
+          account-creation entry point, matching OA-92's scope of fixing
+          CTA copy/behaviour rather than building new auth. */}
       <p className="landing-demo__cta">
         <Link to="/login" className="landing-demo__cta-link">
-          See my last 30 days
+          Sign up free
         </Link>
         <span className="landing-demo__cta-note">
           Connecting your account replaces this example with your own tariff and half-hourly usage.

@@ -46,6 +46,18 @@
   }
 }
 
+/* OA-92: the landing hero's "See how it works" CTA is a plain in-page
+   anchor jump to #comparison-demo -- smooth-scrolling it via CSS alone
+   needs no click handler/JS scrollIntoView call, and still works with
+   JS disabled. Respects prefers-reduced-motion: an instant jump when
+   the visitor has asked for reduced motion, same as every other
+   animation in this app. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 #root {
   min-height: 100svh;
 }

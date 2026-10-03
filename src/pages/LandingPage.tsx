@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom'
 import LandingDemo from '../components/LandingDemo'
 import PublicFooter from '../components/PublicFooter'
 import './LandingPage.css'
@@ -34,9 +33,18 @@ function LandingPage() {
           &amp; Save shows what your <strong>actual usage</strong> would have cost on another
           tariff — and what better timing could change.
         </p>
-        <Link to="/login" className="landing-hero__cta">
-          See my last 30 days
-        </Link>
+        {/* OA-92: hero CTA starts the explanatory journey (Hero -> See how
+            it works -> Interactive comparison -> Sign up free) -- an
+            in-page jump to the comparison section below, not a route
+            change. Plain anchor + CSS `scroll-behavior: smooth` (gated by
+            prefers-reduced-motion in LandingPage.css) rather than a JS
+            scrollIntoView call, so it still works with JS disabled and
+            needs no extra event handler. #comparison-demo is tabIndex={-1}
+            (LandingDemo.tsx) so a click also moves keyboard/AT focus
+            there, not just the viewport. */}
+        <a href="#comparison-demo" className="landing-hero__cta">
+          See how it works
+        </a>
       </section>
 
       <LandingDemo />

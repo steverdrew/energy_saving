@@ -81,8 +81,8 @@ describe('LandingDemo', () => {
     expect(screen.getAllByRole('button', { name: /kWh.*p\/kWh.*£/ }).length).toBe(48)
   })
 
-  it('exposes the CTA as a real link, not a click-only element', () => {
+  it('exposes the post-comparison CTA as a real link reading "Sign up free"', () => {
     renderDemo()
-    expect(screen.getByRole('link', { name: /see my last 30 days/i })).toHaveAttribute('href', '/login')
+    expect(screen.getByRole('link', { name: /sign up free/i })).toHaveAttribute('href', '/login')
   })
 })
