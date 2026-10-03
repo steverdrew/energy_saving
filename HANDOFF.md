@@ -1,9 +1,11 @@
 # HANDOFF
 
-_Last updated: 2026-10-03 (OA-87 built: ported the approved mockup's
-hero typography/section-background rhythm and wider desktop shell --
-design/layout only, product copy kept as-is per Steve's explicit
-instruction; see "Current task" below. Previous entries:)_
+_Last updated: 2026-10-03 (OA-86 and OA-87 merged to `main` and deployed
+-- both Done in Jira. A `/code-review` pass on the merged OA-87 commit
+then found a real mobile bug in the new full-bleed section bands
+(missing horizontal gutter); fixed, consolidated into one shared CSS
+class, and deployed again -- see end of "Current task" below. Previous
+entries:)_
 
 _2026-10-03, OA-86 second pass (superseded below as "previous task"):
 Steve supplied the actual reference mockup after the first "no code
@@ -111,13 +113,52 @@ duplicate in `entry-server.tsx` needed the same change, or the no-JS
 prerendered shell would've drifted from the client-rendered page), and
 the Inter font-loading `<link>` tags are intact after prerendering.
 
-Not yet done: pushed to `claude/zen-archimedes-26lz8o` (not merged to
-`main`), so "Stable beta deploy verified" is still open, same situation
-as OA-86's latest fix -- left as In Progress in Jira rather than Done.
+Steve then said "merge and push": fast-forwarded `main` to this branch
+(clean ff, no conflicts -- `main` hadn't moved since OA-86's base),
+confirmed CI run #70 and Deploy beta run #36 both green on the merged
+commit (`68ebe43`), and moved both OA-86 and OA-87 to Done in Jira with
+links to the passing runs.
+
+**Follow-up: Steve asked to `/code-review` OA-87 again post-merge.**
+Found two real findings, both in the new full-bleed "section band"
+breakout (100vw + negative margins for `.landing-demo`,
+`.landing-chapter-cta`, `.landing-footer`):
+- Each band set only *vertical* padding of its own, relying on
+  `.app-main`'s padding for the horizontal gutter -- which is exactly
+  what the breakout escapes. Their content (none of which has its own
+  horizontal padding -- e.g. `.landing-demo__grid` is just `max-width
+  + margin: 0 auto`) would render flush against the viewport edge on
+  any screen narrower than that content's own max-width, i.e. every
+  phone. A real bug, not just a style nit -- it shipped to prod in the
+  first OA-87 merge above before this review caught it.
+- The same breakout snippet was hand-duplicated three times with no
+  shared class, so fixing the gutter in one place risked leaving the
+  other two broken (simplification/reuse finding, not just correctness).
+- Fixed both at once: extracted a single `.landing-section-band` class
+  (App.css, scoped under `.app-shell[data-landing]`) that owns the
+  breakout *and* the responsive horizontal gutter (16/24/32px at
+  640/1024px, matching `.app-main`'s own scale); each of the three
+  sections now adds only its own background/border/vertical padding on
+  top of that shared class, applied via `className="... landing-
+  section-band"` in LandingDemo.tsx/LandingPage.tsx.
+- Verified: `npm test` (51/51, unchanged), lint/build/check-bundle clean,
+  confirmed in the built CSS that `.landing-section-band`'s three
+  breakpoint rules compiled and that all three target elements carry the
+  class in the prerendered `dist/index.html`.
+- Pushed to `claude/zen-archimedes-26lz8o`, fast-forwarded into `main`
+  again, confirmed Deploy beta run #37 green on commit `6af9356`. No
+  separate Jira comment needed -- OA-87 was already Done and this is a
+  same-day follow-up fix to that same merged work, not a new ticket; the
+  fix itself is the record.
+
 No real-browser visual check was possible in this sandbox (same limit
 noted on OA-82/85/86); the gradient-text/background-band CSS is standard
 and was eyeballed in the diffed CSS, but hasn't been confirmed to render
-correctly pixel-for-pixel against the mockup in an actual browser.
+correctly pixel-for-pixel against the mockup in an actual browser. Given
+this session already shipped one real mobile-layout bug straight to
+prod on the first pass, a follow-up real-browser check (or at least a
+manual phone-width check) before trusting the next landing-page CSS
+change on sight would be worth the extra step.
 
 **OA-86** ("Restore original multi-day heat map inside the tighter
 comparison layout") -- first pass (see superseded entry above) audited
