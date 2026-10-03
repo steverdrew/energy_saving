@@ -903,6 +903,30 @@ function LandingDemo() {
         </p>
       </div>
 
+      {/* OA-92/OA-171 (moved): previously sat below the chart, so a
+          visitor had to read through all three stages before reaching it
+          -- too late if the goal is conversion. By this point the heading
+          row above has already said this compares tariffs and switches
+          to the visitor's own data once connected; what the chart itself
+          still only shows is *how much* that could be worth, which the
+          chart's own stages exist to answer for someone still deciding
+          whether to read on. Moved to right after that intro, with more
+          benefit-led copy ("what to change and how much you could save",
+          not just "free") -- the chart now supports the signup decision
+          rather than gating it. Still routes to /login: there is no
+          dedicated signup flow yet (AuthContext only has login/
+          resetPassword), so this reuses the existing sign-in/account-
+          creation entry point, matching OA-92's scope of fixing CTA
+          copy/behaviour rather than building new auth. */}
+      <p className="landing-demo__cta">
+        <Link to="/login" className="landing-demo__cta-link">
+          Sign up to see what to change and how much you could save
+        </Link>
+        <span className="landing-demo__cta-note">
+          Connect your account to replace this example with your own tariff and half-hourly electricity use.
+        </span>
+      </p>
+
       <div className="landing-demo__panel">
         <LandingTimeProfile
           day={interpolatedDay}
@@ -975,21 +999,6 @@ function LandingDemo() {
           }
         />
       </div>
-
-      {/* OA-92: the post-comparison conversion CTA -- "Sign up free",
-          never "last 30 days" wording. Still routes to /login: there is
-          no dedicated signup flow yet (AuthContext only has
-          login/resetPassword), so this reuses the existing sign-in/
-          account-creation entry point, matching OA-92's scope of fixing
-          CTA copy/behaviour rather than building new auth. */}
-      <p className="landing-demo__cta">
-        <Link to="/login" className="landing-demo__cta-link">
-          Sign up free
-        </Link>
-        <span className="landing-demo__cta-note">
-          Connecting your account replaces this example with your own tariff and half-hourly usage.
-        </span>
-      </p>
 
       {/* OA-166: "Typical household" explained -- what the model is, what
           it's based on, what it includes, where the sources are, and a

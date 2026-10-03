@@ -200,7 +200,7 @@
 }
 
 .landing-demo__cta {
-  margin-top: 20px;
+  margin-bottom: 24px;
   text-align: center;
 }
 
@@ -286,6 +286,6 @@
   }
 
   .landing-demo__cta {
-    margin-top: clamp(10px, 1.6svh, 20px);
+    margin-bottom: clamp(12px, 1.8svh, 24px);
   }
 }

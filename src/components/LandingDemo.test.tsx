@@ -569,9 +569,18 @@ describe('LandingDemo', () => {
     expect(screen.getAllByRole('button', { name: /kWh.*p\/kWh.*£/ }).length).toBe(48)
   })
 
-  it('exposes the post-comparison CTA as a real link reading "Sign up free"', () => {
-    renderDemo()
-    expect(screen.getByRole('link', { name: /sign up free/i })).toHaveAttribute('href', '/login')
+  it('exposes the benefit-led signup CTA as a real link, placed before the chart (OA-171)', () => {
+    const { container } = renderDemo()
+    const link = screen.getByRole('link', { name: 'Sign up to see what to change and how much you could save' })
+    expect(link).toHaveAttribute('href', '/login')
+    expect(
+      screen.getByText('Connect your account to replace this example with your own tariff and half-hourly electricity use.'),
+    ).toBeInTheDocument()
+    // OA-171: moved above the chart so a visitor sees the signup decision
+    // before reading through all three stages, not after.
+    const cta = container.querySelector('.landing-demo__cta')!
+    const panel = container.querySelector('.landing-demo__panel')!
+    expect(cta.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('has exactly one heading in the section -- "See how the comparison works" (OA-171)', () => {
