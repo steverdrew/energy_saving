@@ -287,7 +287,7 @@
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.landing-time-profile__controls-button:hover:not(:disabled) {
+.landing-time-profile__controls-button:hover:not([aria-pressed='true']):not(:disabled) {
   background: rgba(255, 255, 255, 0.1);
 }
 
@@ -429,11 +429,68 @@
   }
 }
 
+/* OA-136 (second pass): "a dedicated result-block treatment rather than
+   ordinary right-aligned text" -- Compare's annual headline now lives in
+   its own visually distinct card (background + border), not just bare
+   text in the shared `.landing-time-profile__result` paragraph every
+   other stage uses for a single flat figure. `display: block` (a `<span>`,
+   not a `<div>` -- this renders inside that shared `<p>`) is what actually
+   produces the stacked, card-like layout below. `data-direction` tints the
+   card per outcome -- a genuine saving reads differently from a genuine
+   extra cost, and "about the same" stays visually neutral rather than
+   borrowing either colour. */
+.landing-time-profile__annual-hero {
+  display: block;
+  margin-top: 4px;
+  padding: 16px 20px;
+  border-radius: 14px;
+  border: 1px solid var(--accent-border, rgba(168, 85, 247, 0.45));
+  background: var(--accent-bg, rgba(168, 85, 247, 0.16));
+}
+
+.landing-time-profile__annual-hero[data-direction='cost'] {
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.14);
+}
+
+.landing-time-profile__annual-hero[data-direction='neutral'] {
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* OA-136 (second pass): the dominant figure on Tab 2 -- deliberately
+   larger than every other stage's `--demo-primary-metric-size` result,
+   since this ticket is explicit that the annual outcome "is the reason
+   this tab exists" and must out-rank tariff names, the daily figure and
+   every control on the page. */
+.landing-time-profile__annual-hero-figure {
+  display: block;
+  margin-bottom: 6px;
+  font-size: calc(var(--demo-primary-metric-size) * 1.2);
+  line-height: 1.2;
+  font-weight: 800;
+  color: var(--text-h);
+}
+
+/* OA-136 (second pass): the daily pence figure, demoted from headline to
+   quiet supporting context underneath the annual one and the tariff-vs-
+   tariff rows. */
+.landing-time-profile__annual-hero-daily {
+  display: block;
+  margin-top: 8px;
+  font-size: var(--demo-secondary-metric-size);
+  color: var(--text);
+  opacity: 0.75;
+}
+
 /* OA-136: each named-tariff line in Compare's two-tariff A/B result
-   ("Flexible — £1.80/day" / "Smart · Agile — £1.66/day"), stacked above
-   the directional difference line. */
+   ("Flexible" / "vs Smart · Agile"), stacked under the annual headline
+   inside the same hero card. */
 .landing-time-profile__compare-row {
   display: block;
+  font-size: var(--demo-secondary-metric-size);
+  color: var(--text);
+  opacity: 0.85;
 }
 
 /* OA-117/OA-132: Optimise's quiet tariff context -- "may appear as quiet
@@ -510,6 +567,14 @@
    colours for the same background. Height is a fixed aspect, not
    `aspect-ratio: 1`, so columns read as a landscape strip rather than a
    block of squares. */
+/* Follow-up fix: sizes to `__track` (the only element in normal flow
+   inside it -- `__event-layer` below is absolutely positioned, so it
+   doesn't contribute to this box's size), giving the overlay an identical
+   box to position against without inheriting the track's own clip. */
+.landing-time-profile__track-wrap {
+  position: relative;
+}
+
 .landing-time-profile__track {
   position: relative;
   display: flex;
@@ -521,6 +586,23 @@
   height: clamp(calc(140px + (var(--event-lanes, 1) - 1) * 26px), 22vw, calc(220px + (var(--event-lanes, 1) - 1) * 26px));
   border-radius: 6px;
   overflow: hidden;
+}
+
+/* Follow-up fix: event chips/labels used to live inside `__track` itself,
+   clipped by its `overflow: hidden` (needed there so the price-neutral
+   columns keep the track's rounded corners) -- a long label on an event
+   near the end of the day (e.g. "Tumble dryer"/"Dishwasher" around
+   22:00-23:30) could get visibly cut off at the track's right edge. This
+   sibling layer covers the exact same box (see `__track-wrap` above) but
+   without the clip, so a chip's label can overflow past the track's own
+   edge instead of disappearing. `pointer-events: none` so it never blocks
+   clicks on the price columns underneath; movable chips re-enable their
+   own pointer events (see `__event-chip:not([data-fixed])` below). */
+.landing-time-profile__event-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
 }
 
 /* OA-131: a flat, calm neutral background -- price no longer lives here

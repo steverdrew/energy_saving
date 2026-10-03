@@ -164,18 +164,25 @@ describe('LandingDemo', () => {
       expect(screen.queryByText(/smart · agile/i)).not.toBeInTheDocument()
     })
 
-    it("shows the current tariff's own category visibly disabled, so it can't be re-selected as its own comparison target", async () => {
+    // OA-136 (second pass): "do not include [the current tariff's
+    // category] as a large disabled segment if removing it makes the
+    // choice simpler" -- Flexible is dropped from the row entirely, not
+    // shown disabled, since it's already explicit in the heading above.
+    it("omits the current tariff's own category from the choice entirely, rather than showing it disabled", async () => {
       const user = userEvent.setup()
       renderDemo()
       await user.click(jumpToStage('Compare'))
 
       const selector = screen.getByRole('group', { name: /compare flexible with/i })
-      expect(within(selector).getByRole('button', { name: 'Flexible' })).toBeDisabled()
+      expect(within(selector).queryByRole('button', { name: 'Flexible' })).not.toBeInTheDocument()
       expect(within(selector).getByRole('button', { name: 'Fixed' })).toBeEnabled()
       expect(within(selector).getByRole('button', { name: 'Smart' })).toBeEnabled()
     })
 
-    it('choosing one alternative shows only the current and chosen tariff, with a directional difference, and carries into Optimise', async () => {
+    // OA-136 (second pass): the annual saving/cost is now the dominant
+    // headline, in its own dedicated result-block, with the daily pence
+    // figure and tariff-vs-tariff context as secondary detail inside it.
+    it('choosing one alternative shows the annual saving as the dominant headline, with daily/tariff context secondary, and carries into Optimise', async () => {
       const user = userEvent.setup()
       const { container } = renderDemo()
       await user.click(jumpToStage('Compare'))
@@ -185,18 +192,44 @@ describe('LandingDemo', () => {
       const smartGroup = screen.getByRole('group', { name: /choose a smart tariff to compare/i })
       await user.click(within(smartGroup).getByRole('button', { name: 'Agile' }))
 
-      const result = container.querySelector('.landing-time-profile__result')!
-      expect(result).toHaveTextContent(/14p less\/day/)
-      expect(result).toHaveTextContent('Smart · Agile')
-      expect(result).toHaveTextContent('vs Flexible')
-      expect(container.querySelector('.landing-time-profile__payoff-detail')).toHaveTextContent(/≈ £[\d.]+\/year less/)
+      const hero = container.querySelector('.landing-time-profile__annual-hero')!
+      expect(hero).toHaveAttribute('data-direction', 'save')
+      expect(hero.querySelector('.landing-time-profile__annual-hero-figure')).toHaveTextContent(/save about £[\d.]+\/year/i)
+      expect(hero).toHaveTextContent('Smart · Agile')
+      expect(hero).toHaveTextContent('vs Flexible')
+      expect(hero.querySelector('.landing-time-profile__annual-hero-daily')).toHaveTextContent(/14p less\/day/)
 
       await user.click(jumpToStage('Optimise'))
       expect(container.querySelector('.landing-time-profile__tariff-context')).toHaveTextContent('Smart · Agile')
       expect(screen.getByText(/save around £\d/i)).toBeInTheDocument()
     })
 
-    it("disables the current tariff's own product within the Smart secondary row too", async () => {
+    // OA-146: "Compare figures reconcile after rounding" -- the secondary
+    // daily pence figure times 365 must equal the dominant annual headline,
+    // not just approximately (the bug this ticket fixes was exactly this
+    // drifting apart once each was rounded for display independently).
+    it('reconciles the secondary daily figure with the dominant annual headline exactly (daily x365 == annual)', async () => {
+      const user = userEvent.setup()
+      const { container } = renderDemo()
+      await user.click(jumpToStage('Compare'))
+
+      const selector = screen.getByRole('group', { name: /compare flexible with/i })
+      await user.click(within(selector).getByRole('button', { name: 'Smart' }))
+      const smartGroup = screen.getByRole('group', { name: /choose a smart tariff to compare/i })
+      await user.click(within(smartGroup).getByRole('button', { name: 'Agile' }))
+
+      const hero = container.querySelector('.landing-time-profile__annual-hero')!
+      const dailyText = hero.querySelector('.landing-time-profile__annual-hero-daily')!.textContent!
+      const dailyPence = Number(dailyText.match(/(\d+)p/)![1])
+      const annualText = hero.querySelector('.landing-time-profile__annual-hero-figure')!.textContent!
+      const annualPence = Math.round(Number(annualText.match(/£(\d+\.\d\d)/)![1]) * 100)
+      expect(dailyPence * 365).toBe(annualPence)
+    })
+
+    // OA-136 (second pass): the current tariff's own smart product is
+    // excluded from the compact subtype row entirely, same "don't show
+    // what can't be chosen" treatment as the primary row above.
+    it("omits the current tariff's own product from the compact Smart subtype row too", async () => {
       const user = userEvent.setup()
       const { container } = renderDemo()
       await switchToSmartAgile(user)
@@ -205,18 +238,20 @@ describe('LandingDemo', () => {
       const selector = screen.getByRole('group', { name: /compare smart · agile with/i })
       await user.click(within(selector).getByRole('button', { name: 'Smart' }))
       const smartGroup = screen.getByRole('group', { name: /choose a smart tariff to compare/i })
-      expect(within(smartGroup).getByRole('button', { name: 'Agile' })).toBeDisabled()
+      expect(within(smartGroup).queryByRole('button', { name: 'Agile' })).not.toBeInTheDocument()
       expect(within(smartGroup).getByRole('button', { name: 'Economy 7' })).toBeEnabled()
 
       await user.click(within(smartGroup).getByRole('button', { name: 'Economy 7' }))
-      expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('Smart · Economy 7')
-      expect(container.querySelector('.landing-time-profile__result')).toHaveTextContent('vs Smart · Agile')
+      const hero = container.querySelector('.landing-time-profile__annual-hero')!
+      expect(hero).toHaveTextContent('Smart · Economy 7')
+      expect(hero).toHaveTextContent('vs Smart · Agile')
     })
 
-    // OA-136 (updated spec): "use the same large segmented-control
-    // treatment as Tab 1" -- promoted into the main content flow
-    // (`primarySelector`), not the old small top-right pills.
-    it('renders as a prominent, full-width segmented control matching Tab 1, not small top-right pills (OA-136)', async () => {
+    // OA-136 (second pass): the primary tariff-type choice keeps the large
+    // segmented treatment; the Smart subtype is now visually subordinate
+    // (the same compact pill treatment Baseline's own subtype row uses),
+    // not a second equally large tab bar.
+    it('renders the primary choice as a large segmented control, with a compact, visually subordinate Smart subtype row', async () => {
       const user = userEvent.setup()
       const { container } = renderDemo()
       await user.click(jumpToStage('Compare'))
@@ -227,12 +262,13 @@ describe('LandingDemo', () => {
       expect(selector).toHaveClass('landing-time-profile__segmented')
       expect(within(selector).getByRole('button', { name: 'Fixed' })).toHaveClass('landing-time-profile__segmented-button')
 
-      // Smart's second-level row uses the same large treatment too, not a
-      // smaller secondary widget.
       await user.click(within(selector).getByRole('button', { name: 'Smart' }))
       const smartGroup = within(primarySelector as HTMLElement).getByRole('group', { name: /choose a smart tariff to compare/i })
-      expect(smartGroup).toHaveClass('landing-time-profile__segmented')
-      expect(within(smartGroup).getByRole('button', { name: 'Agile' })).toHaveClass('landing-time-profile__segmented-button')
+      expect(smartGroup).not.toHaveClass('landing-time-profile__segmented')
+      expect(smartGroup).toHaveClass('landing-time-profile__controls--secondary')
+      expect(within(smartGroup).getByRole('button', { name: 'Agile' })).toHaveClass(
+        'landing-time-profile__controls-button--secondary',
+      )
     })
   })
 
@@ -251,35 +287,65 @@ describe('LandingDemo', () => {
     expect(container.querySelector('.landing-time-profile__tariff-context')).toHaveTextContent('Smart · Agile')
   })
 
-  // OA-137: "where there is little or no opportunity, say so clearly" --
-  // the default tariff (Standard Variable) is flat, so by default
-  // Optimise has nothing genuine to show.
-  describe('Optimise with no genuine timing-saving opportunity (OA-137, default flat tariff)', () => {
-    it('shows neutral no-opportunity copy instead of a manufactured saving', async () => {
+  // OA-117/OA-136: "Fixed/Flexible comparison selections cannot advance
+  // into an active Optimise state" -- the default Flexible comparison
+  // (Baseline's own default tariff) locks Optimise entirely, rather than
+  // landing there and showing a "nothing to optimise" message.
+  describe('Optimise is gated to a Smart comparison tariff (OA-117/OA-136)', () => {
+    it('renders the Optimise label visibly but disabled while the comparison tariff is Flexible', async () => {
       const user = userEvent.setup()
       renderDemo()
-      await user.click(jumpToStage('Optimise'))
+      await user.click(jumpToStage('Compare'))
 
-      expect(screen.getByText(/little to save by changing when you use electricity on this tariff/i)).toBeInTheDocument()
-      expect(screen.queryByText(/save around £/i)).not.toBeInTheDocument()
+      expect(jumpToStage('Optimise')).toBeDisabled()
     })
 
-    it('shows no Reset/Optimise controls when there is nothing meaningful to optimise', async () => {
-      const user = userEvent.setup()
-      const { container } = renderDemo()
-      await user.click(jumpToStage('Optimise'))
-
-      expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
-      expect(container.querySelectorAll('.landing-time-profile__controls-button')).toHaveLength(0)
-    })
-
-    it('leaves every event at its original, unmoved position -- no sliders, fixed/background usage untouched', async () => {
+    it('clicking the disabled Optimise label does not move the scrubber', async () => {
       const user = userEvent.setup()
       renderDemo()
-      await user.click(jumpToStage('Optimise'))
+      await user.click(jumpToStage('Compare'))
 
-      expect(screen.queryByRole('slider', { name: /machine|dryer|dishwasher|dehumidifier|oven/i })).not.toBeInTheDocument()
-      expect(screen.getByText(/dishwasher/i)).toBeInTheDocument()
+      await user.click(jumpToStage('Optimise'))
+      expect(scrubber()).toHaveAttribute('aria-valuenow', '1')
+    })
+
+    it('unlocks and reaches Optimise once a Smart tariff is chosen on Compare', async () => {
+      const user = userEvent.setup()
+      renderDemo()
+      await user.click(jumpToStage('Compare'))
+
+      const selector = screen.getByRole('group', { name: /compare flexible with/i })
+      await user.click(within(selector).getByRole('button', { name: 'Smart' }))
+
+      expect(jumpToStage('Optimise')).toBeEnabled()
+      await user.click(jumpToStage('Optimise'))
+      expect(scrubber()).toHaveAttribute('aria-valuenow', '2')
+    })
+
+    it('choosing Fixed as the comparison tariff on Compare keeps Optimise locked too', async () => {
+      const user = userEvent.setup()
+      renderDemo()
+      await user.click(jumpToStage('Compare'))
+
+      const selector = screen.getByRole('group', { name: /compare flexible with/i })
+      await user.click(within(selector).getByRole('button', { name: 'Fixed' }))
+
+      expect(jumpToStage('Optimise')).toBeDisabled()
+    })
+
+    it('re-locks Optimise after returning to Compare and switching the comparison tariff away from Smart', async () => {
+      const user = userEvent.setup()
+      renderDemo()
+      await switchToSmartAgile(user)
+      await user.click(jumpToStage('Optimise'))
+      expect(scrubber()).toHaveAttribute('aria-valuenow', '2')
+
+      await user.click(jumpToStage('Compare'))
+      const selector = screen.getByRole('group', { name: /compare smart · agile with/i })
+      await user.click(within(selector).getByRole('button', { name: 'Flexible' }))
+
+      expect(jumpToStage('Optimise')).toBeDisabled()
+      expect(scrubber()).toHaveAttribute('aria-valuenow', '1')
     })
   })
 
@@ -304,7 +370,46 @@ describe('LandingDemo', () => {
     })
   })
 
-  it('is operable by keyboard alone -- arrow keys step through stages one at a time', async () => {
+  // OA-146: "a value labelled today is not presented as the daily
+  // equivalent of an annual projection unless it actually is... different
+  // modelling bases are explicitly labelled if both must be shown." The
+  // Optimise stage's annual/monthly figures come from a recurrence
+  // assumption (occurrences/week), while "today" is the literal modelled
+  // day's own before/after cost -- a genuinely different basis, so they
+  // must not be shown grouped as if one simply annualises the other.
+  describe('Optimise daily/monthly figures reconcile and are honestly labelled (OA-146)', () => {
+    it('derives the monthly detail line from the same annual figure as the dominant headline', async () => {
+      const user = userEvent.setup()
+      renderDemo()
+      await switchToSmartAgile(user)
+      await user.click(jumpToStage('Optimise'))
+
+      const annualText = screen.getByText(/save around £\d+\.\d\d\/year/i).textContent!
+      const annualPounds = Number(annualText.match(/£(\d+\.\d\d)/)![1])
+      const monthlyText = screen.getByText(/≈ £\d+\.\d\d\/month/).textContent!
+      const monthlyPounds = Number(monthlyText.match(/£(\d+\.\d\d)/)![1])
+      expect(monthlyPounds * 12).toBeCloseTo(annualPounds, 1)
+    })
+
+    it("labels today's figure as a separate, single-day measure rather than grouping it with the monthly estimate", async () => {
+      const user = userEvent.setup()
+      renderDemo()
+      await switchToSmartAgile(user)
+      await user.click(jumpToStage('Optimise'))
+
+      // Not shown as "£X today · ≈ £Y/month" (implying one derives the
+      // other) -- today's figure gets its own explanatory line instead.
+      expect(screen.queryByText(/today · ≈/)).not.toBeInTheDocument()
+      expect(screen.getByText(/today's example day alone saves £\d+\.\d\d/i)).toBeInTheDocument()
+      expect(screen.getByText(/a separate, single-day figure, not this estimate's daily rate/i)).toBeInTheDocument()
+    })
+  })
+
+  // OA-117: arrowing past Compare while the comparison tariff isn't Smart
+  // must not reach Optimise -- the default Flexible comparison has
+  // nothing to optimise, so the second ArrowRight is a no-op until a
+  // Smart tariff is chosen on Compare.
+  it('is operable by keyboard alone -- arrow keys step through stages one at a time, clamped at Optimise until a Smart tariff is chosen', async () => {
     const user = userEvent.setup()
     renderDemo()
 
@@ -313,6 +418,13 @@ describe('LandingDemo', () => {
     expect(scrubber()).toHaveAttribute('aria-valuenow', '1')
     expect(scrubber()).toHaveFocus()
 
+    await user.keyboard('{ArrowRight}')
+    expect(scrubber()).toHaveAttribute('aria-valuenow', '1')
+
+    const selector = screen.getByRole('group', { name: /compare flexible with/i })
+    await user.click(within(selector).getByRole('button', { name: 'Smart' }))
+
+    scrubber().focus()
     await user.keyboard('{ArrowRight}')
     expect(scrubber()).toHaveAttribute('aria-valuenow', '2')
 
@@ -532,11 +644,14 @@ describe('LandingDemo', () => {
       await switchToSmartAgile(user)
       await user.click(jumpToStage('Optimise'))
 
-      // OA-117: already auto-optimised on arrival -- a real positive
-      // saving, in the dominant `result` line, with a compact detail
-      // line beneath it (today/month), and nothing else repeats it.
+      // OA-117/OA-146: already auto-optimised on arrival -- a real positive
+      // saving, in the dominant `result` line, with a compact monthly
+      // detail line beneath it (derived from the same annual figure, so
+      // it always reconciles), plus today's single-day figure labelled
+      // separately since it's a different measure, not that figure's
+      // daily rate -- see the dedicated OA-146 describe block below.
       expect(screen.getByText(/save around £\d+\.\d\d\/year/i)).toBeInTheDocument()
-      expect(screen.getByText(/£\d+\.\d\d today · ≈ £\d+\.\d\d\/month/)).toBeInTheDocument()
+      expect(screen.getByText(/≈ £\d+\.\d\d\/month/)).toBeInTheDocument()
       const result = container.querySelector('.landing-time-profile__result')
       expect(result).not.toHaveTextContent(/potential saving/i)
     })
@@ -553,22 +668,20 @@ describe('LandingDemo', () => {
       expect(screen.getByText(/standing charge doesn.t vary/i)).toBeInTheDocument()
     })
 
-    // OA-117: "Optimise all" is gone -- the scrubber auto-optimises on
-    // its own. Reset and Optimise now sit side by side as a pair, with the
-    // chart directly below. ("Optimise" also names the scrubber's own
-    // stage-jump button, so the controls pair is queried by its own
-    // container rather than by accessible name alone.)
-    it('shows Reset and Optimise controls, with the chart directly below', async () => {
+    // OA-137: "Reset"/"Optimise" buttons are removed -- arriving at
+    // Optimise always auto-optimises on its own, so no manual controls are
+    // needed; only the quiet tariff-context label remains, with the chart
+    // directly below.
+    it('shows no Reset/Optimise buttons, only the quiet tariff context, with the chart directly below', async () => {
       const user = userEvent.setup()
       const { container } = renderDemo()
       await switchToSmartAgile(user)
 
-      expect(screen.queryByRole('button', { name: 'Optimise all' })).not.toBeInTheDocument()
-
       await user.click(jumpToStage('Optimise'))
+      expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Optimise all' })).not.toBeInTheDocument()
-      const controlButtons = container.querySelectorAll('.landing-time-profile__controls-button')
-      expect(Array.from(controlButtons).map((b) => b.textContent)).toEqual(['Reset', 'Optimise'])
+      expect(container.querySelectorAll('.landing-time-profile__controls-button')).toHaveLength(0)
+      expect(container.querySelector('.landing-time-profile__tariff-context')).toHaveTextContent('Smart · Agile')
     })
 
     // OA-108: "remove the permanent, always-visible verbose per-appliance
@@ -602,111 +715,18 @@ describe('LandingDemo', () => {
     })
   })
 
-  // OA-117: auto-optimise on arrival replaces the old "Optimise all"
-  // button; Reset keeps its original job of returning to the un-optimised
-  // schedule.
-  describe('auto-optimise / Reset controls (OA-117)', () => {
-    // OA-117: the schedule is already optimised (and therefore already
-    // differs from the original) the moment the scrubber arrives -- so,
-    // unlike the old "Optimise all" flow, Reset starts *enabled*, not
-    // disabled, since there is immediately something to reset.
-    it('starts with Reset enabled, since the schedule is already auto-optimised on arrival', async () => {
-      const user = userEvent.setup()
-      renderDemo()
-      await switchToSmartAgile(user)
-      await user.click(jumpToStage('Optimise'))
+  // OA-117: auto-optimise on arrival -- every movable event reaches its
+  // cheapest valid slot with no button press (the old "Optimise all" flow
+  // this replaced). This test covers the fixed oven specifically staying
+  // put even so.
+  it('auto-optimises on arrival without moving the fixed oven', async () => {
+    const user = userEvent.setup()
+    renderDemo()
+    await switchToSmartAgile(user)
+    await user.click(jumpToStage('Optimise'))
 
-      expect(screen.getByRole('button', { name: 'Reset' })).toBeEnabled()
-    })
-
-    // OA-117: this is the behaviour the old "Optimise all moves every
-    // movable event..." test covered -- now true by default, with no
-    // button press, covered by the "shows every movable event..." test
-    // above. This test covers the fixed oven specifically staying put.
-    it('never moves the fixed oven, even though every movable event auto-optimises', async () => {
-      const user = userEvent.setup()
-      renderDemo()
-      await switchToSmartAgile(user)
-      await user.click(jumpToStage('Optimise'))
-
-      expect(screen.queryByRole('slider', { name: /oven/i })).not.toBeInTheDocument()
-      expect(screen.getByText(/oven/i)).toBeInTheDocument()
-    })
-
-    it('Reset restores the exact original schedule and disables itself again', async () => {
-      const user = userEvent.setup()
-      renderDemo()
-      await switchToSmartAgile(user)
-      await user.click(jumpToStage('Optimise'))
-
-      await user.click(screen.getByRole('button', { name: 'Reset' }))
-
-      expect(screen.getByRole('slider', { name: /dishwasher/i })).toHaveAttribute('aria-valuenow', '36')
-      expect(screen.getByRole('slider', { name: /washing machine/i })).toHaveAttribute('aria-valuenow', '14')
-      expect(screen.getByRole('button', { name: 'Reset' })).toBeDisabled()
-    })
-
-    it('Reset after a manual drag returns to the original schedule, not just the pre-drag (auto-optimised) one', async () => {
-      const user = userEvent.setup()
-      renderDemo()
-      await switchToSmartAgile(user)
-      await user.click(jumpToStage('Optimise'))
-
-      const slider = screen.getByRole('slider', { name: /dishwasher/i })
-      slider.focus()
-      await user.keyboard('{ArrowLeft}')
-      await user.click(screen.getByRole('button', { name: 'Reset' }))
-
-      expect(screen.getByRole('slider', { name: /dishwasher/i })).toHaveAttribute('aria-valuenow', '36')
-      expect(screen.getByRole('slider', { name: /washing machine/i })).toHaveAttribute('aria-valuenow', '14')
-    })
-
-    // "Optimise" names both the scrubber's own stage-jump button and this
-    // control, so it's queried by its own container rather than by
-    // accessible name (see `controlsButtons` above).
-    function controlsOptimiseButton(container: HTMLElement) {
-      return Array.from(container.querySelectorAll('.landing-time-profile__controls-button')).find(
-        (b) => b.textContent === 'Optimise',
-      ) as HTMLButtonElement
-    }
-
-    it('starts with Optimise disabled, since the schedule is already auto-optimised on arrival', async () => {
-      const user = userEvent.setup()
-      const { container } = renderDemo()
-      await switchToSmartAgile(user)
-      await user.click(jumpToStage('Optimise'))
-
-      expect(controlsOptimiseButton(container)).toBeDisabled()
-    })
-
-    it('Optimise only enables once Reset has returned to the original schedule', async () => {
-      const user = userEvent.setup()
-      const { container } = renderDemo()
-      await switchToSmartAgile(user)
-      await user.click(jumpToStage('Optimise'))
-
-      expect(controlsOptimiseButton(container)).toBeDisabled()
-      await user.click(screen.getByRole('button', { name: 'Reset' }))
-      expect(controlsOptimiseButton(container)).toBeEnabled()
-    })
-
-    it('Optimise re-applies the auto-optimised schedule and disables itself again', async () => {
-      const user = userEvent.setup()
-      const { container } = renderDemo()
-      await switchToSmartAgile(user)
-      await user.click(jumpToStage('Optimise'))
-      await user.click(screen.getByRole('button', { name: 'Reset' }))
-
-      await user.click(controlsOptimiseButton(container))
-
-      const expected = expectedAutoOptimisedStartSlots()
-      expect(screen.getByRole('slider', { name: /dishwasher/i })).toHaveAttribute(
-        'aria-valuenow',
-        String(expected.dishwasher),
-      )
-      expect(controlsOptimiseButton(container)).toBeDisabled()
-      expect(screen.getByRole('button', { name: 'Reset' })).toBeEnabled()
-    })
+    expect(screen.queryByRole('slider', { name: /oven/i })).not.toBeInTheDocument()
+    expect(screen.getByText(/oven/i)).toBeInTheDocument()
   })
 
   // OA-106: an event overlay must never render unless it maps to a real,

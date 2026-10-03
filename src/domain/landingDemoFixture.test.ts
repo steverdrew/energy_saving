@@ -466,3 +466,49 @@ describe('buildLandingDemoFixture', () => {
     })
   })
 })
+
+// OA-146: "daily, monthly and annual figures derive from a single
+// canonical saving basis... figures reconcile after rounding." A tariff's
+// per-day rate difference genuinely recurs every day of the year, so
+// `annualDifferencePence` is modelled as a straight x365 of the daily
+// figure -- but it must be x365 of the same (penny-rounded) daily figure
+// the UI actually displays, not the unrounded one, or the two can
+// disagree by whole pounds once each is rounded again for its own display
+// (e.g. 14.22p/day rounds to "14p" on its own, but 14.22p x 365 rounds to
+// "£51.90" -- not the £51.10 that "14p" x 365 actually is).
+describe('tariffComparison annual/daily reconciliation (OA-146)', () => {
+  it('derives every annualDifferencePence as exactly the penny-rounded daily figure x365, for every tariff and comparison basis', () => {
+    for (const currentTariffId of TARIFF_IDS) {
+      const fixture = buildLandingDemoFixture({}, 'agile', currentTariffId)
+      for (const entry of fixture.tariffComparison) {
+        const roundedDailyPence = Math.round(entry.differencePenceVsCurrentTariffPence)
+        expect(entry.annualDifferencePence).toBe(roundedDailyPence * 365)
+      }
+    }
+  })
+
+  it('never produces an annual figure whose own /365 rounds back to a different penny figure than the displayed daily one', () => {
+    const fixture = buildLandingDemoFixture({}, 'agile', 'standard-variable')
+    for (const entry of fixture.tariffComparison) {
+      const displayedDailyPence = Math.round(Math.abs(entry.differencePenceVsCurrentTariffPence))
+      const impliedDailyFromAnnual = Math.round(Math.abs(entry.annualDifferencePence) / 365)
+      expect(impliedDailyFromAnnual).toBe(displayedDailyPence)
+    }
+  })
+})
+
+// OA-146: the Optimise stage's monthly figure must reconcile with the
+// dominant annual headline it sits beneath -- both now derive from the
+// same `projectedAnnualSavingPence` (monthly = annual/12, already how
+// `buildEventProjection` computes it; this just locks that in at the
+// fixture's top level too).
+describe('projection monthly/annual reconciliation (OA-146)', () => {
+  it('derives projectedMonthlySavingPence as exactly projectedAnnualSavingPence/12', () => {
+    const fixture = buildLandingDemoFixture(
+      Object.fromEntries(LANDING_DEMO_EVENTS.filter(isRealHouseholdEvent).map((e) => [e.id, e.actualStartSlot])),
+      'agile',
+      'standard-variable',
+    )
+    expect(fixture.projection.projectedMonthlySavingPence * 12).toBeCloseTo(fixture.projection.projectedAnnualSavingPence, 9)
+  })
+})

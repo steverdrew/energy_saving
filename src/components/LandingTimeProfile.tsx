@@ -115,7 +115,16 @@ function priceStripLegendText(shape: PriceStripShape, offPeakTimeRange: string |
 // component doesn't otherwise need) reserves extra lane width for a
 // short-duration event with a long name, so it's pushed to its own lane
 // instead of visually colliding with its neighbour's label.
-const ESTIMATED_CHARS_PER_LABEL_SLOT = 2.2
+// Follow-up fix: 2.2 chars/slot assumed more horizontal room than
+// `--chart-event-label-size`'s actual bold 16px glyphs take up at the
+// card's own ~900px width (48 slots -> ~18px/slot, ~9-10px/bold-char --
+// closer to 1.8 chars/slot), so two adjacent long labels (e.g. "Washing
+// machine" immediately followed by "Oven") could still land in the same
+// lane and visually run together. Lowered to 1.8, plus a one-slot buffer
+// on top of the estimate so neighbouring labels keep a visible gap rather
+// than sitting flush against each other.
+const ESTIMATED_CHARS_PER_LABEL_SLOT = 1.8
+const LABEL_LANE_BUFFER_SLOTS = 1
 
 function computeEventLanes(overlays: readonly LandingTimeProfileEventOverlay[]): Map<string, number> {
   const laneEndSlots: number[] = []
@@ -123,7 +132,7 @@ function computeEventLanes(overlays: readonly LandingTimeProfileEventOverlay[]):
   const sorted = [...overlays].sort((a, b) => a.startSlot - b.startSlot)
   for (const overlay of sorted) {
     const labelSlotSpan = Math.ceil(overlay.label.length / ESTIMATED_CHARS_PER_LABEL_SLOT)
-    const end = overlay.startSlot + Math.max(overlay.slotCount, labelSlotSpan)
+    const end = overlay.startSlot + Math.max(overlay.slotCount, labelSlotSpan) + LABEL_LANE_BUFFER_SLOTS
     let lane = laneEndSlots.findIndex((laneEnd) => laneEnd <= overlay.startSlot)
     if (lane === -1) {
       lane = laneEndSlots.length
@@ -184,12 +193,12 @@ export interface LandingTimeProfileProps {
   payoff?: ReactNode
   /** OA-126: the standing charge, disclosed quietly right next to the result it's deliberately excluded from (e.g. "+ 55p/day standing charge") -- shown on every stage, consistently, so the headline £ figure is never mistaken for a visitor's full daily bill. */
   standingChargeNote?: ReactNode
-  /** OA-106: optional secondary controls ("Optimise all" / "Reset"), shown above the chart -- only the Optimise step passes this. */
+  /** OA-137: Optimise's quiet tariff-context label (e.g. "Smart · Agile") -- the old "Reset"/"Optimise" buttons this slot used to carry are removed (arriving at Optimise always auto-optimises; see LandingDemo.tsx). Rendered in the heading row for the `'result-right'` split, or in its own right-hand column for `'context-right'` -- see `splitLayout`. */
   controls?: ReactNode
   /** OA-141/136: Baseline's current-tariff selector and Compare's A/B comparison selector, each promoted to its own full-width, visually prominent block -- "the key decision on this tab... should have stronger hierarchy than secondary controls." Rendered between the supporting copy and the result (never squeezed into the `controls` slot beside the heading, which stays small/secondary for Optimise's Reset/Optimise buttons). Baseline and Compare pass this; Optimise doesn't. */
   primarySelector?: ReactNode
-  /** OA-143: Baseline only -- "left = choose, right = result." Puts the heading/supporting copy/primary selector in a left column and the result summary (resultLabel/result/payoff/standingChargeNote) in a compact right-hand column, so the tariff choice stays the dominant action and pricing reads as its secondary result. Falls back to the default stacked narrative (Compare/Optimise) when omitted. */
-  splitLayout?: boolean
+  /** OA-143/OA-136/OA-137: the two-column layout every stage now uses, in one of two arrangements. `'result-right'` (Baseline/Compare) -- "left = choose, right = result": heading/supporting copy/primary selector/`controls` on the left, the result summary (resultLabel/result/payoff/standingChargeNote) in a compact right-hand column, so the tariff choice stays the dominant action and pricing reads as its secondary result. `'context-right'` (Optimise) -- OA-137's "main text should not float on the right": heading/supporting copy/result summary all sit together on the left as the dominant content, with `controls` (now just a quiet tariff-context label, no buttons) alone in the right column. Omit for the default stacked narrative (no stage currently uses this). */
+  splitLayout?: 'result-right' | 'context-right'
   /** Remounts just the narrative block (not the chart) to replay its OA-80 fade/slide on step change -- see the component doc comment for why the chart itself must stay mounted. */
   stepKey: string
   /** OA-99/OA-101: the 16:00-19:00 structural-peak annotation is a documented feature of *Agile's* pricing formula specifically -- showing it on a flat Standard Variable day would wrongly imply that flat tariff has the same structural peak. Baseline passes `false`; Compare/Optimise (both on Agile) pass `true`. */
@@ -514,7 +523,10 @@ function LandingTimeProfile({
                 <h3 className="landing-time-profile__question">{questionHeading}</h3>
                 <p className="landing-time-profile__supporting">{supportingCopy}</p>
               </div>
-              {controls}
+              {/* OA-137: `'context-right'` (Optimise) renders `controls` in
+                  its own right-hand column below instead -- inlining it here
+                  too would duplicate the now-quiet tariff-context label. */}
+              {splitLayout !== 'context-right' && controls}
             </div>
           )
           // OA-141/136: "the selector should not feel visually lost between
@@ -548,11 +560,12 @@ function LandingTimeProfile({
             </>
           )
 
-          // OA-143: "left = choose, right = result" -- Baseline only. The
-          // tariff choice (heading + selector) stays the dominant left-hand
-          // action; the pricing summary becomes a compact right-hand result,
-          // never a second primary task competing with it.
-          if (splitLayout) {
+          // OA-143/OA-136: "left = choose, right = result" -- Baseline/
+          // Compare. The tariff choice (heading + selector) stays the
+          // dominant left-hand action; the pricing summary becomes a
+          // compact right-hand result, never a second primary task
+          // competing with it.
+          if (splitLayout === 'result-right') {
             return (
               <div className="landing-time-profile__split">
                 <div className="landing-time-profile__split-left">
@@ -560,6 +573,24 @@ function LandingTimeProfile({
                   {primarySelectorBlock}
                 </div>
                 <div className="landing-time-profile__split-right">{resultBlock}</div>
+              </div>
+            )
+          }
+
+          // OA-137: "the main text should not float on the right" --
+          // Optimise. The headline saving is the dominant *left*-hand
+          // content, alongside the heading/supporting copy; the right
+          // column holds only `controls` (now a quiet "Smart · Agile"
+          // tariff-context label, no buttons), never a second result.
+          if (splitLayout === 'context-right') {
+            return (
+              <div className="landing-time-profile__split">
+                <div className="landing-time-profile__split-left">
+                  {headingRow}
+                  {primarySelectorBlock}
+                  {resultBlock}
+                </div>
+                <div className="landing-time-profile__split-right">{controls}</div>
               </div>
             )
           }
@@ -653,6 +684,19 @@ function LandingTimeProfile({
             strip actually renders (flat/two-rate/dynamic). */}
         <p className="landing-time-profile__price-legend">{priceStripLegendText(priceStripShape, offPeakTimeRange)}</p>
 
+        {/* Follow-up fix: event chips/labels used to live inside
+            `__track` itself, which clips (`overflow: hidden`, needed so
+            the price-neutral columns keep the track's own rounded
+            corners) -- a long label on an event near the end of the day
+            (e.g. "Tumble dryer"/"Dishwasher" around 22:00-23:30) could
+            get visually cut off at the track's right edge. `__track-wrap`
+            sizes to the track (the only element in normal flow inside
+            it), and `__event-layer` is an absolutely-positioned sibling
+            covering the exact same box but *without* the clip, so a
+            chip's label can overflow past the track's edge without being
+            hidden. Percentage-based left/width positioning is unaffected
+            since the layer's box is identical to the track's. */}
+        <div className="landing-time-profile__track-wrap">
         <div
           ref={trackRef}
           className="landing-time-profile__track"
@@ -719,8 +763,9 @@ function LandingTimeProfile({
           >
             <path d={usagePath} />
           </svg>
+        </div>
 
-          {/* OA-105/OA-115: every shared household event, overlaid in the
+        {/* OA-105/OA-115: every shared household event, overlaid in the
               same position on every tab -- a fixed, non-interactive chip
               here, or (Optimise only) a draggable chip, clamped by the
               caller to that event's own valid same-day window. OA-115:
@@ -733,6 +778,7 @@ function LandingTimeProfile({
               *label* is allowed to overflow that coloured indicator
               (`overflow: visible` in CSS) rather than hard-truncating, so
               short events like "Washing machine" never render as "Wa...". */}
+        <div className="landing-time-profile__event-layer">
           {renderableEventOverlays.map((overlay) => {
             const left = `${(overlay.startSlot / day.slots.length) * 100}%`
             const width = `${(overlay.slotCount / day.slots.length) * 100}%`
@@ -843,6 +889,7 @@ function LandingTimeProfile({
               </div>
             )
           })}
+        </div>
         </div>
 
         {/* Short tick marks bridging the gap between the track's hour

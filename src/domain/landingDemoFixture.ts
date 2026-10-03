@@ -652,6 +652,17 @@ export interface LandingDemoTariffComparisonEntry {
   // happens to run), so a straight x365 projection is the correct model
   // here, not the "do not simply calculate today's saving x 365" case
   // `projection.projectedAnnualSavingPence` exists to avoid.
+  //
+  // OA-146: derived from the *displayed* (penny-rounded) daily figure, not
+  // the raw one -- the UI's daily line already rounds
+  // `differencePenceVsCurrentTariffPence` to the nearest penny, and an
+  // unrounded x365 can disagree with that rounded daily figure by several
+  // pounds a year once it's then rounded again for its own display (e.g.
+  // 14.22p/day genuinely rounds to "14p" but 14.22p x 365 rounds to
+  // "£51.90", not the £51.10 that 14p x 365 actually is). Rounding once,
+  // here, and deriving every other period from that same rounded value is
+  // what keeps daily x365 == annual after display rounding, for any
+  // precision the UI chooses to show either at.
   annualDifferencePence: number
   isCurrentTariff: boolean
 }
@@ -774,7 +785,7 @@ export function buildLandingDemoFixture(
       tariffName: TARIFF_LABELS[id],
       totalCostPence,
       differencePenceVsCurrentTariffPence,
-      annualDifferencePence: differencePenceVsCurrentTariffPence * 365,
+      annualDifferencePence: Math.round(differencePenceVsCurrentTariffPence) * 365,
       isCurrentTariff: id === currentTariffId,
     }
   })

@@ -49,6 +49,16 @@
   outline-offset: 2px;
 }
 
+/* OA-117: "the disabled state should be visually clear but not punitive"
+   -- stays fully legible (never the very-low-opacity/greyed treatment
+   disabled controls elsewhere use), just not clickable, with a lower
+   opacity ceiling than an enabled-but-inactive label so it still reads as
+   "not yet available" at a glance. */
+.landing-story-scrubber__label[data-locked] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* OA-109: "scrubber drag must not break normal page vertical scrolling
    outside the control" -- `pan-y` on the track lets a touch that starts
    here still scroll the page vertically; only the thumb itself (the

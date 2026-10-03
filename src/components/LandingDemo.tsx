@@ -129,25 +129,28 @@ function formatPenceCompact(pence: number): string {
   return rounded < 100 ? `${rounded}p` : formatGbp(rounded)
 }
 
-// OA-136 (updated spec): "lead with the meaningful result... do not lead
-// with raw tariff prices" -- "14p less/day"/"5p more/day", or "About the
-// same" for a negligible (rounds to zero) difference, never a "0p
-// less/more" reading as spuriously precise.
+// OA-136 (second pass): "14p less/day"/"5p more/day" -- now the
+// *secondary* daily-equivalent line (the annual figure below is the
+// dominant headline). Omitted entirely by the caller once the difference
+// rounds to zero, since the annual headline's own "About the same over a
+// year" already covers that case -- a secondary "About the same" under it
+// would just repeat the same statement twice.
 function describeComparisonHeadline(diffPence: number): string {
   const rounded = Math.round(diffPence)
-  if (rounded === 0) return 'About the same'
   return rounded < 0 ? `${formatPenceCompact(rounded)} less/day` : `${formatPenceCompact(rounded)} more/day`
 }
 
-// OA-136 (updated spec): "annualised value can be shown as a secondary
-// figure where the model supports it" -- e.g. "≈ £51/year less". Omitted
-// (returns undefined) once the daily difference is already negligible, so
-// an "About the same" headline is never followed by a spurious annual
-// figure derived from rounding noise.
-function describeAnnualDifference(annualPence: number, dailyDiffPence: number): string | undefined {
-  if (Math.round(dailyDiffPence) === 0) return undefined
+// OA-136 (second pass): "make the annual saving / annual cost increase the
+// dominant result" -- "Save about £70/year" / "Costs about £18/year more"
+// / "About the same over a year", replacing the old daily-led headline.
+// Keyed on the *daily* difference for the negligible case (rather than a
+// rounded annual figure) so a genuinely tiny daily difference can never
+// read as a materially different annual one just from multiplying up
+// rounding noise.
+function describeComparisonAnnualHeadline(annualPence: number, dailyDiffPence: number): string {
+  if (Math.round(dailyDiffPence) === 0) return 'About the same over a year'
   const rounded = Math.round(Math.abs(annualPence))
-  return annualPence < 0 ? `≈ ${formatGbp(rounded)}/year less` : `≈ ${formatGbp(rounded)}/year more`
+  return annualPence < 0 ? `Save about ${formatGbp(rounded)}/year` : `Costs about ${formatGbp(rounded)}/year more`
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -337,6 +340,17 @@ function LandingDemo() {
   // every state transition without extra state.
   const hasSelectedComparisonTariff = chosenTariffId !== currentTariffId
 
+  // OA-117/OA-136: "only a Smart comparison tariff can proceed to
+  // Optimise" -- Flexible/Fixed have no timing structure at all to
+  // optimise against, so Optimise must be visibly unavailable rather than
+  // landing on a flat "little to save" result for a tariff type that was
+  // never going to have one. Deliberately keyed on the chosen tariff's
+  // *category*, not `hasSelectedComparisonTariff` -- before the user picks
+  // an alternative, `chosenTariffId` still equals `currentTariffId`, and if
+  // that starting tariff already happens to be Smart, Optimise should stay
+  // reachable rather than requiring a redundant re-selection of it.
+  const canReachOptimiseStage = TARIFF_CATEGORY[chosenTariffId] === 'smart'
+
   // OA-136: picking an alternative tariff to inspect/carry into Optimise --
   // re-optimises against the newly chosen tariff's own rates (OA-137-aware:
   // falls back to the original schedule if that tariff has no genuine
@@ -392,7 +406,16 @@ function LandingDemo() {
     return category !== 'smart' && resolveTariffForCategory(category, chosenTariffId) === currentTariffId
   }
 
-  const clampedProgress = Math.max(0, Math.min(2, progress))
+  // OA-117: the scrubber itself (LandingStoryScrubber) already refuses to
+  // drag/click/key its way past a locked stage, but `progress` can still
+  // momentarily hold an unclamped value the instant `canReachOptimiseStage`
+  // flips from true to false (e.g. scrubbing back to Compare and switching
+  // to Flexible while still mid-drag toward Optimise) -- this is the single
+  // place that derives every other value in this component from `progress`,
+  // so clamping here too keeps the whole render consistent even in that
+  // instant, with no separate effect needed to correct the stored state.
+  const maxReachableStageIndex = canReachOptimiseStage ? 2 : 1
+  const clampedProgress = Math.max(0, Math.min(maxReachableStageIndex, progress))
   const nearestStageIndex = Math.round(clampedProgress)
   const nearestStage = STAGE_ORDER[nearestStageIndex]
   // OA-109: "event dragging only at stage 3" -- gated on having actually
@@ -419,42 +442,6 @@ function LandingDemo() {
   function moveEvent(eventId: string, startSlot: number) {
     setOptimiseEventStartSlots((prev) => ({ ...prev, [eventId]: clampEventStartSlot(eventId, startSlot, prev) }))
   }
-
-  // OA-106/OA-117: "Reset" means return to the original household
-  // schedule, not undo the last move, and not undo auto-optimisation --
-  // clearing all overrides makes every event fall back to its
-  // `actualStartSlot`, the exact same position shown fixed on Baseline/
-  // Compare (see `buildLandingDemoFixture`'s default). OA-117 removed the
-  // "Optimise all" button this used to pair with (the scrubber now
-  // auto-optimises on its own), but Reset keeps its original meaning
-  // unchanged -- now the one way back to the original schedule from
-  // Optimise's auto-optimised default, same as it was from a manual drag.
-  function resetSchedule() {
-    setOptimiseEventStartSlots({})
-  }
-
-  // Re-applies the same auto-optimised schedule the scrubber arrives at by
-  // default -- only ever needed after Reset has returned every event to
-  // its original slot (see the button's `disabled` condition below), since
-  // arriving at Optimise is already auto-optimised on its own (OA-117).
-  // OA-137: this button is only rendered at all once
-  // `fixture.hasTimingSavingOpportunity` is true, so it's safe to always
-  // use the real auto-optimised schedule here, never the
-  // threshold-guarded fallback `computeEffectiveOptimisedStartSlots` uses
-  // on arrival.
-  function optimiseAll() {
-    setOptimiseEventStartSlots(computeAutoOptimisedStartSlots(chosenTariffId))
-  }
-
-  // OA-117: "has moved" now means *differs from the original schedule*,
-  // not merely "has an entry in the override map" -- the map is
-  // auto-populated with the optimised schedule from the start, so an
-  // emptiness check would leave Reset permanently enabled even right
-  // after Reset itself re-populated nothing. Compares each movable
-  // event's current position against its own actual one.
-  const hasMovedFromOriginalSchedule = LANDING_DEMO_EVENTS.filter(isRealHouseholdEvent)
-    .filter((event) => event.movable)
-    .some((event) => (optimiseEventStartSlots[event.id] ?? event.actualStartSlot) !== event.actualStartSlot)
 
   // OA-110/OA-126: the compact, visually dominant primary result for the
   // current stage -- kept separate from the question heading/supporting
@@ -550,30 +537,37 @@ function LandingDemo() {
     supportingCopy = 'Same household. Same usage. Same timings. Only the tariff changes.'
     const currentEntry = fixture.tariffComparison.find((entry) => entry.isCurrentTariff)!
     if (hasSelectedComparisonTariff) {
-      // OA-136 (updated spec): "lead with the meaningful result... the
-      // right-hand summary should make the result understandable without
-      // requiring the user to mentally subtract two tariff prices" --
-      // replaces the old "Flexible — £1.80/day" / "Smart · Agile —
-      // £1.66/day" raw-price pair with the directional headline first,
-      // then which tariff and what it's compared against.
+      // OA-136 (second pass): "make the annual saving the dominant result
+      // ... a dedicated result-block treatment rather than ordinary
+      // right-aligned text" -- the annual headline, tariff-vs-tariff
+      // context and the now-secondary daily figure all live together in
+      // one visually distinct block (`__annual-hero`, LandingTimeProfile.css),
+      // not spread across the plain `result`/`payoff` slots other stages
+      // use for a single flat figure. `data-direction` lets that block's
+      // CSS give a saving/cost/neutral outcome a distinct accent without
+      // three near-duplicate class names.
       const chosenEntry = fixture.tariffComparison.find((entry) => entry.tariffId === chosenTariffId)!
+      const dailyDiffPence = chosenEntry.differencePenceVsCurrentTariffPence
+      const isNegligible = Math.round(dailyDiffPence) === 0
+      const direction = isNegligible ? 'neutral' : dailyDiffPence < 0 ? 'save' : 'cost'
       resultLabel = undefined
       result = (
-        <>
-          <strong>{describeComparisonHeadline(chosenEntry.differencePenceVsCurrentTariffPence)}</strong>
+        <span className="landing-time-profile__annual-hero" data-direction={direction}>
+          <strong className="landing-time-profile__annual-hero-figure">
+            {describeComparisonAnnualHeadline(chosenEntry.annualDifferencePence, dailyDiffPence)}
+          </strong>
           <span className="landing-time-profile__compare-row">{tariffContextLabel(chosenTariffId)}</span>
           <span className="landing-time-profile__compare-row">vs {tariffContextLabel(currentTariffId)}</span>
-        </>
+          {/* OA-136: the daily pence figure is now secondary supporting
+              context, not the headline -- and dropped entirely once it's
+              already negligible, since the headline's own "About the same
+              over a year" already says so. */}
+          {!isNegligible && (
+            <span className="landing-time-profile__annual-hero-daily">{describeComparisonHeadline(dailyDiffPence)}</span>
+          )}
+        </span>
       )
-      // OA-136 (updated spec): "annualised value can be shown as a
-      // secondary figure where the model supports it" -- a quiet detail
-      // line under the headline, same treatment Optimise's today/month
-      // figure already uses.
-      const annualText = describeAnnualDifference(
-        chosenEntry.annualDifferencePence,
-        chosenEntry.differencePenceVsCurrentTariffPence,
-      )
-      payoff = annualText ? <span className="landing-time-profile__payoff-detail">{annualText}</span> : undefined
+      payoff = undefined
     } else {
       // OA-136: "starting state" -- only the fixed current-tariff
       // reference, before any alternative has been chosen to compare it
@@ -591,24 +585,23 @@ function LandingDemo() {
     caveat =
       'Representative comparison — which tariff costs less depends on your own usage, region and actual prices on the day.'
 
-    // OA-136 (updated spec): "Tab 2 should follow the same pattern" as
-    // Tab 1's prominent segmented control (OA-141) -- promoted into
-    // `primarySelector` (its own block in the main content flow, directly
-    // below the heading/supporting copy), using the exact same
-    // `.landing-time-profile__segmented`/`-button` treatment, not the
-    // small top-right pills this replaces. Smart's second-level row below
-    // it uses the same large treatment too -- "a direct continuation of
-    // the primary choice, not a separate secondary widget in the corner."
-    // `controls` (the small heading-row slot) is left unset for Compare:
-    // there's no second, duplicate selector any more.
+    // OA-136 (second pass): "reduce the control hierarchy... do not
+    // include [the current tariff's category] as a large disabled segment
+    // if removing it makes the choice simpler" -- the current tariff's own
+    // category (if it resolves to exactly one tariff -- Flexible/Fixed) is
+    // dropped from the row entirely rather than shown disabled, since it's
+    // already explicit in the heading/result context above. Smart stays in
+    // the row even when the current tariff is itself Smart -- there's
+    // still a genuine, different smart product to compare against -- with
+    // only that one matching product excluded from its own compact
+    // subtype row below.
     const chosenCategory = TARIFF_CATEGORY[chosenTariffId]
+    const compareCategoryOptions = (['flexible', 'fixed', 'smart'] as const).filter(
+      (category) => !isCategoryDisabledAsComparisonTarget(category),
+    )
+    const compareSmartTariffOptions = SMART_TARIFF_IDS.filter((tariffId) => tariffId !== currentTariffId)
     primarySelector = (
       <div className="landing-time-profile__primary-selector-stack">
-        {/* OA-136: current tariff's own category visibly disabled so it
-            can never be re-selected as its own comparison target --
-            legible, but clearly not selectable. Smart reveals its own
-            products below, with whichever one matches the current tariff
-            disabled the same way. */}
         <span className="landing-time-profile__primary-selector-label">
           Compare {tariffContextLabel(currentTariffId)} with:
         </span>
@@ -617,35 +610,39 @@ function LandingDemo() {
           role="group"
           aria-label={`Compare ${tariffContextLabel(currentTariffId)} with`}
         >
-          {(['flexible', 'fixed', 'smart'] as const).map((category) => {
-            const disabled = isCategoryDisabledAsComparisonTarget(category)
-            return (
-              <button
-                key={category}
-                type="button"
-                className="landing-time-profile__segmented-button"
-                aria-pressed={!disabled && category === chosenCategory}
-                disabled={disabled}
-                onClick={() => selectChosenTariffCategory(category)}
-              >
-                {CATEGORY_LABELS[category]}
-              </button>
-            )
-          })}
+          {compareCategoryOptions.map((category) => (
+            <button
+              key={category}
+              type="button"
+              className="landing-time-profile__segmented-button"
+              aria-pressed={category === chosenCategory}
+              onClick={() => selectChosenTariffCategory(category)}
+            >
+              {CATEGORY_LABELS[category]}
+            </button>
+          ))}
         </div>
+        {/* OA-136 (second pass): "should not look like another full-width
+            segmented tab bar... clearly feel secondary to the primary
+            tariff-type choice" -- the same compact pill treatment
+            Baseline's own Smart subtype row already uses, not the large
+            `__segmented` control the first pass gave this. The current
+            tariff's own matching product is excluded entirely (see
+            `compareSmartTariffOptions`) rather than shown disabled, for
+            the same "don't show what can't be chosen" reason as the
+            primary row above. */}
         {chosenCategory === 'smart' && (
           <div
-            className="landing-time-profile__segmented"
+            className="landing-time-profile__controls landing-time-profile__controls--secondary"
             role="group"
             aria-label="Choose a smart tariff to compare"
           >
-            {SMART_TARIFF_IDS.map((tariffId) => (
+            {compareSmartTariffOptions.map((tariffId) => (
               <button
                 key={tariffId}
                 type="button"
-                className="landing-time-profile__segmented-button"
+                className="landing-time-profile__controls-button landing-time-profile__controls-button--secondary"
                 aria-pressed={tariffId === chosenTariffId && hasSelectedComparisonTariff}
-                disabled={tariffId === currentTariffId}
                 onClick={() => selectChosenTariff(tariffId)}
               >
                 {TARIFF_SHORT_LABELS[tariffId]}
@@ -683,10 +680,26 @@ function LandingDemo() {
     // oddly; this stage instead states the standing charge is untouched.
     standingChargeNote = 'Standing charge unaffected — never part of this saving'
 
+    // OA-146: `monthlySavingPence` is derived from the same canonical
+    // `projectedAnnualSavingPence` the dominant `result` line above
+    // already shows (annual/12, see `buildEventProjection`), so this line
+    // and the headline always reconcile. `dailySavingPence`
+    // (`fixture.timingSavingPence`) is a genuinely different measure --
+    // today's example day's actual before/after cost, not an equivalent
+    // daily rate for the annual/monthly recurrence projection above (see
+    // the "do not simply calculate today's saving x 365" comment on
+    // `WEEKS_PER_YEAR` in landingDemoFixture.ts) -- so it's labelled and
+    // explained on its own line, in the same quiet `payoff-caveat`
+    // treatment as the other secondary caveats, rather than grouped next
+    // to the monthly figure as if one annualises into the other.
     payoff = (
-      <span className="landing-time-profile__payoff-detail">
-        {formatGbp(Math.abs(dailySavingPence))} today · ≈ {formatGbp(Math.abs(monthlySavingPence))}/month
-      </span>
+      <>
+        <span className="landing-time-profile__payoff-detail">≈ {formatGbp(Math.abs(monthlySavingPence))}/month, at the assumed cycle frequency</span>
+        <span className="landing-time-profile__payoff-caveat">
+          Today's example day alone saves {formatGbp(Math.abs(dailySavingPence))} — a separate, single-day figure, not this
+          estimate's daily rate.
+        </span>
+      </>
     )
 
     // OA-112: every secondary detail (methodology, standing-charge
@@ -712,60 +725,31 @@ function LandingDemo() {
       </details>
     )
 
-    // OA-106/OA-112/OA-117: "Reset" returns to the un-optimised schedule,
-    // for a visitor who has manually experimented with events, or who
-    // simply wants to compare against the original timings. "Optimise"
-    // sits alongside it but only re-enables once the schedule is back at
-    // original (i.e. after Reset) -- arriving at Optimise is already
-    // auto-optimised on its own (OA-117), so the button would be
-    // redundant until Reset (or a manual drag back to original) undoes
-    // that.
-    controls = (
-      <div className="landing-time-profile__controls-stack">
-        {/* OA-117/OA-132/OA-137: the tariff chosen on Compare carries into
-            Optimise as quiet context only -- never a second prominent
-            selector here. Changing tariff means scrubbing back to
-            Compare, selecting there, and scrubbing forward again. */}
-        <span className="landing-time-profile__tariff-context">{tariffContextLabel(chosenTariffId)}</span>
-        <div className="landing-time-profile__controls">
-          <button
-            type="button"
-            className="landing-time-profile__controls-button"
-            onClick={resetSchedule}
-            disabled={!hasMovedFromOriginalSchedule}
-          >
-            Reset
-          </button>
-          <button
-            type="button"
-            className="landing-time-profile__controls-button"
-            onClick={optimiseAll}
-            disabled={hasMovedFromOriginalSchedule}
-          >
-            Optimise
-          </button>
-        </div>
-      </div>
-    )
+    // OA-137: "Reset"/"Optimise" removed as top-level actions -- arriving
+    // at Optimise already auto-optimises on its own (OA-117), so a manual
+    // "Optimise" button was always redundant, and the ticket is explicit
+    // that Reset should not remain a primary top-level action here either.
+    // What's left is exactly the tariff-context label the no-opportunity
+    // branch below already uses -- both branches now share the same quiet,
+    // button-free `controls`.
+    controls = <span className="landing-time-profile__tariff-context">{tariffContextLabel(chosenTariffId)}</span>
   } else {
-    // OA-137: "where the tariff is effectively flat across the day, or
-    // valid shifts produce no meaningful saving, do not manufacture an
-    // optimisation result" -- a factual, neutral state rather than a
-    // saving figure of ~£0 dressed up as an "aha moment". No Reset/
-    // Optimise controls (there's nothing meaningful to reset or apply),
-    // and the chart shows the household's real, unmoved schedule
-    // (`optimiseEventStartSlots` is never auto-populated with a trial
-    // schedule that didn't clear the threshold -- see
-    // `computeEffectiveOptimisedStartSlots`).
-    questionHeading = 'Can this tariff be improved by moving flexible use?'
-    supportingCopy = 'Your tariff charges broadly the same throughout the day.'
+    // OA-137: a Smart tariff is selected (Optimise is otherwise
+    // unreachable -- see `canReachOptimiseStage`), but it has no genuine
+    // timing-saving opportunity under its real pricing structure -- a
+    // factual, neutral result rather than manufacturing a saving figure of
+    // ~£0 dressed up as an "aha moment". The chart shows the household's
+    // real, unmoved schedule (`optimiseEventStartSlots` is never
+    // auto-populated with a trial schedule that didn't clear the
+    // threshold -- see `computeEffectiveOptimisedStartSlots`).
+    questionHeading = 'What could you save by moving flexible use?'
+    supportingCopy = 'Shift only the things that can realistically move.'
     resultLabel = undefined
-    result = <strong>There&rsquo;s little to save by changing when you use electricity on this tariff.</strong>
+    result = <strong>Little additional saving available</strong>
     standingChargeNote = undefined
     payoff = (
       <span className="landing-time-profile__payoff-detail">
-        {tariffContextLabel(chosenTariffId)} charges broadly the same throughout the day, so shifting these loads
-        won&rsquo;t materially reduce the cost.
+        Your flexible use is already close to the cheaper periods.
       </span>
     )
     explanation = undefined
@@ -903,6 +887,9 @@ function LandingDemo() {
         stages={SCRUBBER_STAGES}
         progress={clampedProgress}
         onProgressChange={setProgress}
+        // OA-117: locks the Optimise label/drag range until the chosen
+        // comparison tariff is Smart.
+        maxReachableIndex={maxReachableStageIndex}
         aria-label="Demo story stage"
       />
 
@@ -923,9 +910,11 @@ function LandingDemo() {
           primarySelector={primarySelector}
           // OA-143/OA-136: "Tab 1 and Tab 2 should share the same
           // high-level layout" -- left = choice, right = outcome, for both
-          // Baseline and Compare. Optimise keeps its existing stacked
-          // narrative (not part of either ticket's scope).
-          splitLayout={nearestStage === 'baseline' || nearestStage === 'compare'}
+          // Baseline and Compare. OA-137: Optimise now uses the same
+          // two-column grammar too, but inverted -- the headline saving is
+          // dominant *left*-hand content, with only the quiet tariff
+          // context on the right.
+          splitLayout={nearestStage === 'optimise' ? 'context-right' : 'result-right'}
           stepKey={nearestStage}
           // OA-99/OA-101/OA-127/OA-135: the 16:00-19:00 structural peak is
           // a documented feature of Agile's pricing specifically -- shown

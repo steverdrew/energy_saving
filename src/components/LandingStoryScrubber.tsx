@@ -21,6 +21,8 @@ export interface LandingStoryScrubberProps {
   onProgressChange: (progress: number) => void
   /** Called once a drag ends (or a label click/keyboard step completes) with the final, snapped integer stage -- the caller's cue to commit any per-event state tied to "fully at this stage" (e.g. OA-109's "event dragging only at stage 3"). */
   onCommit?: (stageIndex: number) => void
+  /** OA-117: the furthest stage index the user can currently reach -- e.g. locks Optimise (index 2) until the comparison tariff selected in Compare is a Smart tariff. Defaults to the last stage (no gating). The gated stage's label is rendered visibly but disabled ("visually clear but not punitive" -- never hidden), and neither dragging, clicking its label, nor arrow/Home/End keys can move `progress` past it. */
+  maxReachableIndex?: number
   'aria-label'?: string
 }
 
@@ -42,20 +44,33 @@ function clamp(value: number, min: number, max: number): number {
  * owns all of that (fixture, narrative, interpolation); this component
  * only ever reports a number back via `onProgressChange`/`onCommit`.
  */
-function LandingStoryScrubber({ stages, progress, onProgressChange, onCommit, ...rest }: LandingStoryScrubberProps) {
+function LandingStoryScrubber({
+  stages,
+  progress,
+  onProgressChange,
+  onCommit,
+  maxReachableIndex,
+  ...rest
+}: LandingStoryScrubberProps) {
   const trackRef = useRef<HTMLDivElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const maxIndex = stages.length - 1
+  // OA-117: "should not be able to drag/click into an active Optimise
+  // state" -- every position-reporting path below clamps to this, not just
+  // maxIndex, while the ratio from pointer position still spans the whole
+  // track (so the thumb visibly can't reach the gated label's position,
+  // rather than reinterpreting a smaller track width).
+  const effectiveMaxIndex = clamp(maxReachableIndex ?? maxIndex, 0, maxIndex)
 
   function progressFromClientX(clientX: number): number {
     const rect = trackRef.current?.getBoundingClientRect()
     if (!rect || rect.width === 0) return progress
     const ratio = clamp((clientX - rect.left) / rect.width, 0, 1)
-    return ratio * maxIndex
+    return Math.min(effectiveMaxIndex, ratio * maxIndex)
   }
 
   function commitSnap(value: number) {
-    const snapped = clamp(Math.round(value), 0, maxIndex)
+    const snapped = clamp(Math.round(value), 0, effectiveMaxIndex)
     onProgressChange(snapped)
     onCommit?.(snapped)
   }
@@ -100,7 +115,7 @@ function LandingStoryScrubber({ stages, progress, onProgressChange, onCommit, ..
       commitSnap(0)
     } else if (e.key === 'End') {
       e.preventDefault()
-      commitSnap(maxIndex)
+      commitSnap(effectiveMaxIndex)
     }
   }
 
@@ -110,18 +125,24 @@ function LandingStoryScrubber({ stages, progress, onProgressChange, onCommit, ..
   return (
     <div className="landing-story-scrubber" data-dragging={isDragging || undefined}>
       <div className="landing-story-scrubber__labels" role="group" aria-label={rest['aria-label'] ?? 'Story stage'}>
-        {stages.map((stage, index) => (
-          <button
-            key={stage.id}
-            type="button"
-            className="landing-story-scrubber__label"
-            data-active={activeStageIndex === index || undefined}
-            aria-current={activeStageIndex === index || undefined}
-            onClick={() => commitSnap(index)}
-          >
-            {stage.label}
-          </button>
-        ))}
+        {stages.map((stage, index) => {
+          const isLocked = index > effectiveMaxIndex
+          return (
+            <button
+              key={stage.id}
+              type="button"
+              className="landing-story-scrubber__label"
+              data-active={activeStageIndex === index || undefined}
+              data-locked={isLocked || undefined}
+              aria-current={activeStageIndex === index || undefined}
+              aria-disabled={isLocked || undefined}
+              disabled={isLocked}
+              onClick={() => commitSnap(index)}
+            >
+              {stage.label}
+            </button>
+          )
+        })}
       </div>
       <div
         ref={trackRef}
@@ -138,7 +159,7 @@ function LandingStoryScrubber({ stages, progress, onProgressChange, onCommit, ..
           tabIndex={0}
           aria-label={rest['aria-label'] ?? 'Story stage'}
           aria-valuemin={0}
-          aria-valuemax={maxIndex}
+          aria-valuemax={effectiveMaxIndex}
           aria-valuenow={Math.round(progress * 100) / 100}
           aria-valuetext={stages[activeStageIndex]?.label}
           style={{ left: `${fillPercent}%` }}
