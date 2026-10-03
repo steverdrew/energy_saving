@@ -89,20 +89,22 @@
   outline-offset: 2px;
 }
 
-/* OA-80/OA-79/OA-83/OA-87: story panel left, heat-map right on desktop --
-   stacks on narrow screens (narrative first, then the visual -- already
-   the DOM order, so no reordering needed for the mobile requirement
-   that the narrative appear before the heat map).
-   OA-87 (third pass): ported literally from the mockup's own
-   `grid lg:grid-cols-12 gap-12 lg:gap-16` with `lg:col-span-5` narrative
-   / `lg:col-span-7` visual -- a 12-column grid, not a fixed-px two-
-   column split. No max-width of its own: the section's existing
-   `.landing-section-band`/`.app-main` width (OA-87 first pass) already
-   caps the whole comparison at the page's ~1280px shell, exactly like
-   the mockup's own `max-w-7xl` wraps its 12-col grid -- a second,
-   narrower cap here was the earlier passes' actual mistake, squeezing
-   the heat-map column (and so every one of its 48 real half-hour cells)
-   far below the width the shell was already providing. */
+/* OA-80/OA-79/OA-83/OA-87/OA-94: story panel left, visual right on
+   desktop -- stacks on narrow screens (narrative first, then the visual
+   -- already the DOM order, so no reordering needed for the mobile
+   requirement that the narrative appear before the visual).
+   OA-87 believed `.landing-section-band`/`.app-main` already capped this
+   grid at the page's ~1280px shell -- it doesn't. `.landing-section-band`
+   (App.css) makes `.landing-demo` itself a `width: 100vw` full-bleed
+   breakout, and nothing re-centers `.landing-demo__grid` inside it, so
+   on a wide monitor this grid actually spans the *entire viewport*,
+   growing past 1280px while every other section on the page stays
+   capped at `.app-main`'s width -- that mismatch, not the 5/7 column
+   split itself (already the ticket's target ~42/58 ratio), was what let
+   the chart "stretch to consume all available width" and separate from
+   the narrative on wide screens. OA-94 fixes it by capping/centering
+   this grid at the same ~1280px shell width explicitly, rather than
+   relying on an ambient container that doesn't actually apply here. */
 .landing-demo__grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -113,7 +115,11 @@
 @media (min-width: 860px) {
   .landing-demo__grid {
     grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 48px;
+    /* OA-94: "reduce the horizontal gap... so narrative and chart read
+       as one composed feature" -- down from 48px. */
+    gap: 32px;
+    max-width: 1280px;
+    margin: 0 auto;
   }
 
   .landing-demo__story {
@@ -122,6 +128,11 @@
 
   .landing-demo__heatmap-slot {
     grid-column: span 7;
+    /* OA-94: "wide page does not mean infinitely wide chart" -- an
+       explicit ceiling independent of the grid-cap above, so the visual
+       stays landscape/substantial without ever reading as billboard-
+       sized if this shell widens again in future. */
+    max-width: 860px;
   }
 }
 
