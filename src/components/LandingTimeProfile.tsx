@@ -188,6 +188,8 @@ export interface LandingTimeProfileProps {
   controls?: ReactNode
   /** OA-141/136: Baseline's current-tariff selector and Compare's A/B comparison selector, each promoted to its own full-width, visually prominent block -- "the key decision on this tab... should have stronger hierarchy than secondary controls." Rendered between the supporting copy and the result (never squeezed into the `controls` slot beside the heading, which stays small/secondary for Optimise's Reset/Optimise buttons). Baseline and Compare pass this; Optimise doesn't. */
   primarySelector?: ReactNode
+  /** OA-143: Baseline only -- "left = choose, right = result." Puts the heading/supporting copy/primary selector in a left column and the result summary (resultLabel/result/payoff/standingChargeNote) in a compact right-hand column, so the tariff choice stays the dominant action and pricing reads as its secondary result. Falls back to the default stacked narrative (Compare/Optimise) when omitted. */
+  splitLayout?: boolean
   /** Remounts just the narrative block (not the chart) to replay its OA-80 fade/slide on step change -- see the component doc comment for why the chart itself must stay mounted. */
   stepKey: string
   /** OA-99/OA-101: the 16:00-19:00 structural-peak annotation is a documented feature of *Agile's* pricing formula specifically -- showing it on a flat Standard Variable day would wrongly imply that flat tariff has the same structural peak. Baseline passes `false`; Compare/Optimise (both on Agile) pass `true`. */
@@ -291,6 +293,7 @@ function LandingTimeProfile({
   standingChargeNote,
   controls,
   primarySelector,
+  splitLayout,
   stepKey,
   showStructuralPeakAnnotation,
   priceStripShape,
@@ -494,47 +497,81 @@ function LandingTimeProfile({
           step change (see the component doc comment for why the chart
           below must not remount the same way). */}
       <div className="landing-time-profile__narrative" key={stepKey}>
-        {/* OA-110/OA-126: the question heading/supporting line sit in a
-            row alongside "Reset"/"Optimise" -- top-right of the card, next
-            to the heading they relate to, rather than stacked as their own
-            full-width row between the narrative and the chart. Only the
-            Optimise step passes `controls`. */}
-        <div className="landing-time-profile__heading-row">
-          <div className="landing-time-profile__heading-col">
-            {/* OA-110: one question-style heading plus a short supporting
-                line per stage -- answers "when do you use energy -> what
-                that costs on Agile -> what you could save" at a glance, so
-                the narrative reads continuously rather than as three
-                separate screens. */}
-            <h3 className="landing-time-profile__question">{questionHeading}</h3>
-            <p className="landing-time-profile__supporting">{supportingCopy}</p>
-          </div>
-          {controls}
-        </div>
-        {/* OA-141/136: "the selector should not feel visually lost between
-            the intro copy and the graph" -- its own full-width block,
-            between the supporting copy and the result, with stronger
-            hierarchy than the small `controls` slot above (which stays
-            as-is for Optimise's Reset/Optimise buttons). Baseline and
-            Compare pass this. */}
-        {primarySelector && <div className="landing-time-profile__primary-selector">{primarySelector}</div>}
-        {/* OA-126: names what the result figure actually is (a modelled
-            daily usage amount, not a total household spend) directly
-            above it, rather than relying on the result line itself to
-            imply that distinction. */}
-        {resultLabel && <p className="landing-time-profile__result-label">{resultLabel}</p>}
-        {/* OA-104/OA-110: the stage's one compact, visually dominant
-            result -- "a few pence today only matters if we show what
-            that behaviour could add up to over time", and it should read
-            as a single bold figure, not buried in a longer sentence. */}
-        <p className="landing-time-profile__result">{result}</p>
-        {payoff && <div className="landing-time-profile__payoff">{payoff}</div>}
-        {/* OA-126: the standing charge is disclosed right next to the
-            figure it's excluded from, not just in the below-chart
-            footnote -- quiet enough to not compete with `result`, but
-            immediately visible without having to read the methodology
-            disclosure. */}
-        {standingChargeNote && <p className="landing-time-profile__standing-charge-note">{standingChargeNote}</p>}
+        {(() => {
+          // OA-110/OA-126: the question heading/supporting line sit in a
+          // row alongside "Reset"/"Optimise" -- top-right of the card, next
+          // to the heading they relate to, rather than stacked as their own
+          // full-width row between the narrative and the chart. Only the
+          // Optimise step passes `controls`.
+          const headingRow = (
+            <div className="landing-time-profile__heading-row">
+              <div className="landing-time-profile__heading-col">
+                {/* OA-110: one question-style heading plus a short supporting
+                    line per stage -- answers "when do you use energy -> what
+                    that costs on Agile -> what you could save" at a glance, so
+                    the narrative reads continuously rather than as three
+                    separate screens. */}
+                <h3 className="landing-time-profile__question">{questionHeading}</h3>
+                <p className="landing-time-profile__supporting">{supportingCopy}</p>
+              </div>
+              {controls}
+            </div>
+          )
+          // OA-141/136: "the selector should not feel visually lost between
+          // the intro copy and the graph" -- its own full-width block,
+          // between the supporting copy and the result, with stronger
+          // hierarchy than the small `controls` slot above (which stays
+          // as-is for Optimise's Reset/Optimise buttons). Baseline and
+          // Compare pass this.
+          const primarySelectorBlock = primarySelector && (
+            <div className="landing-time-profile__primary-selector">{primarySelector}</div>
+          )
+          const resultBlock = (
+            <>
+              {/* OA-126: names what the result figure actually is (a modelled
+                  daily usage amount, not a total household spend) directly
+                  above it, rather than relying on the result line itself to
+                  imply that distinction. */}
+              {resultLabel && <p className="landing-time-profile__result-label">{resultLabel}</p>}
+              {/* OA-104/OA-110: the stage's one compact, visually dominant
+                  result -- "a few pence today only matters if we show what
+                  that behaviour could add up to over time", and it should read
+                  as a single bold figure, not buried in a longer sentence. */}
+              <p className="landing-time-profile__result">{result}</p>
+              {payoff && <div className="landing-time-profile__payoff">{payoff}</div>}
+              {/* OA-126: the standing charge is disclosed right next to the
+                  figure it's excluded from, not just in the below-chart
+                  footnote -- quiet enough to not compete with `result`, but
+                  immediately visible without having to read the methodology
+                  disclosure. */}
+              {standingChargeNote && <p className="landing-time-profile__standing-charge-note">{standingChargeNote}</p>}
+            </>
+          )
+
+          // OA-143: "left = choose, right = result" -- Baseline only. The
+          // tariff choice (heading + selector) stays the dominant left-hand
+          // action; the pricing summary becomes a compact right-hand result,
+          // never a second primary task competing with it.
+          if (splitLayout) {
+            return (
+              <div className="landing-time-profile__split">
+                <div className="landing-time-profile__split-left">
+                  {headingRow}
+                  {primarySelectorBlock}
+                </div>
+                <div className="landing-time-profile__split-right">{resultBlock}</div>
+              </div>
+            )
+          }
+
+          return (
+            <>
+              {headingRow}
+              {primarySelectorBlock}
+              {resultBlock}
+            </>
+          )
+        })()}
       </div>
 
       <div className="landing-time-profile__body">

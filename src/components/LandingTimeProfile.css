@@ -218,6 +218,51 @@
   }
 }
 
+/* OA-143: Baseline's two-column top section -- "left = choose, right =
+   result." The left column keeps the heading/selector as the dominant
+   action; the right column is a compact, secondary-feeling result summary,
+   so pricing never reads as a second primary task competing with the
+   tariff choice. `minmax(0, ...)` on the left keeps a long question
+   heading from forcing the column (and the result column with it) wider
+   than the card. */
+.landing-time-profile__split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 240px);
+  align-items: start;
+  gap: 16px 24px;
+}
+
+.landing-time-profile__split-left {
+  min-width: 0;
+}
+
+/* OA-143: "the price should feel secondary to the selection" -- right-
+   aligned and visually quieter than the left column's primary selector,
+   a compact result rather than a second full-width block. */
+.landing-time-profile__split-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  padding-top: 2px;
+}
+
+/* OA-143: "use responsive fallback to stacked layout on narrower
+   screens" -- below this width the result reclaims full width and
+   left-aligns again, reading as the same stacked narrative Compare/
+   Optimise already use. */
+@media (max-width: 720px) {
+  .landing-time-profile__split {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-time-profile__split-right {
+    align-items: flex-start;
+    text-align: left;
+    padding-top: 0;
+  }
+}
+
 /* OA-106: "Optimise all" / "Reset" -- clear secondary controls above the
    chart, deliberately styled lighter than the primary "Sign up free" CTA
    (LandingDemo.css's `__cta-link`) since these only change the example,

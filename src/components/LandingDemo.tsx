@@ -903,6 +903,9 @@ function LandingDemo() {
           standingChargeNote={standingChargeNote}
           controls={controls}
           primarySelector={primarySelector}
+          // OA-143: "move pricing summary to the right" is Tab 1/Baseline-
+          // only -- Compare/Optimise keep their existing stacked narrative.
+          splitLayout={nearestStage === 'baseline'}
           stepKey={nearestStage}
           // OA-99/OA-101/OA-127/OA-135: the 16:00-19:00 structural peak is
           // a documented feature of Agile's pricing specifically -- shown
