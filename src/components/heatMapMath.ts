@@ -182,11 +182,12 @@ export function findPeakWindow(day: HeatMapDay | undefined, min: number, max: nu
 }
 
 /**
- * OA-70/OA-87: the shared per-slot accessible description (time, usage,
- * rate, cost) -- used as every cell button's aria-label by both the
- * authenticated-app HeatMap and the landing page's own dedicated
- * comparison graph (LandingHeatMap.tsx), so the two presentations never
- * drift into two slightly different descriptions of the same data shape.
+ * OA-70/OA-87/OA-89: the shared per-slot accessible description (time,
+ * usage, rate, cost) -- used as every cell/column button's aria-label by
+ * both the authenticated-app HeatMap and the landing page's own
+ * dedicated comparison graph (LandingTimeProfile.tsx), so the two
+ * presentations never drift into two slightly different descriptions of
+ * the same data shape.
  */
 export function describeSlot(slot: HeatMapSlot): string {
   const time = formatSlotTime(slot.startsAt)

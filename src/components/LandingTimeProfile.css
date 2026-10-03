@@ -1,0 +1,191 @@
+/* OA-89: replaces LandingHeatMap.css's square-cell grid. Card chrome
+   (glass card, padding, header/legend layout, sr-only table) is carried
+   over unchanged from LandingHeatMap -- only the visual track itself
+   (`__track`/`__column`/`__usage-bar`) is new. */
+.landing-time-profile {
+  --landing-time-profile-cheap: #10b981;
+  --landing-time-profile-standard: #8b5cf6;
+  --landing-time-profile-peak: #ef4444;
+  --landing-time-profile-unknown: #2c2c3a;
+
+  position: relative;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+
+@media (min-width: 640px) {
+  .landing-time-profile {
+    padding: 24px;
+  }
+}
+
+.landing-time-profile__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.landing-time-profile__title {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-h);
+}
+
+.landing-time-profile__subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.7;
+}
+
+.landing-time-profile__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.landing-time-profile__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.landing-time-profile__legend-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.landing-time-profile__legend-swatch[data-category='0'] { background: var(--landing-time-profile-cheap); }
+.landing-time-profile__legend-swatch[data-category='1'] { background: var(--landing-time-profile-standard); }
+.landing-time-profile__legend-swatch[data-category='2'] { background: var(--landing-time-profile-peak); }
+
+/* Foreground usage shape, shown in the legend as a short bar rather than
+   a dot -- distinguishes it from the price-category swatches above. */
+.landing-time-profile__legend-bar {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+  background: var(--landing-time-profile-usage, rgba(255, 255, 255, 0.85));
+}
+
+.landing-time-profile__body {
+  position: relative;
+}
+
+/* The "time landscape": one flat row of 48 flush columns (no gap), each
+   a full-height coloured price band -- a continuous/banded backdrop
+   rather than the heat map's grid of discrete, gapped squares. Height is
+   a fixed aspect, not `aspect-ratio: 1`, so columns read as a landscape
+   strip rather than a block of squares. */
+.landing-time-profile__track {
+  display: flex;
+  align-items: stretch;
+  height: clamp(140px, 22vw, 220px);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.landing-time-profile__column {
+  position: relative;
+  flex: 1 1 0;
+  display: flex;
+  align-items: flex-end;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  background: var(--landing-time-profile-unknown);
+}
+
+.landing-time-profile__column[data-category='0'] { background: var(--landing-time-profile-cheap); }
+.landing-time-profile__column[data-category='1'] { background: var(--landing-time-profile-standard); }
+.landing-time-profile__column[data-category='2'] { background: var(--landing-time-profile-peak); }
+
+.landing-time-profile__column[data-selected],
+.landing-time-profile__column:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.65);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+/* Foreground usage shape -- a solid bar anchored to the bottom of the
+   column, sized by height only (never opacity), so usage is always a
+   visually distinct layer sitting on top of the price landscape rather
+   than a shade of it. */
+.landing-time-profile__usage-bar {
+  display: block;
+  width: 100%;
+  height: calc(var(--usage-ratio, 0) * 100%);
+  min-height: 2px;
+  background: rgba(255, 255, 255, 0.85);
+  mix-blend-mode: overlay;
+}
+
+/* OA-86/89: colour and usage-bar-height transitions on the *same*
+   persistent column nodes across Baseline -> Compare -> Optimise
+   (LandingDemo.tsx keeps this component mounted across steps so this
+   can interpolate, rather than a fresh mount snapping straight to the
+   new state). Baseline -> Compare only animates background-color
+   (usage is identical); Compare -> Optimise only animates the usage
+   bar's height (the price landscape is identical). */
+@media (prefers-reduced-motion: no-preference) {
+  .landing-time-profile__column {
+    transition: background-color 0.8s ease;
+  }
+
+  .landing-time-profile__usage-bar {
+    transition: height 0.8s ease;
+  }
+}
+
+.landing-time-profile__axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text);
+  opacity: 0.6;
+}
+
+/* OA-86: "selected-cell details only after interaction" -- no permanent
+   prompt text; this element only exists in the DOM once a column has
+   actually been selected. */
+.landing-time-profile__detail {
+  margin: 10px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+/* Visually hidden (not `display: none`) -- stays in the accessibility
+   tree and reachable by screen readers/automation, satisfying OA-82/84's
+   "accessibility/table views may remain secondary". */
+.landing-time-profile__sr-table {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

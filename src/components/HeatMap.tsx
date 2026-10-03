@@ -40,9 +40,8 @@ export interface HeatMapProps {
  *
  * OA-87: this used to also carry a `variant="tariff"` mode for the
  * landing-page demo (OA-85/86). Removed -- the landing page now has its
- * own dedicated presentation (LandingHeatMap.tsx, modelled directly on
- * the approved mockup's structure/CSS) rather than a second mode bolted
- * onto this analytics-oriented component. The two pages' visual needs
+ * own dedicated presentation (LandingTimeProfile.tsx, OA-89) rather than
+ * a second mode bolted onto this analytics-oriented component. The two pages' visual needs
  * are different enough (a diagnostic 30-day table-toggle chart here vs.
  * a bespoke marketing visual there) that sharing this component's
  * *presentation* was the wrong reuse boundary; they still share the

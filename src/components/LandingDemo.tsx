@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { buildLandingDemoFixture, type LandingDemoFixture } from '../domain/landingDemoFixture'
 import { formatGbp } from '../format'
-import LandingHeatMap from './LandingHeatMap'
+import LandingTimeProfile from './LandingTimeProfile'
 import './LandingDemo.css'
 
 type DemoStepId = 'baseline' | 'compare' | 'optimise'
@@ -52,23 +52,22 @@ function describeTimingPotential(pence: number): string {
  * OA-85/86: multi-day fixture (colour = cheap/standard/peak, opacity =
  * usage) -- see landingDemoFixture's `days`.
  *
- * OA-87 (third pass): the heat map is `<LandingHeatMap>`, a dedicated
- * landing-page presentation component built directly from the approved
- * mockup's structure/CSS -- not the authenticated app's `<HeatMap>` with
- * a variant prop. See LandingHeatMap.tsx's own comment for why.
+ * OA-89: the visual is `<LandingTimeProfile>`, a continuous price-
+ * landscape + usage-bar time profile -- replaces the square-cell
+ * `<LandingHeatMap>` (removed), whose colour+opacity-on-one-cell
+ * encoding made price and usage too abstract to read at a glance. See
+ * LandingTimeProfile.tsx's own comment for the full rationale.
  *
- * OA-86: the `key={step}` remount (for the story panel's fade/slide) is
- * scoped to `.landing-demo__story` only, not the whole grid --
- * `<LandingHeatMap>` itself stays mounted across step changes. Each
- * day/slot across Baseline/Compare/Optimise shares the same
- * `date`/`startsAt` (only the colour/opacity values differ -- see
- * landingDemoFixture.ts), which are LandingHeatMap's own React keys, so
- * switching steps updates each cell's existing DOM node in place rather
- * than replacing it. That's what lets its CSS `transition: background-
- * color/opacity` actually interpolate between states, the same
- * mechanism the OA-86 reference mockup's own `applyState()` relies on
- * (mutate persistent nodes, let CSS do the animating) -- remounting
- * fresh cells on every step would have nothing to transition from.
+ * OA-86/89: the `key={step}` remount (for the story panel's fade/slide)
+ * is scoped to `.landing-demo__story` only, not the whole grid --
+ * `<LandingTimeProfile>` itself stays mounted across step changes. Each
+ * slot across Baseline/Compare/Optimise shares the same `startsAt`
+ * (only price-band colour/usage-bar height differ -- see
+ * landingDemoFixture.ts), which are LandingTimeProfile's own React keys,
+ * so switching steps updates each column's existing DOM node in place
+ * rather than replacing it. That's what lets its CSS transitions
+ * actually interpolate between states -- remounting fresh columns on
+ * every step would have nothing to transition from.
  */
 function LandingDemo() {
   const [step, setStep] = useState<DemoStepId>('baseline')
@@ -189,10 +188,10 @@ function LandingDemo() {
         </div>
 
         <div className="landing-demo__heatmap-slot">
-          <LandingHeatMap
-            days={current.days}
+          <LandingTimeProfile
+            day={current.day}
             title={`${STEP_TAB_LABELS[step]} — ${current.tariffName} (example data)`}
-            subtitle={`${current.days.length}-day example · half-hourly readings`}
+            subtitle="Example day · half-hourly readings"
           />
         </div>
       </div>

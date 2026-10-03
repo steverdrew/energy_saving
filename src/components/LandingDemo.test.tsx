@@ -72,13 +72,13 @@ describe('LandingDemo', () => {
     expect(screen.getByRole('tab', { name: '2. Compare tariff' })).toHaveAttribute('aria-selected', 'true')
   })
 
-  it('gives the heat map a text/DOM equivalent of its visual data, not canvas-only state', () => {
+  it('gives the time profile a text/DOM equivalent of its visual data, not canvas-only state', () => {
     renderDemo()
-    // Every half-hour cell, across every example day (OA-85's multi-day
-    // landscape), is a real <button> with a descriptive aria-label (time,
-    // usage, rate, cost) -- see HeatMap.tsx -- so the grid's meaning is
-    // readable without interpreting pixels. 4 example days x 48 slots.
-    expect(screen.getAllByRole('button', { name: /kWh.*p\/kWh.*£/ }).length).toBe(4 * 48)
+    // Every half-hour column (OA-89's price-landscape/usage-bar profile)
+    // is a real <button> with a descriptive aria-label (time, usage,
+    // rate, cost) -- see heatMapMath.ts's describeSlot -- so the
+    // profile's meaning is readable without interpreting pixels.
+    expect(screen.getAllByRole('button', { name: /kWh.*p\/kWh.*£/ }).length).toBe(48)
   })
 
   it('exposes the CTA as a real link, not a click-only element', () => {
