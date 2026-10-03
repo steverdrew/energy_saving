@@ -1,0 +1,187 @@
+/* OA-87 (third pass): ported directly from the approved mockup's own
+   CSS (`.glass-card`, `.heatmap-grid`, `.heatmap-cell`, `#peak-
+   highlight`) -- a dedicated landing-page presentation, not a variant of
+   the authenticated app's HeatMap.css. Colour tokens are the mockup's
+   own `cost.low/mid/high` (Tailwind `emerald-500`/`brand-500`/`red-500`)
+   rather than HeatMap.css's sequential blue ramp. */
+.landing-heat-map {
+  --landing-heat-map-cheap: #10b981;
+  --landing-heat-map-standard: #8b5cf6;
+  --landing-heat-map-peak: #ef4444;
+  --landing-heat-map-unknown: #2c2c3a;
+
+  position: relative;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+
+@media (min-width: 640px) {
+  .landing-heat-map {
+    padding: 24px;
+  }
+}
+
+.landing-heat-map__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.landing-heat-map__title {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-h);
+}
+
+.landing-heat-map__subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.7;
+}
+
+.landing-heat-map__legend {
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.landing-heat-map__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.landing-heat-map__legend-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.landing-heat-map__legend-swatch[data-category='0'] { background: var(--landing-heat-map-cheap); }
+.landing-heat-map__legend-swatch[data-category='1'] { background: var(--landing-heat-map-standard); }
+.landing-heat-map__legend-swatch[data-category='2'] { background: var(--landing-heat-map-peak); }
+
+.landing-heat-map__body {
+  position: relative;
+}
+
+/* The mockup's own mechanism: one flat grid, `repeat(N, 1fr)` columns,
+   no explicit rows -- every day's slots are plain siblings here (see
+   LandingHeatMap.tsx), so the grid auto-wraps one row per day with no
+   separate label column or inter-row gap stealing width from the cells
+   themselves. `aspect-ratio: 1` (not a fixed height) is what makes cells
+   read as bold squares: their size now simply follows the card's actual
+   width, which is itself uncapped on desktop (see LandingDemo.css). */
+.landing-heat-map__grid {
+  display: grid;
+  grid-template-columns: repeat(48, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.landing-heat-map__cell {
+  position: relative;
+  aspect-ratio: 1;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  background: var(--landing-heat-map-unknown);
+  opacity: calc(0.3 + (var(--usage-ratio, 0) * 0.7));
+}
+
+.landing-heat-map__cell[data-category='0'] { background: var(--landing-heat-map-cheap); }
+.landing-heat-map__cell[data-category='1'] { background: var(--landing-heat-map-standard); }
+.landing-heat-map__cell[data-category='2'] { background: var(--landing-heat-map-peak); }
+
+.landing-heat-map__cell[data-selected],
+.landing-heat-map__cell:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.65);
+  outline-offset: 1px;
+  z-index: 1;
+}
+
+/* OA-86: colour/opacity transitions on the *same* persistent cell nodes
+   across Baseline -> Compare -> Optimise (LandingDemo.tsx keeps this
+   component mounted across steps specifically so this can interpolate,
+   rather than a fresh mount snapping straight to the new state) -- the
+   mockup's own `transition: background-color 0.8s ease, opacity 0.8s
+   ease`. */
+@media (prefers-reduced-motion: no-preference) {
+  .landing-heat-map__cell {
+    transition: background-color 0.8s ease, opacity 0.8s ease;
+  }
+}
+
+/* OA-86: peak-window overlay, derived from this step's own fixture data
+   (heatMapMath's findPeakWindow), not the mockup's hard-coded 16:00-19:00
+   band. Grid-placed alongside the cell buttons, spanning every row
+   (`grid-row: 1 / -1`) since this is one unified grid, not per-day rows
+   -- `pointer-events: none` so it never intercepts a click/tap meant for
+   the cell underneath. Absent entirely for a flat tariff (e.g. Baseline
+   has no peak run at all). */
+.landing-heat-map__peak-overlay {
+  grid-row: 1 / -1;
+  pointer-events: none;
+  background: rgba(239, 68, 68, 0.08);
+  border-left: 1px solid rgba(239, 68, 68, 0.35);
+  border-right: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .landing-heat-map__peak-overlay {
+    transition: opacity 0.8s ease;
+  }
+}
+
+.landing-heat-map__axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text);
+  opacity: 0.6;
+}
+
+/* OA-86: "selected-cell details only after interaction" -- no permanent
+   prompt text; this element only exists in the DOM once a cell has
+   actually been selected (LandingHeatMap.tsx), so there's nothing to
+   reserve space for when idle. */
+.landing-heat-map__detail {
+  margin: 10px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+/* Visually hidden (not `display: none`) -- stays in the accessibility
+   tree and reachable by screen readers/automation, satisfying OA-82/84's
+   "accessibility/table views may remain secondary" without the visible
+   "Show as table" toggle chrome the mockup doesn't have. */
+.landing-heat-map__sr-table {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

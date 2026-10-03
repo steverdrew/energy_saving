@@ -1,6 +1,7 @@
 // OA-70: pure helpers for the shared heat-map component -- kept separate
 // from the rendering component so the colour-scale and annotation logic
 // can be unit tested without mounting React.
+import { formatGbp } from '../format'
 
 export interface HeatMapSlot {
   startsAt: string
@@ -178,6 +179,21 @@ export function findPeakWindow(day: HeatMapDay | undefined, min: number, max: nu
 
   if (bestLength === 0) return null
   return { startSlot: bestStart, endSlot: bestStart + bestLength - 1 }
+}
+
+/**
+ * OA-70/OA-87: the shared per-slot accessible description (time, usage,
+ * rate, cost) -- used as every cell button's aria-label by both the
+ * authenticated-app HeatMap and the landing page's own dedicated
+ * comparison graph (LandingHeatMap.tsx), so the two presentations never
+ * drift into two slightly different descriptions of the same data shape.
+ */
+export function describeSlot(slot: HeatMapSlot): string {
+  const time = formatSlotTime(slot.startsAt)
+  const rate = slot.unitRateIncVatPence !== null ? `${slot.unitRateIncVatPence.toFixed(1)}p/kWh` : 'rate unknown'
+  const usage = slot.kwh !== null ? `${slot.kwh.toFixed(2)} kWh` : 'usage unknown'
+  const cost = slot.costPence !== null ? formatGbp(slot.costPence) : 'cost unknown'
+  return `${time} — ${usage}, ${rate}, ${cost}`
 }
 
 export function formatSlotTime(iso: string): string {

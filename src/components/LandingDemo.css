@@ -72,30 +72,39 @@
   outline-offset: 2px;
 }
 
-/* OA-80/OA-79/OA-83: story panel left, heat-map card right on desktop --
+/* OA-80/OA-79/OA-83/OA-87: story panel left, heat-map right on desktop --
    stacks on narrow screens (narrative first, then the visual -- already
    the DOM order, so no reordering needed for the mobile requirement
-   that the narrative appear before the heat map). Capped width so the
-   pair reads as one contained object instead of sprawling edge to edge.
-   OA-87: the landing shell itself widened to ~1280px (App.css); this cap
-   grows with it (760px -> 1040px) so the comparison gets the breathing
-   room the approved mockup shows instead of feeling squeezed into the
-   old 960px app-content width -- still well short of the full shell so
-   it keeps reading as one contained object, not full-bleed. */
+   that the narrative appear before the heat map).
+   OA-87 (third pass): ported literally from the mockup's own
+   `grid lg:grid-cols-12 gap-12 lg:gap-16` with `lg:col-span-5` narrative
+   / `lg:col-span-7` visual -- a 12-column grid, not a fixed-px two-
+   column split. No max-width of its own: the section's existing
+   `.landing-section-band`/`.app-main` width (OA-87 first pass) already
+   caps the whole comparison at the page's ~1280px shell, exactly like
+   the mockup's own `max-w-7xl` wraps its 12-col grid -- a second,
+   narrower cap here was the earlier passes' actual mistake, squeezing
+   the heat-map column (and so every one of its 48 real half-hour cells)
+   far below the width the shell was already providing. */
 .landing-demo__grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 16px;
+  gap: 24px;
   align-items: center;
-  max-width: 760px;
-  margin: 0 auto;
 }
 
 @media (min-width: 860px) {
   .landing-demo__grid {
-    grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
-    gap: 32px;
-    max-width: 1040px;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 48px;
+  }
+
+  .landing-demo__story {
+    grid-column: span 5;
+  }
+
+  .landing-demo__heatmap-slot {
+    grid-column: span 7;
   }
 }
 
@@ -107,6 +116,13 @@
   .landing-demo__story {
     text-align: left;
   }
+}
+
+.landing-demo__heatmap-slot {
+  /* A 48-column inner grid (LandingHeatMap.css) would otherwise force
+     this grid item wider than its 7-column track (grid items default to
+     `min-width: auto`, not 0). */
+  min-width: 0;
 }
 
 /* OA-83 (second pass): lead with the number, not a sentence -- a short
@@ -171,110 +187,6 @@
   opacity: 0.8;
 }
 
-/* Premium glass card around the heat map -- dark surface regardless of
-   the visitor's OS colour scheme, since the landing page is always
-   dark/purple. Overriding the heat map's own --heat-map-* tokens here
-   (rather than relying on its @media (prefers-color-scheme: dark)
-   block) keeps it visually coherent with the rest of this page even
-   for a visitor whose system is set to light mode. */
-.landing-demo__heatmap-card {
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  min-width: 0;
-  /* OA-83 (second pass): capped narrower still, now that the grid below
-     wraps the 48 cells into several rows instead of one long 1x48 bar --
-     a compact, closer-to-square card reads as a contained object rather
-     than a "giant grid" dominating the section. */
-  max-width: 340px;
-  margin: 0 auto;
-}
-
-@media (min-width: 860px) {
-  .landing-demo__heatmap-card {
-    margin: 0;
-    /* OA-87: a bit more room now that the right-hand column itself is
-       wider (see .landing-demo__grid above) -- still capped well short
-       of that column's full width so it keeps its contained, closer-to-
-       square card feel rather than becoming a wide dominant grid. */
-    max-width: 460px;
-  }
-}
-
-.landing-demo__heatmap-card .heat-map {
-  --heat-map-surface: #16142a;
-  --heat-map-step-0: #184f95;
-  --heat-map-step-1: #1c5cab;
-  --heat-map-step-2: #256abf;
-  --heat-map-step-3: #2a78d6;
-  --heat-map-step-4: #3987e5;
-  --heat-map-step-5: #5598e7;
-  --heat-map-step-6: #6da7ec;
-  --heat-map-step-7: #86b6ef;
-  --heat-map-step-8: #9ec5f4;
-  --heat-map-unknown: #2c2c3a;
-  --heat-map-bar: rgba(255, 255, 255, 0.82);
-  --heat-map-ring: rgba(255, 255, 255, 0.65);
-}
-
-/* OA-83: "labels and legend remain visually secondary to the story" --
-   shrink the legend rather than leave it at full visual weight, and
-   drop the text annotations list (the flagged cells on the grid itself
-   still show cheapest/most-expensive/highest-usage via the small ring
-   marker -- see HeatMap.tsx's cell-flag) so the card doesn't run on
-   past the grid with a block of extra copy competing with the left
-   panel's own caption. (OA-85 demotes the "Show as table" toggle
-   further still, globally for the 'tariff' variant -- see HeatMap.css
-   -- since it read as diagnostic-widget chrome next to the story.) */
-.landing-demo__heatmap-card .heat-map__title {
-  font-size: 13px;
-  opacity: 0.85;
-}
-
-.landing-demo__heatmap-card .heat-map__legend {
-  font-size: 11px;
-  opacity: 0.65;
-  flex-wrap: wrap;
-  row-gap: 4px;
-}
-
-/* The card is narrower now (see .landing-demo__heatmap-card above), so
-   "Cheapest [ramp] Most expensive" and "Bar height = usage" no longer
-   fit on one line -- let the note drop to its own full-width line
-   instead of the three pieces wrapping mid-phrase. */
-.landing-demo__heatmap-card .heat-map__legend-note {
-  margin-left: 0;
-  flex-basis: 100%;
-}
-
-.landing-demo__heatmap-card .heat-map__annotations {
-  display: none;
-}
-
-/* OA-85: now a genuine multi-day grid (DEMO_DAY_DATES, 4 rows x 48
-   cells) -- the "time landscape" the ticket asks for -- rather than
-   OA-83's single wide day wrapped into a square block, so the grid
-   shape is simply the shared component's own row-per-day layout, just
-   sized compactly for the card. Each cell's aria-label still carries
-   its exact time/usage/rate/cost, so nothing about accessibility
-   changes, only the layout and the tariff/opacity colour mechanism
-   (see HeatMap's 'tariff' variant). */
-.landing-demo__heatmap-card .heat-map__row-cells {
-  height: 14px;
-}
-
-.landing-demo__heatmap-card .heat-map__row-label {
-  flex: 0 0 52px;
-  font-size: 10px;
-}
-
-.landing-demo__heatmap-card .heat-map__cell {
-  border-radius: 2px;
-}
-
 .landing-demo__cta {
   margin-top: 20px;
   text-align: center;
@@ -318,10 +230,10 @@
    (React `key={step}`) on every step change. Respects reduced motion by
    simply not defining the animation at all when the preference is set.
    OA-86: scoped to the story panel only (it alone remounts via
-   `key={step}`, see LandingDemo.tsx) -- `.landing-demo__heatmap-card`
-   stays mounted across step changes so its cells can CSS-transition
-   background-color/opacity in place instead of popping into a freshly
-   rendered end state. */
+   `key={step}`, see LandingDemo.tsx) -- `.landing-demo__heatmap-slot`
+   (LandingHeatMap) stays mounted across step changes so its cells can
+   CSS-transition background-color/opacity in place instead of popping
+   into a freshly rendered end state. */
 @media (prefers-reduced-motion: no-preference) {
   .landing-demo__story {
     animation: landing-demo-panel-in 0.32s ease both;

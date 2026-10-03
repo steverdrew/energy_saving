@@ -16,12 +16,6 @@
   --heat-map-bar: rgba(11, 11, 11, 0.55);
   --heat-map-ring: rgba(11, 11, 11, 0.5);
 
-  /* OA-85: landing-page "tariff" variant only -- cheap/standard/peak,
-     not a continuous ramp (see HeatMap.tsx's `variant` prop). */
-  --heat-map-cat-0: #2e9e52;
-  --heat-map-cat-1: #8b5cf6;
-  --heat-map-cat-2: #e5484d;
-
   max-width: 100%;
 }
 
@@ -40,9 +34,6 @@
     --heat-map-unknown: #2c2c2a;
     --heat-map-bar: rgba(255, 255, 255, 0.7);
     --heat-map-ring: rgba(255, 255, 255, 0.6);
-    --heat-map-cat-0: #3fbf68;
-    --heat-map-cat-1: #a78bfa;
-    --heat-map-cat-2: #f87171;
   }
 }
 
@@ -106,24 +97,6 @@
 .heat-map__legend-note {
   margin-left: auto;
 }
-
-/* OA-85: tariff-variant legend -- cheap/standard/peak swatches instead
-   of the sequential ramp. */
-.heat-map__legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.heat-map__legend-swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  display: inline-block;
-}
-.heat-map__legend-swatch[data-category='0'] { background: var(--heat-map-cat-0); }
-.heat-map__legend-swatch[data-category='1'] { background: var(--heat-map-cat-1); }
-.heat-map__legend-swatch[data-category='2'] { background: var(--heat-map-cat-2); }
 
 .heat-map__grid {
   margin-top: 10px;
@@ -198,64 +171,6 @@
   outline: 2px solid var(--heat-map-ring);
   outline-offset: 1px;
   z-index: 1;
-}
-
-/* OA-85: landing-page "tariff" variant -- colour = tariff price band
-   (cheap/standard/peak), intensity/opacity = usage, no bar. Scoped under
-   .heat-map--tariff so the authenticated-page chart (Actual/Compare/
-   Optimised) keeps its existing sequential-ramp + bar-height mechanism
-   untouched. */
-.heat-map--tariff .heat-map__cell[data-step='0'] { background: var(--heat-map-cat-0); }
-.heat-map--tariff .heat-map__cell[data-step='1'] { background: var(--heat-map-cat-1); }
-.heat-map--tariff .heat-map__cell[data-step='2'] { background: var(--heat-map-cat-2); }
-
-.heat-map--tariff .heat-map__cell {
-  opacity: calc(0.3 + (var(--usage-ratio, 0) * 0.7));
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .heat-map--tariff .heat-map__cell {
-    transition: background-color 0.8s ease, opacity 0.8s ease;
-  }
-}
-
-/* OA-86: peak-window overlay, derived from this step's own fixture data
-   (heatMapMath's findPeakWindow) -- not a hard-coded time band. Grid-
-   placed alongside the 48 cell buttons in the same row (see HeatMap.tsx),
-   painted after them so it reads on top, but `pointer-events: none` so
-   it never intercepts a click/tap meant for the cell underneath. Absent
-   entirely for a flat tariff (no peak run), e.g. Baseline. */
-.heat-map--tariff .heat-map__peak-overlay {
-  grid-row: 1;
-  align-self: stretch;
-  pointer-events: none;
-  background: rgba(229, 72, 77, 0.12);
-  border-left: 1px solid rgba(229, 72, 77, 0.5);
-  border-right: 1px solid rgba(229, 72, 77, 0.5);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .heat-map--tariff .heat-map__peak-overlay {
-    transition: opacity 0.8s ease;
-  }
-}
-
-/* "Show as table" and the detail line read as diagnostic-widget chrome
-   next to the landing page's own story -- demoted here, not removed:
-   they stay reachable/accessible, just visually secondary. */
-.heat-map--tariff .heat-map__table-toggle {
-  padding: 2px 8px;
-  border: none;
-  background: none;
-  text-decoration: underline;
-  font-size: 11px;
-  opacity: 0.6;
-}
-
-.heat-map--tariff .heat-map__detail {
-  font-size: 12px;
-  font-weight: 400;
-  opacity: 0.7;
 }
 
 .heat-map__annotations {

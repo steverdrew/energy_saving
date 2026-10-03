@@ -1,17 +1,14 @@
 import { useId, useMemo, useRef, useState } from 'react'
 import { formatGbp } from '../format'
 import {
+  describeSlot,
   findAnnotations,
-  findPeakWindow,
   formatSlotTime,
   maxUsage,
-  rateCategoryIndex,
   rateColorStepIndex,
   rateRange,
-  RATE_CATEGORY_LABELS,
   RATE_COLOR_STEPS_LIGHT,
   type HeatMapDay,
-  type HeatMapSlot,
 } from './heatMapMath'
 import './HeatMap.css'
 
@@ -28,38 +25,30 @@ function formatDayLabel(date: string): string {
   return dayLabelFormatter.format(new Date(`${date}T12:00:00Z`))
 }
 
-function describeSlot(slot: HeatMapSlot): string {
-  const time = formatSlotTime(slot.startsAt)
-  const rate = slot.unitRateIncVatPence !== null ? `${slot.unitRateIncVatPence.toFixed(1)}p/kWh` : 'rate unknown'
-  const usage = slot.kwh !== null ? `${slot.kwh.toFixed(2)} kWh` : 'usage unknown'
-  const cost = slot.costPence !== null ? formatGbp(slot.costPence) : 'cost unknown'
-  return `${time} — ${usage}, ${rate}, ${cost}`
-}
-
 export interface HeatMapProps {
   days: HeatMapDay[]
   /** Accessible label for the chart as a whole, e.g. "Actual usage and cost". */
   title: string
-  /**
-   * OA-85: 'sequential' (default) is the authenticated-page chart --
-   * one-hue rate ramp, usage as bar height. 'tariff' is the landing-page
-   * demo's own mechanism -- rate as a 3-band cheap/standard/peak colour
-   * (green/purple/red), usage as cell opacity/intensity instead of a bar.
-   * Scoped to this prop (not a global style change) so Actual/Compare/
-   * Optimised keep their existing chart untouched.
-   */
-  variant?: 'sequential' | 'tariff'
 }
 
 /**
- * OA-70: the shared 30-day heat map -- tariff-agnostic (it only consumes
- * HeatMapDay[], never infers tariff family), reused by Actual, Like-for-like
- * and later Shifted. Background colour = rate (one sequential hue, per the
- * dataviz skill); foreground bar height = usage, so the two magnitudes never
- * share a channel. The 'tariff' variant (OA-85) is the one exception to
- * that convention, deliberately scoped to the landing-page demo only.
+ * OA-70: the shared 30-day heat map for the authenticated app
+ * (Actual/Like-for-like/Shifted) -- tariff-agnostic (it only consumes
+ * HeatMapDay[], never infers tariff family). Background colour = rate
+ * (one sequential hue, per the dataviz skill); foreground bar height =
+ * usage, so the two magnitudes never share a channel.
+ *
+ * OA-87: this used to also carry a `variant="tariff"` mode for the
+ * landing-page demo (OA-85/86). Removed -- the landing page now has its
+ * own dedicated presentation (LandingHeatMap.tsx, modelled directly on
+ * the approved mockup's structure/CSS) rather than a second mode bolted
+ * onto this analytics-oriented component. The two pages' visual needs
+ * are different enough (a diagnostic 30-day table-toggle chart here vs.
+ * a bespoke marketing visual there) that sharing this component's
+ * *presentation* was the wrong reuse boundary; they still share the
+ * underlying pure data/colour-maths in heatMapMath.ts.
  */
-function HeatMap({ days, title, variant = 'sequential' }: HeatMapProps) {
+function HeatMap({ days, title }: HeatMapProps) {
   const [selected, setSelected] = useState<{ dayIndex: number; slotIndex: number } | null>(null)
   const [showTable, setShowTable] = useState(false)
   const panelId = useId()
@@ -68,22 +57,6 @@ function HeatMap({ days, title, variant = 'sequential' }: HeatMapProps) {
   const { min, max } = useMemo(() => rateRange(days), [days])
   const peakUsage = useMemo(() => maxUsage(days), [days])
   const annotations = useMemo(() => findAnnotations(days), [days])
-  const isTariff = variant === 'tariff'
-  // OA-86: derived from this step's own fixture data (the longest run of
-  // peak-band slots in a representative day), never a hard-coded time
-  // band -- a flat tariff (e.g. Baseline) has no peak run, so this is
-  // null and no overlay renders, exactly mirroring the reference
-  // mockup's "peak overlay hidden on Baseline" behaviour without needing
-  // a per-step special case.
-  const peakWindow = useMemo(() => (isTariff ? findPeakWindow(days[0], min, max) : null), [isTariff, days, min, max])
-  const peakWindowLabel = useMemo(() => {
-    if (!peakWindow) return null
-    const startSlot = days[0]?.slots[peakWindow.startSlot]
-    const endSlot = days[0]?.slots[peakWindow.endSlot]
-    if (!startSlot || !endSlot) return null
-    const endsAt = new Date(new Date(endSlot.startsAt).getTime() + 30 * 60_000).toISOString()
-    return `${formatSlotTime(startSlot.startsAt)}–${formatSlotTime(endsAt)}`
-  }, [peakWindow, days])
 
   const annotationFor = (dayIndex: number, slotIndex: number) =>
     annotations.find((a) => a.dayIndex === dayIndex && a.slotIndex === slotIndex)
@@ -121,7 +94,7 @@ function HeatMap({ days, title, variant = 'sequential' }: HeatMapProps) {
   const selectedDay = selected !== null ? days[selected.dayIndex] : null
 
   return (
-    <div className={isTariff ? 'heat-map heat-map--tariff' : 'heat-map'}>
+    <div className="heat-map">
       <div className="heat-map__header">
         <h2 className="heat-map__title">{title}</h2>
         <button type="button" className="heat-map__table-toggle" onClick={() => setShowTable((v) => !v)}>
@@ -138,30 +111,14 @@ function HeatMap({ days, title, variant = 'sequential' }: HeatMapProps) {
       {!showTable && (
         <>
           <div className="heat-map__legend">
-            {isTariff ? (
-              <>
-                {RATE_CATEGORY_LABELS.map((label, i) => (
-                  <span className="heat-map__legend-item" key={label}>
-                    <span className="heat-map__legend-swatch" aria-hidden="true" data-category={i} />
-                    <span className="heat-map__legend-label">{label}</span>
-                  </span>
-                ))}
-                <span className="heat-map__legend-note">
-                  Shade shows usage{peakWindowLabel ? ` · Peak ${peakWindowLabel}` : ''}
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="heat-map__legend-label">Cheapest</span>
-                <span className="heat-map__legend-ramp" aria-hidden="true">
-                  {RATE_COLOR_STEPS_LIGHT.map((_, i) => (
-                    <span key={i} className="heat-map__legend-step" data-step={i} />
-                  ))}
-                </span>
-                <span className="heat-map__legend-label">Most expensive</span>
-                <span className="heat-map__legend-note">Bar height = usage</span>
-              </>
-            )}
+            <span className="heat-map__legend-label">Cheapest</span>
+            <span className="heat-map__legend-ramp" aria-hidden="true">
+              {RATE_COLOR_STEPS_LIGHT.map((_, i) => (
+                <span key={i} className="heat-map__legend-step" data-step={i} />
+              ))}
+            </span>
+            <span className="heat-map__legend-label">Most expensive</span>
+            <span className="heat-map__legend-note">Bar height = usage</span>
           </div>
 
           <div className="heat-map__grid" role="group" aria-label={title} aria-describedby={panelId}>
@@ -171,9 +128,7 @@ function HeatMap({ days, title, variant = 'sequential' }: HeatMapProps) {
                   <span className="heat-map__row-label">{formatDayLabel(day.date)}</span>
                   <div className="heat-map__row-cells">
                     {day.slots.map((slot, slotIndex) => {
-                      const stepIndex = isTariff
-                        ? rateCategoryIndex(slot.unitRateIncVatPence, min, max)
-                        : rateColorStepIndex(slot.unitRateIncVatPence, min, max)
+                      const stepIndex = rateColorStepIndex(slot.unitRateIncVatPence, min, max)
                       const usageRatio = slot.kwh !== null && peakUsage > 0 ? slot.kwh / peakUsage : 0
                       const annotation = annotationFor(dayIndex, slotIndex)
                       const isSelected = selected?.dayIndex === dayIndex && selected?.slotIndex === slotIndex
@@ -197,18 +152,11 @@ function HeatMap({ days, title, variant = 'sequential' }: HeatMapProps) {
                           onClick={() => setSelected({ dayIndex, slotIndex })}
                           onKeyDown={(e) => handleKeyDown(e, dayIndex, slotIndex)}
                         >
-                          {!isTariff && <span className="heat-map__cell-bar" />}
+                          <span className="heat-map__cell-bar" />
                           {annotation && <span className="heat-map__cell-flag" aria-hidden="true" />}
                         </button>
                       )
                     })}
-                    {peakWindow && (
-                      <span
-                        className="heat-map__peak-overlay"
-                        aria-hidden="true"
-                        style={{ gridColumn: `${peakWindow.startSlot + 1} / ${peakWindow.endSlot + 2}` }}
-                      />
-                    )}
                   </div>
                 </div>
               )

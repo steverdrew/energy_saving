@@ -1,11 +1,13 @@
 # HANDOFF
 
-_Last updated: 2026-10-03 (OA-86 and OA-87 merged to `main` and deployed
--- both Done in Jira. A `/code-review` pass on the merged OA-87 commit
-then found a real mobile bug in the new full-bleed section bands
-(missing horizontal gutter); fixed, consolidated into one shared CSS
-class, and deployed again -- see end of "Current task" below. Previous
-entries:)_
+_Last updated: 2026-10-03 (OA-87, third pass: Steve's own diagnosis of
+why two prior CSS-only passes kept missing the mockup -- the landing
+page was reusing HeatMap.tsx's analytics-widget *presentation*, which
+no amount of per-variant override turns into the mockup's bespoke
+visual. Built a dedicated LandingHeatMap.tsx from the mockup's own
+structure instead, reusing only heatMapMath.ts's pure data/colour logic;
+removed the now-dead `variant="tariff"` branch from HeatMap.tsx/.css
+entirely. See "Current task" below. Previous entries:)_
 
 _2026-10-03, OA-86 second pass (superseded below as "previous task"):
 Steve supplied the actual reference mockup after the first "no code
@@ -32,6 +34,71 @@ Steve but not yet started -- largely expected to already be satisfied
 by OA-82's work, pending its own audit pass; OA-65 not started)_
 
 ## Current task (latest)
+
+**OA-87, third pass.** After two CSS-only passes (widen the shell,
+widen the card, bump cell height) still produced a cramped, thin-strip
+grid with leftover analytics chrome ("Show as table", "Select a period
+for details", bordered diagnostic card) that didn't match the mockup,
+Steve diagnosed the actual root cause in chat: every pass was refining
+`HeatMap.tsx`'s `variant="tariff"` mode -- an authenticated-app
+analytics widget with its own sizing assumptions and chrome -- rather
+than building the bespoke marketing visual the mockup's own HTML/CSS
+already specifies. His instruction: stop reusing the presentation
+component; reuse only the underlying data/calculation logic.
+
+- **New `LandingHeatMap.tsx`/`.css`** -- built directly from the
+  mockup's own structure (`.glass-card`, `.heatmap-grid`,
+  `.heatmap-cell`, `#peak-highlight`), not a HeatMap.tsx variant.
+  Reused: `heatMapMath.ts`'s pure functions (`rateCategoryIndex`,
+  `rateRange`, `maxUsage`, `findPeakWindow`, `RATE_CATEGORY_LABELS`) and
+  a newly-shared `describeSlot` (moved there from HeatMap.tsx, so both
+  presentations describe a slot identically rather than drifting).
+  Never imports or renders `<HeatMap>`.
+- **One flat 48-column CSS Grid**, no explicit rows and no per-row day-
+  label column (which was eating width) -- all 4 days' slots are plain
+  siblings, so the grid auto-wraps one row per day exactly like the
+  mockup's own flat `rows * cols` cell list. Cells use `aspect-ratio: 1`
+  rather than a fixed height, so their size simply follows the card's
+  real width.
+- **Removed the chrome the mockup doesn't have**: no "Show as table"
+  toggle, no permanent "Select a period for details" prompt (OA-86
+  explicitly asked for "selected-cell details only after interaction" --
+  the detail line now only exists in the DOM once a cell is actually
+  selected), no visible day labels, no annotations list. A visually-
+  hidden (not `display:none`) `<table>` replaces the toggle, keeping a
+  screen-reader/automation text equivalent per OA-82/84's "accessibility
+  views may remain secondary" without the visible widget chrome.
+- **12-column grid**, ported literally from the mockup's own `grid lg:
+  grid-cols-12 gap-12 lg:gap-16` / `lg:col-span-5` narrative / `lg:col-
+  span-7` visual (LandingDemo.css), replacing the earlier fixed-px
+  two-column split. No extra max-width on the grid itself -- the
+  section's existing shell width (OA-87 first pass) already caps it,
+  exactly like the mockup's own `max-w-7xl` wraps its 12-col grid; a
+  second, narrower cap on top of that was the earlier passes' actual
+  mistake.
+- **Dead code removed**: `HeatMap.tsx`/`.css`'s entire `variant="tariff"`
+  branch (now unused -- only the landing page ever rendered it) --
+  `isTariff`, the `heat-map--tariff` CSS, `--heat-map-cat-*` tokens, the
+  peak-overlay CSS that lived there. `HeatMap` is back to a single
+  `{ days, title }` signature, used only by Actual/Compare/Optimised --
+  exactly its original OA-70 scope, now undisturbed by the landing
+  page's very different visual needs.
+- Colour-swatch legend uses round dots + the mockup's own hex values
+  (`#10b981`/`#8b5cf6`/`#ef4444`, Tailwind emerald-500/brand-500/
+  red-500) rather than HeatMap.css's square swatches and tokens.
+
+Verified: `npm test` (51/51, unchanged -- `LandingDemo.test.tsx`'s
+`describeSlot`-pattern aria-label assertion and 192-button count both
+hold since the shared `describeSlot` format didn't change), `npm run
+lint` (clean), `npm run build` (typecheck + build, passes) and `check-
+bundle` (passes), and confirmed directly in the prerendered
+`dist/index.html`: 192 `landing-heat-map__cell` buttons, zero
+occurrences of "Show as table"/"Select a period for details"/row-label
+markup, the new 12-col `landing-demo__heatmap-slot` wrapper present, and
+the sr-only table present for accessibility.
+
+Not yet merged/deployed as of this entry -- Steve asked for OA-88 next,
+then "merge and push" together.
 
 **OA-87** ("Match landing-page hero and desktop width to the approved
 mockup") -- explicitly a visual-fidelity ticket against the same
