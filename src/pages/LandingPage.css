@@ -78,14 +78,13 @@
    background band... calmer and more direct after the interactive
    comparison" -- a solid, slightly-opaque navy that sits over the hero's
    ambient glow (the fixed [data-landing]::before layer) rather than
-   letting it show through, same full-bleed breakout as LandingDemo.css's
-   comparison band. */
+   letting it show through. The full-bleed breakout + horizontal gutter
+   come from the shared `.landing-section-band` class (App.css, also
+   used by LandingDemo.css's comparison band and .landing-footer below)
+   -- this only adds this chapter's own vertical padding/background. */
 .landing-chapter-cta {
-  position: relative;
-  width: 100vw;
-  margin-left: calc(50% - 50vw);
-  margin-right: calc(50% - 50vw);
-  padding: 48px 0;
+  padding-top: 48px;
+  padding-bottom: 48px;
   background: #0f172a;
 }
 
@@ -153,19 +152,15 @@
 
 /* OA-87: "a deeper closing band... with a subtle top border" -- the
    mockup's own footer tone, deeper/darker again than the CTA chapter
-   above it, closing the page's section rhythm. Same full-bleed breakout
-   as the other bands; .landing-footer's own children keep their existing
-   centering/max-widths untouched. */
+   above it, closing the page's section rhythm. The full-bleed breakout +
+   horizontal gutter come from the shared `.landing-section-band` class
+   (App.css); .landing-footer's own children keep their existing
+   centering/max-widths untouched either way. */
 .landing-footer {
-  position: relative;
-  width: 100vw;
-  margin-left: calc(50% - 50vw);
-  margin-right: calc(50% - 50vw);
-  margin-top: 0;
-  padding: 32px 20px 40px;
+  padding-top: 32px;
+  padding-bottom: 40px;
   background: #0a0f1c;
   border-top: 1px solid var(--border);
-  box-sizing: border-box;
 }
 
 .landing-trust {

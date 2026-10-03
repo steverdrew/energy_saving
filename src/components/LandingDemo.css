@@ -2,17 +2,17 @@
    for each major landing-page section" -- a subtly different, translucent
    band (the mockup's own bg-dark-900/40) rather than one continuous
    navy/purple surface for the whole page, so the comparison reads as the
-   page's next "chapter". The 100vw/negative-margin breakout lets this
-   section's background span the full viewport width even though it sits
-   inside .app-main's centered max-width -- its own content
-   (.landing-demo__grid etc.) keeps its existing centering untouched. */
+   page's next "chapter". The full-bleed breakout itself (and its
+   horizontal gutter, which this section's own content would otherwise
+   lose once it escapes .app-main's width) lives in the shared
+   `.landing-section-band` class (App.css) -- this only adds the
+   comparison's own vertical padding/background/border on top of it. Its
+   content (.landing-demo__grid etc.) keeps its existing centering
+   untouched either way. */
 .landing-demo {
-  position: relative;
-  width: 100vw;
-  margin-left: calc(50% - 50vw);
-  margin-right: calc(50% - 50vw);
+  padding-top: 32px;
+  padding-bottom: 32px;
   margin-top: 28px;
-  padding: 32px 0;
   background: rgba(15, 23, 42, 0.4);
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);

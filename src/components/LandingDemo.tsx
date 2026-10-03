@@ -91,7 +91,7 @@ function LandingDemo() {
 
   return (
     <section
-      className="landing-demo"
+      className="landing-demo landing-section-band"
       id="comparison-demo"
       aria-label="Interactive example: how Shift & Save works"
       data-active-step={step}

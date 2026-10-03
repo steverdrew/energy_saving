@@ -58,7 +58,7 @@ function LandingPage() {
           continuation of the same surface. Individual section ids/
           aria-labels (used by OA-82's automation-friendliness work)
           are unchanged -- this only adds a shared background wrapper. */}
-      <div className="landing-chapter-cta">
+      <div className="landing-chapter-cta landing-section-band">
         <section className="landing-card landing-about" id="about" aria-label="What is Shift & Save?">
           <h2>What is Shift &amp; Save?</h2>
           <p>
@@ -107,7 +107,7 @@ function LandingPage() {
         </section>
       </div>
 
-      <footer className="landing-footer" id="footer">
+      <footer className="landing-footer landing-section-band" id="footer">
         <div className="landing-trust" aria-label="Why trust us">
           {TRUST_POINTS.map((point) => (
             <p className="landing-trust__item" key={point}>

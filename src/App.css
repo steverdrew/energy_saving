@@ -190,3 +190,39 @@
   position: relative;
   z-index: 1;
 }
+
+/* OA-87: shared full-bleed "section band" mixin -- lets a section's
+   background span the full viewport width via a 100vw/negative-margin
+   breakout while it still sits inside .app-main's centered max-width,
+   used by the comparison (LandingDemo.css), CTA-chapter and footer
+   (LandingPage.css) bands. Centralised here (rather than hand-duplicated
+   per section) specifically so the horizontal gutter is defined once --
+   a section using only vertical padding of its own would otherwise lose
+   the side gutter .app-main used to provide once it escapes that
+   container's width, and render flush against the viewport edge on
+   narrow screens. Each section adds its own background/border/vertical
+   padding on top of this class; .landing-demo and .landing-footer also
+   carry their pre-existing vertical-padding/border rules unchanged. */
+.app-shell[data-landing] .landing-section-band {
+  position: relative;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  padding-left: 16px;
+  padding-right: 16px;
+  box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+  .app-shell[data-landing] .landing-section-band {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-shell[data-landing] .landing-section-band {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+}
