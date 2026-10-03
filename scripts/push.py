@@ -29,9 +29,9 @@ What it does, in order:
      deploy. This script exits once the push succeeds; watch the Actions
      tab (or `gh run watch`) for the deploy itself.
 
-Usage:
-    python3 prod.py              # commit (if needed), check, confirm, push
-    python3 prod.py --check-only # commit (if needed) and check only, never push
+Usage (from the repo root):
+    python3 scripts/push.py              # commit (if needed), check, confirm, push
+    python3 scripts/push.py --check-only # commit (if needed) and check only, never push
 """
 
 import subprocess
@@ -39,7 +39,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 SERVER_DIR = ROOT / "server"
 PROD_URL = "https://shiftandsaveapp.web.app/"
 
